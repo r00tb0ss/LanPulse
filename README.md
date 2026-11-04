@@ -327,17 +327,3 @@ of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Publ
 
 Third-party software, data and services used by LanPulse keep their own licenses. See
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). IP geolocation by [DB-IP](https://db-ip.com).
-
-## Project website
-
-A ready-made landing page lives in **`docs/index.html`** with the full feature tour and screenshots. To publish it
-free as a website:
-
-1. Push this repository to GitHub.
-2. Go to the repo's **Settings → Pages**.
-3. Under **Build and deployment → Source**, choose **Deploy from a branch**.
-4. Set the branch to **main** and the folder to **/docs**, then **Save**.
-5. After a minute your site is live at `https://<your-username>.github.io/<repo-name>/`.
-
-Edit the "View the repository" link near the bottom of `docs/index.html` to point at your repo once it's up. All
-screenshots use sample/demo data, so nothing about your real network is published.
