@@ -4,8 +4,7 @@
 any browser. Discover every device, watch attacks on a live world map, scan for vulnerabilities, and get an at-a-glance
 security score and an alert the moment something inside your network is compromised.
 
-> **Project page with full feature tour and screenshots:** open `docs/index.html`, or publish it free with GitHub Pages
-> (see [Project website](#project-website) below).
+> **Project page with full feature tour and screenshots:** https://r00tb0ss.github.io/LanPulse/
 
 ![LanPulse operations-center view](docs/images/noc.png)
 
