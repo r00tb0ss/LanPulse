@@ -1,0 +1,260 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later · Copyright (C) 2026 The LanPulse authors -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LanPulse — real-time LAN security dashboard</title>
+<meta name="description" content="LanPulse is a self-hosted, real-time map of your home or lab network: live attack map, vulnerability scanning, DNS and service monitoring, red-team tooling, attacker OSINT, compromised-device detection and a network security score.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0f1c; --bg2:#0e1527; --panel:#111a2e; --border:#1f2a44; --border2:#2a3858;
+    --text:#e2e8f0; --muted:#8b9bb6; --dim:#5b6b88; --accent:#38bdf8; --accent2:#0ea5e9;
+    --green:#22c55e; --red:#f43f5e; --amber:#f59e0b; --violet:#a78bfa;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}a:hover{color:#7dd3fc}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+  img{max-width:100%;display:block}
+  code,kbd{font-family:var(--mono);font-size:.9em}
+  h1,h2,h3{line-height:1.2;letter-spacing:-.02em}
+  /* nav */
+  .nav{position:sticky;top:0;z-index:10;background:rgba(10,15,28,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  .nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+  .logo{font-size:20px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .logo b{color:var(--accent)}.logo .wave{width:22px;height:22px}
+  .nav nav{margin-left:auto;display:flex;gap:22px;font-size:14px}
+  .nav nav a{color:var(--muted)}.nav nav a:hover{color:var(--text)}
+  .nav .gh{background:var(--accent2);color:#fff;padding:7px 14px;border-radius:8px;font-weight:600;font-size:14px}
+  .nav .gh:hover{background:#0284c7;color:#fff}
+  @media(max-width:720px){.nav nav{display:none}}
+  /* hero */
+  .hero{text-align:center;padding:70px 0 40px;background:radial-gradient(1000px 420px at 50% -10%,rgba(56,189,248,.14),transparent 70%)}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border2);
+    border-radius:999px;padding:5px 14px;font-size:13px;color:var(--muted);margin-bottom:22px}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .hero h1{font-size:clamp(34px,6vw,58px);font-weight:800;margin:0 0 18px}
+  .hero h1 .g{background:linear-gradient(90deg,#38bdf8,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lead{font-size:clamp(17px,2.4vw,21px);color:var(--muted);max-width:720px;margin:0 auto 30px}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+  .btn{padding:12px 22px;border-radius:10px;font-weight:600;font-size:15px;border:1px solid var(--border2);background:var(--panel);color:var(--text)}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}.btn.primary:hover{background:#0284c7;color:#fff}
+  .hero .sub{color:var(--dim);font-size:13px}
+  .shot{border:1px solid var(--border2);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5);background:var(--bg2)}
+  .hero .shot{margin-top:40px}
+  /* sections */
+  section{padding:56px 0}
+  .eyebrow{color:var(--accent);font-weight:600;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px}
+  h2.title{font-size:clamp(26px,4vw,38px);margin:0 0 14px;font-weight:800}
+  .lead2{color:var(--muted);font-size:18px;max-width:760px;margin:0 0 8px}
+  .feature{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;margin:48px 0}
+  .feature:nth-child(even) .ftext{order:2}
+  .feature h3{font-size:24px;margin:0 0 12px}
+  .feature p{color:var(--muted);margin:0 0 14px}
+  .feature ul{margin:0;padding-left:18px;color:var(--muted)}
+  .feature ul li{margin:6px 0}
+  .feature ul b{color:var(--text)}
+  .tag{display:inline-block;background:var(--panel);border:1px solid var(--border2);border-radius:6px;padding:2px 9px;font-size:12px;color:var(--accent);margin-bottom:12px;font-weight:600}
+  @media(max-width:760px){.feature{grid-template-columns:1fr;gap:20px}.feature:nth-child(even) .ftext{order:0}}
+  /* grid of smaller features */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px}
+  .card .ic{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:rgba(56,189,248,.12);color:var(--accent);font-size:18px;margin-bottom:12px}
+  .card h4{margin:0 0 6px;font-size:16px}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+  /* themes strip */
+  .themes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:760px){.themes{grid-template-columns:repeat(2,1fr)}}
+  .theme figcaption{text-align:center;color:var(--muted);font-size:13px;margin-top:8px}
+  .theme img{border-radius:10px;border:1px solid var(--border)}
+  /* install */
+  .install{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px}
+  pre{background:#060a14;border:1px solid var(--border);border-radius:10px;padding:16px;overflow:auto;font-family:var(--mono);font-size:13.5px;color:#cbd5e1;margin:12px 0}
+  pre .c{color:#5b6b88}
+  .note{color:var(--dim);font-size:13px}
+  /* stat row */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center}
+  @media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat b{display:block;font-size:30px;font-weight:800;font-family:var(--mono);color:var(--accent)}
+  .stat span{color:var(--muted);font-size:13px}
+  footer{border-top:1px solid var(--border);padding:34px 0;color:var(--dim);font-size:13px;text-align:center}
+  footer a{color:var(--muted)}
+  .divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0}
+  .center{text-align:center}
+</style>
+</head>
+<body>
+
+<div class="nav"><div class="wrap">
+  <span class="logo"><svg class="wave" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg>Lan<b>Pulse</b></span>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#security">Security</a>
+    <a href="#themes">Themes</a>
+    <a href="#install">Install</a>
+  </nav>
+  <a class="gh" href="#install">Get it</a>
+</div></div>
+
+<header class="hero"><div class="wrap">
+  <span class="pill"><span class="dot"></span>Self-hosted · real-time · open source (GPL-2.0)</span>
+  <h1>See your whole network.<br><span class="g">Catch what's attacking it.</span></h1>
+  <p class="lead">LanPulse is a real-time map and security dashboard for your home or lab network. It discovers every
+    device, watches attacks as they land on a live world map, scans for vulnerabilities, and tells you — at a glance —
+    how secure your network is and whether anything inside it is already compromised.</p>
+  <div class="cta">
+    <a class="btn primary" href="#install">Install in one command</a>
+    <a class="btn" href="#features">Tour the features</a>
+  </div>
+  <div class="sub">Runs on a spare Linux box or a Raspberry Pi · viewed from any browser on your network</div>
+  <figure class="shot"><img src="images/noc.png" alt="LanPulse operations-center wall display showing the security score, live attack map, stats and activity feed"></figure>
+</div></header>
+
+<section id="overview"><div class="wrap">
+  <div class="stats">
+    <div class="stat"><b>1</b><span>command to install</span></div>
+    <div class="stat"><b>6</b><span>live dashboards</span></div>
+    <div class="stat"><b>A–F</b><span>security posture grade</span></div>
+    <div class="stat"><b>0</b><span>cloud, 100% self-hosted</span></div>
+  </div>
+</div></section>
+
+<div class="divider"></div>
+
+<section id="features"><div class="wrap">
+  <p class="eyebrow">What it does</p>
+  <h2 class="title">Everything, in one dashboard</h2>
+  <p class="lead2">LanPulse pulls your router's firewall log, scans your devices, and reads your Pi-hole — then turns it
+    all into live views you can actually act on.</p>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">LIVE ATTACK MAP</span>
+      <h3>Watch attacks hit your network in real time</h3>
+      <p>Every blocked probe and every connection that gets through is placed on a live world map, with the attacking
+        country named and your own outbound traffic drawn alongside it.</p>
+      <ul>
+        <li><b>Risk Profile score</b> — one A–F grade for the whole network, with a trend line and a fix list.</li>
+        <li><b>Attacker intelligence</b> — geo, network owner, reputation, Tor and known-malware lookups per IP.</li>
+        <li><b>One-click blocking</b> on a UniFi gateway.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/threats.png" alt="Threats dashboard: security score, attack stats, live world map and event feed"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">VULNERABILITIES</span>
+      <h3>Know which devices can actually be broken into</h3>
+      <p>LanPulse matches the software versions it finds against the NVD database, ranks flaws that are being actively
+        exploited first, and tells you which ones have a working exploit — including old Windows.</p>
+      <ul>
+        <li>CISA <b>Known Exploited Vulnerabilities</b> flagged first.</li>
+        <li><b>Metasploit &amp; Exploit-DB</b> cross-referenced per CVE.</li>
+        <li>Per-device breakdown with research links.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/vulns.png" alt="Vulnerabilities view listing CVEs by device, worst first"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">RED TEAM</span>
+      <h3>From recon to a ready-to-run plan</h3>
+      <p>The Red Team tab maps your exposures to the MITRE ATT&amp;CK framework, scores each host's exploitability, and
+        generates the exact Metasploit commands and a resource script for your own testing — it never runs an exploit.</p>
+      <ul>
+        <li>Clickable <b>ATT&amp;CK</b> techniques with detection &amp; mitigation.</li>
+        <li><b>Exports:</b> Metasploit <code>.rc</code>, Nmap XML, ATT&amp;CK Navigator layer, HTML report.</li>
+        <li>Exploitability score per host.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/redteam.png" alt="Red Team view with ATT&CK mapping and target list"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">OPERATIONS CENTER</span>
+      <h3>A wall display for the big screen</h3>
+      <p>One click opens a full-screen NOC view built for a TV or second monitor: the security grade, live stats, the
+        attack map, a compromised-device banner and a running activity feed — all auto-refreshing.</p>
+    </div>
+    <figure class="shot"><img src="images/noc.png" alt="Full-screen operations-center wall display"></figure>
+  </div>
+</div></section>
+
+<div class="divider"></div>
+
+<section id="security"><div class="wrap">
+  <p class="eyebrow">Beyond monitoring</p>
+  <h2 class="title">It finds what's already wrong</h2>
+  <p class="lead2">Most tools only watch the front door. LanPulse also watches what your devices do — and learns what's
+    normal for each one.</p>
+  <div class="grid" style="margin-top:28px">
+    <div class="card"><div class="ic">⚠</div><h4>Compromised-device detection</h4><p>Flags any device that connects out to a known botnet command-and-control server (abuse.ch Feodo Tracker) — the strongest sign a device is infected.</p></div>
+    <div class="card"><div class="ic">📈</div><h4>Behavior anomalies</h4><p>Learns each device's normal outbound regions and traffic volume, then alerts when a device talks somewhere new or spikes unexpectedly.</p></div>
+    <div class="card"><div class="ic">🛡</div><h4>Inside-network threats</h4><p>Detects ARP spoofing, rogue DHCP servers, network sweeps and port scans — and catches a replaced or impersonated router.</p></div>
+    <div class="card"><div class="ic">🌐</div><h4>DNS visibility (Pi-hole)</h4><p>Reads your Pi-hole query log and flags lookups of known-malware domains, per device.</p></div>
+    <div class="card"><div class="ic">❤</div><h4>Service uptime</h4><p>HTTP, TCP and ping checks for the things you care about, with history and down/up alerts.</p></div>
+    <div class="card"><div class="ic">🕑</div><h4>Per-device timeline</h4><p>Every change on a device — ports opened, software updated, vulnerabilities found, threats seen — in one history.</p></div>
+    <div class="card"><div class="ic">🔔</div><h4>Alerts anywhere</h4><p>ntfy, Telegram, email, Discord/webhook and IRC — with a daily summary.</p></div>
+    <div class="card"><div class="ic">🔄</div><h4>One-click updates</h4><p>Update from the dashboard; the previous version is backed up and restored automatically if anything fails.</p></div>
+    <div class="card"><div class="ic">🔒</div><h4>Hardened by design</h4><p>Login-protected, DNS-rebinding and CSRF guards, a systemd sandbox, and no exposed shell.</p></div>
+  </div>
+</div></section>
+
+<div class="divider"></div>
+
+<section id="themes"><div class="wrap">
+  <p class="eyebrow">Make it yours</p>
+  <h2 class="title">Four built-in themes</h2>
+  <p class="lead2">From a clean enterprise look to full 80s hacker. Switch in Settings → Appearance.</p>
+  <div class="themes" style="margin-top:28px">
+    <figure class="theme"><img src="images/network.png" alt="Midnight default theme"><figcaption>Midnight (default)</figcaption></figure>
+    <figure class="theme"><img src="images/theme_light.png" alt="Enterprise Light theme"><figcaption>Enterprise Light</figcaption></figure>
+    <figure class="theme"><img src="images/theme_hacker.png" alt="80s Hacker theme"><figcaption>80s Hacker</figcaption></figure>
+    <figure class="theme"><img src="images/theme_synthwave.png" alt="Midnight Synthwave theme"><figcaption>Midnight Synthwave</figcaption></figure>
+  </div>
+</div></section>
+
+<div class="divider"></div>
+
+<section id="install"><div class="wrap">
+  <p class="eyebrow">Get started</p>
+  <h2 class="title">Up and running in a minute</h2>
+  <p class="lead2">LanPulse runs on Ubuntu, Debian or a Raspberry Pi (64-bit). You view it from any browser on your network.</p>
+  <div class="install" style="margin-top:24px">
+    <pre><span class="c"># On a spare Linux box or Raspberry Pi:</span>
+unzip lanpulse.zip -d ~ && cd ~/lanpulse
+sudo ./install.sh
+
+<span class="c"># then open it from any computer on your network:</span>
+https://&lt;the-box-ip&gt;:8080</pre>
+    <p class="note">The installer sets up everything — a Python virtual environment, the <code>lanpulse</code> systemd service,
+      a self-signed certificate and the firewall rules. Point your router's firewall log at the box and, optionally,
+      connect your Pi-hole and UniFi gateway. Full setup notes are in the README.</p>
+  </div>
+  <div class="center" style="margin-top:30px">
+    <a class="btn primary" href="https://github.com/">View the repository</a>
+  </div>
+  <p class="center note" style="margin-top:10px">Replace this link with your repository URL once it's on GitHub.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <p><b style="color:var(--muted)">LanPulse</b> — a self-hosted LAN security dashboard. Licensed under GPL-2.0-or-later.</p>
+  <p>Built with Python (FastAPI), SQLite, Scapy, nmap, vis-network and ECharts. Threat data from NVD, CISA KEV,
+    Metasploit, Exploit-DB and abuse.ch. MITRE ATT&amp;CK® is a trademark of The MITRE Corporation.</p>
+  <p class="note">Screenshots show sample/demo data. Not affiliated with any vendor mentioned.</p>
+</div></footer>
+
+</body>
+</html>

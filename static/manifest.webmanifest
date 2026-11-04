@@ -1,0 +1,14 @@
+{
+  "name": "LanPulse",
+  "short_name": "LanPulse",
+  "description": "Real-time network map, threats, DNS, vulnerabilities and uptime for your home network",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1c",
+  "theme_color": "#0e1527",
+  "icons": [
+    {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/static/icons/icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
