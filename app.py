@@ -56,7 +56,7 @@ from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 
-VERSION = "1.19.0"
+VERSION = "1.19.1"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -438,7 +438,7 @@ def parse_scripts(host) -> tuple[list[dict], str]:
                 continue
             seen.add(key)
             probes.append({"id": sid, "cve": cve, "port": port,
-                           "title": clean_text(title, 160) or SCRIPT_TITLE.get(sid, sid)})
+                           "title": SCRIPT_TITLE.get(sid) or clean_text(title, 160) or sid})
         # Fallback: older output format carries only the "output" text
         if not found_table and "State: VULNERABLE" in scr.get("output", "") and "NOT VULNERABLE" not in scr.get("output", ""):
             m = re.search(r"CVE-\d{4}-\d{4,7}", scr.get("output", ""), re.I)
