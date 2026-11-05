@@ -26,6 +26,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import signatures
+
 log = logging.getLogger("lanpulse.vulns")
 NVD = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 KEV = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -491,6 +493,38 @@ class VulnScanner:
                     "ransomware": bool(k and k.get("ransomware")), "distro": False,
                     "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
                     "os": False, "confidence": "version"})
+        # OpenVAS results: real vulnerability tests. QoD >= 80 means the test exercised the flaw or fingerprinted the
+        # exact version, so those rank as Confirmed; weaker detections stay "version".
+        for d in list(self.nm.devices.values()):
+            for ov in d.get("openvas", []):
+                conf = "confirmed" if ov.get("qod", 0) >= 80 else "version"
+                for cve in (ov.get("cve") or [""]):
+                    cid = cve or ("OPENVAS-" + (ov.get("oid", "").split(".")[-1] or "result"))
+                    k = self.kev.get(cve) if cve else None
+                    x = (self.exploits.get(cve) or {}) if cve else {}
+                    results.setdefault(d["id"], []).append({
+                        "cve": cid, "score": ov.get("severity"), "sev": severity(ov.get("severity")),
+                        "desc": ov.get("desc") or ov.get("name", ""), "pub": "", "port": ov.get("port") or 0,
+                        "software": ov.get("name", "")[:80], "product": "openvas", "ver": "", "kev": bool(k),
+                        "kev_name": (k or {}).get("name", ""), "ransomware": bool(k and k.get("ransomware")),
+                        "distro": False, "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                        "os": False, "confidence": conf, "probe": "openvas"})
+        # Curated signatures for classic exploitable services nmap can't give a product ID for (see signatures.py)
+        for d in list(self.nm.devices.values()):
+            have = {(f["cve"], f["port"]) for f in results.get(d["id"], [])}
+            for port, sig in signatures.match_device(d):
+                if (sig["cve"], port) in have:
+                    continue
+                have.add((sig["cve"], port))
+                real = sig["cve"] if sig["cve"].startswith("CVE-") else ""
+                k = self.kev.get(real) if real else None
+                x = (self.exploits.get(real) or {}) if real else {}
+                results.setdefault(d["id"], []).append({
+                    "cve": sig["cve"], "score": sig["score"], "sev": severity(sig["score"]), "desc": sig["desc"],
+                    "pub": "", "port": port, "software": sig["title"], "product": "signature", "ver": "",
+                    "kev": bool(k), "kev_name": (k or {}).get("name", ""), "ransomware": bool(k and k.get("ransomware")),
+                    "distro": False, "msf": (x.get("m") or sig["msf"])[:5], "edb": x.get("e", [])[:5],
+                    "unverified": False, "os": False, "confidence": "version"})
         # Confirmed findings: NSE checks that actively TESTED a flaw and reported VULNERABLE (thorough scans).
         # These don't depend on a version string, so they catch patch-level holes banner-matching misses.
         for d in list(self.nm.devices.values()):

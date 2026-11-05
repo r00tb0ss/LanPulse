@@ -46,7 +46,7 @@ DEFAULT_SETTINGS = {
     "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "",
                 "ingest_key": "", "forwards": [], "ignore_noise": True,
                 "syslog_from": [], "syslog_any": False, "auto_intel": True},
-    "local": {"enabled": True, "sweep_threshold": 40, "scan_threshold": 15, "ignore": [],
+    "local": {"enabled": True, "sweep_threshold": 40, "scan_threshold": 15, "lateral_threshold": 5, "ignore": [],
               "dhcp_check": True, "dhcp_probe": False, "dhcp_servers": [], "gateway_mac": ""},
     "summary": {"enabled": False, "time": "08:00", "last_sent": ""},
     "unifi": {"host": "", "api_key": "", "username": "", "password": "", "site": "default",
@@ -57,6 +57,8 @@ DEFAULT_SETTINGS = {
     "honeypot": {"enabled": False, "bind": "0.0.0.0", "ingest_key": "",
                  "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
                               "smb": True, "rdp": True, "mysql": True}},
+    "openvas": {"enabled": False, "auto": False, "username": "admin", "password": ""},
+    "wizard": {"done": False},
     "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
@@ -156,6 +158,8 @@ def masked(s: dict) -> dict:
         out["vulns"]["nvd_key"] = MASK
     if out.get("honeypot", {}).get("ingest_key"):
         out["honeypot"]["ingest_key"] = MASK
+    if out.get("openvas", {}).get("password"):
+        out["openvas"]["password"] = MASK
     if out.get("ai", {}).get("api_key"):
         out["ai"]["api_key"] = MASK
     for f in ("api_key", "password"):
@@ -230,7 +234,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
         cur = new["local"]
         if "enabled" in lc:
             cur["enabled"] = bool(lc["enabled"])
-        for f, lo, hi in (("sweep_threshold", 10, 1000), ("scan_threshold", 5, 1000)):
+        for f, lo, hi in (("sweep_threshold", 10, 1000), ("scan_threshold", 5, 1000), ("lateral_threshold", 3, 100)):
             if f in lc:
                 try:
                     cur[f] = max(lo, min(hi, int(lc[f])))
@@ -313,6 +317,19 @@ def apply_update(current: dict, incoming: dict) -> dict:
             for k in list(cur["services"]):
                 if k in hp["services"]:
                     cur["services"][k] = bool(hp["services"][k])
+    ov = incoming.get("openvas")
+    if isinstance(ov, dict):
+        cur = new["openvas"]
+        for f in ("enabled", "auto"):
+            if f in ov:
+                cur[f] = bool(ov[f])
+        if "username" in ov:
+            cur["username"] = re.sub(r"[^\w.@\-]", "", str(ov["username"]))[:64] or "admin"
+        if "password" in ov and ov["password"] != MASK:
+            cur["password"] = re.sub(r"[^\x21-\x7e]", "", str(ov["password"]))[:128]
+    wz = incoming.get("wizard")
+    if isinstance(wz, dict) and "done" in wz:
+        new["wizard"]["done"] = bool(wz["done"])
     ai = incoming.get("ai")
     if isinstance(ai, dict):
         cur = new["ai"]
