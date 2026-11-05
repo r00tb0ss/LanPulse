@@ -736,7 +736,10 @@ class LanPulse:
         except Exception as e:
             log.warning("Could not load %s: %s", self.data_file, e)
         try:
-            self.settings = alerts.with_defaults(json.loads(self.settings_file.read_text()))
+            raw = json.loads(self.settings_file.read_text())
+            if isinstance(raw, dict) and "wizard" not in raw:
+                raw["wizard"] = {"done": True}          # an existing install: don't greet it with the first-run guide
+            self.settings = alerts.with_defaults(raw)
         except FileNotFoundError:
             self.settings = alerts.with_defaults(None)
         except Exception as e:
