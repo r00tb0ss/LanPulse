@@ -218,8 +218,12 @@
     <div class="t-card"><h4><span>By device</span><span class="muted">tap for details</span></h4><div class="rank" id="vulnDevs"></div></div>
     <div class="t-card"><h4><span>Risky settings LanPulse found <span id="vulnCfgN"></span></span><span class="muted">open services, old Windows</span></h4><div id="vulnConfig"></div></div>
   </div>
-  <p class="v-foot">Matching is by version number. Linux distributions often patch a flaw without changing the version, so
-    results marked <span class="tagchip">may be patched</span> could already be fixed by your OS updates. Data: NVD (NIST), CISA's Known Exploited Vulnerabilities list, Metasploit module metadata and Exploit-DB. This product uses the NVD API but is not endorsed or certified by the NVD.</p>
+  <p class="v-foot">Findings carry a confidence level. <span class="tagchip confirmed"><i class="fa-solid fa-circle-check"></i>confirmed</span> means a
+    thorough scan actively tested the flaw on the device (e.g. EternalBlue over SMB) — not a guess. Everything else is matched by version number:
+    Linux distributions often patch a flaw without changing the version, so results marked <span class="tagchip">may be patched</span> could already be
+    fixed by your OS updates, and <span class="tagchip">patch level unknown</span> covers a Windows version whose updates a scan can't see. Turn on
+    <b>Thorough scan</b> on a device to run the active checks. Data: NVD (NIST), CISA's Known Exploited Vulnerabilities list, Metasploit module
+    metadata and Exploit-DB. This product uses the NVD API but is not endorsed or certified by the NVD.</p>
 </section>
 
 <!-- Services: up/down board -->
