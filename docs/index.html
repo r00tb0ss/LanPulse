@@ -122,7 +122,7 @@
 <section id="overview"><div class="wrap">
   <div class="stats">
     <div class="stat"><b>1</b><span>command to install</span></div>
-    <div class="stat"><b>6</b><span>live dashboards</span></div>
+    <div class="stat"><b>8</b><span>live dashboards</span></div>
     <div class="stat"><b>A–F</b><span>security posture grade</span></div>
     <div class="stat"><b>0</b><span>cloud, 100% self-hosted</span></div>
   </div>
@@ -155,15 +155,46 @@
     <div class="ftext">
       <span class="tag">VULNERABILITIES</span>
       <h3>Know which devices can actually be broken into</h3>
-      <p>LanPulse matches the software versions it finds against the NVD database, ranks flaws that are being actively
-        exploited first, and tells you which ones have a working exploit — including old Windows.</p>
+      <p>Version matching can't see missing Windows patches, so LanPulse also runs safe active checks on thorough scans
+        and marks what it <b>proved</b> separately from what it only suspects. Flaws that are being actively exploited
+        or have a working exploit rank first — including old Windows.</p>
       <ul>
-        <li>CISA <b>Known Exploited Vulnerabilities</b> flagged first.</li>
-        <li><b>Metasploit &amp; Exploit-DB</b> cross-referenced per CVE.</li>
-        <li>Per-device breakdown with research links.</li>
+        <li><b>Confirmed</b> findings from active checks (for example EternalBlue / MS17-010), ranked above version guesses.</li>
+        <li>CISA <b>Known Exploited Vulnerabilities</b> and <b>Metasploit &amp; Exploit-DB</b> cross-referenced per CVE.</li>
+        <li>Non-intrusive: nothing is exploited, and confirmed flaws raise the Risk Profile score.</li>
       </ul>
     </div>
-    <figure class="shot"><img src="images/vulns.png" alt="Vulnerabilities view listing CVEs by device, worst first"></figure>
+    <figure class="shot"><img src="images/vulns.png" alt="Vulnerabilities view with a confirmed EternalBlue finding ranked first, then actively exploited CVEs"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">HONEYPOT</span>
+      <h3>A built-in tripwire for your network</h3>
+      <p>Turn on decoy Telnet, FTP, SMB, RDP and MySQL services (plus optional SSH and HTTP). Nothing legitimate should
+        ever touch them, so every hit is a warning sign — and a hit from inside your LAN means a device is likely compromised.</p>
+      <ul>
+        <li>Logs who connected, which decoy and the <b>credentials tried</b>.</li>
+        <li>Internal vs. external sources, with an instant alert for internal ones.</li>
+        <li>Accepts events from external sensors such as an ESP32. Low-interaction only — it never gives a shell.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/honeypot.png" alt="Honeypot view showing hits from inside the network, decoys hit and credentials tried"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">AI SECURITY ANALYST</span>
+      <h3>Ask your network what to fix first</h3>
+      <p>A read-only assistant that answers in plain language using only what LanPulse already knows — and cites the
+        devices, ports and CVEs behind every answer. Bring your own AI.</p>
+      <ul>
+        <li><b>Ollama</b> (local), any <b>OpenAI-compatible</b> server, or <b>Anthropic</b>.</li>
+        <li>It can explain and prioritise, never scan, block or change anything.</li>
+        <li>Clearly shows whether answers stay on your network or go to a cloud provider.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/analyst.png" alt="AI Security Analyst panel answering what to fix first, beside the Threats dashboard"></figure>
   </div>
 
   <div class="feature">
@@ -205,6 +236,9 @@
     <div class="card"><div class="ic">🛡</div><h4>Inside-network threats</h4><p>Detects ARP spoofing, rogue DHCP servers, network sweeps and port scans — and catches a replaced or impersonated router.</p></div>
     <div class="card"><div class="ic">🌐</div><h4>DNS visibility (Pi-hole)</h4><p>Reads your Pi-hole query log and flags lookups of known-malware domains, per device.</p></div>
     <div class="card"><div class="ic">❤</div><h4>Service uptime</h4><p>HTTP, TCP and ping checks for the things you care about, with history and down/up alerts.</p></div>
+    <div class="card"><div class="ic">🍯</div><h4>Honeypot</h4><p>Decoy services that log every probe and the credentials tried; a hit from inside your LAN flags a likely-compromised device.</p></div>
+    <div class="card"><div class="ic">✅</div><h4>Confirmed vulnerabilities</h4><p>Safe active checks prove flaws that version matching misses, like missing SMB patches on old Windows.</p></div>
+    <div class="card"><div class="ic">🤖</div><h4>AI analyst (bring your own)</h4><p>Ask questions in plain language with Ollama, an OpenAI-compatible server or Anthropic. Read-only, grounded in your data.</p></div>
     <div class="card"><div class="ic">🕑</div><h4>Per-device timeline</h4><p>Every change on a device — ports opened, software updated, vulnerabilities found, threats seen — in one history.</p></div>
     <div class="card"><div class="ic">🔔</div><h4>Alerts anywhere</h4><p>ntfy, Telegram, email, Discord/webhook and IRC — with a daily summary.</p></div>
     <div class="card"><div class="ic">🔄</div><h4>One-click updates</h4><p>Update from the dashboard; the previous version is backed up and restored automatically if anything fails.</p></div>
