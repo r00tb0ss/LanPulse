@@ -210,6 +210,11 @@ and reads the Windows version from `smb-os-discovery`. Each finding carries a co
 check proved it), **Version match**, or **OS guess**. Confirmed findings rank first, show a Confirmed count and badge
 on the Vulnerabilities tab, and weigh heavily in the Risk Profile. The checks are non-intrusive and exploit nothing.
 
+Thorough scans also run nmap's `vulners` script, which looks up each detected service version at vulners.com and
+adds serious (CVSS 7+) CVEs the NVD match missed. These are version-based, so they rank as **Version match**, not
+Confirmed. Only the service's version identifier (CPE) is sent to vulners.com, never your IPs or device names; if the
+LanPulse box has no internet access, the lookup is simply skipped.
+
 ![Vulnerabilities view](docs/images/vulns.png)
 
 ## Honeypot
