@@ -52,7 +52,7 @@ function renderVulns() {
     return `<div class="fix ${g.confidence === "confirmed" ? "confirmed-fix" : g.kev ? "kev" : ""}">
       <button class="fix-row" data-key="${esc(key)}" aria-expanded="${vulnOpen.has(key)}">
         ${g.confidence === "confirmed" && !g.max ? '<span class="score-chip confirmed-chip" title="Confirmed vulnerable by an active check (no CVSS score)">!</span>' : scoreChip(g.max)}
-        <span class="fix-main"><b>${esc(g.software)}</b> <span class="muted">port ${g.port}</span><br>
+        <span class="fix-main"><b>${esc(g.software)}</b> ${g.port ? `<span class="muted">port ${g.port}</span>` : ""}<br>
           <span class="fix-dev">${esc(g.name)} · ${esc(g.ip)}</span></span>
         <span class="fix-tags">${g.confidence === "confirmed" ? '<span class="tagchip confirmed" title="An active check connected to this service and confirmed the flaw — not a version guess."><i class="fa-solid fa-circle-check"></i>confirmed</span>' : ""}
           ${g.kev ? `<span class="tagchip bad">${g.kev} exploited</span>` : ""}
