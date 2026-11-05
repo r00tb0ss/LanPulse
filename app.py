@@ -51,6 +51,7 @@ from dns import DnsMonitor
 from vulns import VulnScanner
 import redteam
 from services import ServiceMonitor
+from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 
@@ -601,6 +602,9 @@ class LanPulse:
         self.dns = DnsMonitor(self)
         self.vulns = VulnScanner(self)
         self.services = ServiceMonitor(self)
+        self.honeypot = Honeypot(self)
+        if args.demo:
+            self.honeypot.seed_demo()
         self.discovery = Discovery(self)
         self.blocked_cache: tuple[float, list[str]] = (0.0, [])
         self.demo_blocked: list[str] = ["203.0.113.77"] if args.demo else []
@@ -1063,6 +1067,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         tasks.append(asyncio.create_task(nm.dns.run()))
         tasks.append(asyncio.create_task(nm.vulns.run()))
         tasks.append(asyncio.create_task(nm.services.run()))
+        tasks.append(asyncio.create_task(nm.honeypot.run()))
         if nm.args.demo:
             tasks.append(asyncio.create_task(nm.flows.demo_loop()))
         yield
@@ -1077,7 +1082,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     app = FastAPI(title="LanPulse", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
     secure_cookie = bool(nm.args.cert)
-    public = ("/login", "/static/", "/api/threats/ingest", "/favicon.ico")
+    public = ("/login", "/static/", "/api/threats/ingest", "/api/honeypot/ingest", "/favicon.ico")
     def extra_hosts() -> set:          # read live, so changes in Settings > System apply straight away
         return {h.strip().lower() for h in (nm.settings.get("system", {}).get("allow_hosts")
                                            or getattr(nm.args, "allow_host", None) or []) if h.strip()}
@@ -1094,7 +1099,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not nm.auth.enabled and not host_ok(request.headers):
             return Response("LanPulse only answers to IP addresses and local names when no login is set. "
                             "Set a login, or add this name under Settings > System > Extra host names", 403, media_type="text/plain")
-        if request.method not in ("GET", "HEAD", "OPTIONS") and path != "/api/threats/ingest" and not origin_ok(request.headers):
+        if request.method not in ("GET", "HEAD", "OPTIONS") and path not in ("/api/threats/ingest", "/api/honeypot/ingest") and not origin_ok(request.headers):
             return JSONResponse({"error": "Request from another web site refused"}, 403)
         if not nm.auth.enabled or path.startswith(public) or nm.auth.verify(request.cookies.get("nm_session")):
             resp = await call_next(request)
@@ -1732,6 +1737,23 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not d:
             return JSONResponse({"error": "Device not found"}, 404)
         return await asyncio.to_thread(nm.flows.summary, max(1, min(hours, 168)), d["ip"])
+
+    # ---- honeypot (built-in low-interaction decoy services)
+    @app.get("/api/honeypot")
+    async def honeypot_summary(hours: int = 168):
+        return await asyncio.to_thread(nm.honeypot.summary, max(1, min(hours, 2160)))
+
+    @app.post("/api/honeypot/ingest")
+    async def honeypot_ingest(request: Request):
+        key = request.headers.get("X-LanPulse-Key", "") or request.query_params.get("key", "")
+        try:
+            payload = await request.json()
+        except Exception:
+            return JSONResponse({"error": "Expected a JSON object"}, 400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "Expected a JSON object"}, 400)
+        ok, msg = await asyncio.to_thread(nm.honeypot.ingest, payload, key)
+        return JSONResponse({"ok": True}) if ok else JSONResponse({"error": msg}, 403)
 
     # ---- local threats
     @app.get("/api/local")
