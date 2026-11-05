@@ -112,6 +112,17 @@ alert (higher priority for risky ones, and for classic backdoor ports such as 44
 version changes go on the device's timeline. A scan that suddenly finds nothing open isn't believed until the next scan
 agrees, and switching a device between quick and thorough scans doesn't count as a change.
 
+### Lateral movement
+
+A device that tries to reach **5 or more different machines** on admin ports (SSH, Telnet, SMB, RDP, WinRM, VNC,
+databases, NFS) within 10 minutes is flagged as **Possible lateral movement**, which is how an intruder spreads from
+the first machine they break into. The threshold is adjustable in Settings > Threats.
+
+LanPulse can only flag what it can see. It sees connections that your router logs between networks or VLANs
+(on a UniFi gateway, enable logging on the inter-VLAN allow/block policies) and any traffic that reaches the LanPulse
+server's network card, for example from a switch **mirror port**. Machines on the same switch talk directly, so
+without a mirror port that traffic is invisible to any tool on the network, and the honeypot is the best tripwire.
+
 ## Device timeline
 
 Each device panel has a **Timeline**: when it joined, came online or went offline, changed IP, opened or closed ports,
