@@ -57,6 +57,7 @@ DEFAULT_SETTINGS = {
     "honeypot": {"enabled": False, "bind": "0.0.0.0", "ingest_key": "",
                  "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
                               "smb": True, "rdp": True, "mysql": True}},
+    "openvas": {"enabled": False, "auto": False, "username": "admin", "password": ""},
     "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
@@ -156,6 +157,8 @@ def masked(s: dict) -> dict:
         out["vulns"]["nvd_key"] = MASK
     if out.get("honeypot", {}).get("ingest_key"):
         out["honeypot"]["ingest_key"] = MASK
+    if out.get("openvas", {}).get("password"):
+        out["openvas"]["password"] = MASK
     if out.get("ai", {}).get("api_key"):
         out["ai"]["api_key"] = MASK
     for f in ("api_key", "password"):
@@ -313,6 +316,16 @@ def apply_update(current: dict, incoming: dict) -> dict:
             for k in list(cur["services"]):
                 if k in hp["services"]:
                     cur["services"][k] = bool(hp["services"][k])
+    ov = incoming.get("openvas")
+    if isinstance(ov, dict):
+        cur = new["openvas"]
+        for f in ("enabled", "auto"):
+            if f in ov:
+                cur[f] = bool(ov[f])
+        if "username" in ov:
+            cur["username"] = re.sub(r"[^\w.@\-]", "", str(ov["username"]))[:64] or "admin"
+        if "password" in ov and ov["password"] != MASK:
+            cur["password"] = re.sub(r"[^\x21-\x7e]", "", str(ov["password"]))[:128]
     ai = incoming.get("ai")
     if isinstance(ai, dict):
         cur = new["ai"]
