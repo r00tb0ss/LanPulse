@@ -473,6 +473,9 @@ class VulnScanner:
         # Confirmed findings: NSE checks that actively TESTED a flaw and reported VULNERABLE (thorough scans).
         # These don't depend on a version string, so they catch patch-level holes banner-matching misses.
         for d in list(self.nm.devices.values()):
+            open_ports = [p["port"] for p in d.get("ports", [])]
+            # host-level scripts carry no port: show them against the port Windows exposes them through
+            host_port = next((x for x in (445, 139, 135, 3389) if x in open_ports), open_ports[0] if open_ports else 0)
             for pr in d.get("probes", []):
                 cve = (pr.get("cve") or "").upper()
                 k = self.kev.get(cve) if cve else None
@@ -480,7 +483,7 @@ class VulnScanner:
                 results.setdefault(d["id"], []).append({
                     "cve": cve or pr.get("id", "probe").upper(), "score": None, "sev": "unknown",
                     "desc": pr.get("title") or f"Confirmed vulnerable by {pr.get('id', 'an active check')}", "pub": "",
-                    "port": pr.get("port") or 0, "software": pr.get("title") or pr.get("id", ""),
+                    "port": pr.get("port") or host_port, "software": pr.get("title") or pr.get("id", ""),
                     "product": pr.get("id", ""), "ver": "", "kev": bool(k), "kev_name": (k or {}).get("name", ""),
                     "ransomware": bool(k and k.get("ransomware")), "distro": False,
                     "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
