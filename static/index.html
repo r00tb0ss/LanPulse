@@ -290,6 +290,7 @@
   <div class="modal-card">
     <div class="modal-head">
       <h3 id="setTitle"><i class="fa-solid fa-gear"></i>Settings</h3>
+      <button class="btn sm" id="btnWizard" style="margin-left:auto" title="Run the guided setup again"><i class="fa-solid fa-hat-wizard"></i>Setup guide</button>
       <button class="icon-btn" id="btnSetClose" title="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="tabs" id="setTabs">
@@ -348,6 +349,7 @@
 <script src="/static/traffic.js"></script>
 <script src="/static/sidebar.js"></script>
 <script src="/static/update.js"></script>
+<script src="/static/wizard.js"></script>
 <script src="/static/system.js"></script>
 <script src="/static/dnsview.js"></script>
 <script src="/static/vulnview.js"></script>
@@ -377,5 +379,6 @@
   }, 2500);
 })();
 </script>
+<div class="wiz hidden" id="wiz" role="dialog" aria-modal="true" aria-labelledby="wizTitle"><div class="wiz-card" id="wizCard"></div></div>
 </body>
 </html>

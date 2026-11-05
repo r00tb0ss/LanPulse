@@ -57,6 +57,7 @@ DEFAULT_SETTINGS = {
     "honeypot": {"enabled": False, "bind": "0.0.0.0", "ingest_key": "",
                  "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
                               "smb": True, "rdp": True, "mysql": True}},
+    "wizard": {"done": False},
     "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
@@ -313,6 +314,9 @@ def apply_update(current: dict, incoming: dict) -> dict:
             for k in list(cur["services"]):
                 if k in hp["services"]:
                     cur["services"][k] = bool(hp["services"][k])
+    wz = incoming.get("wizard")
+    if isinstance(wz, dict) and "done" in wz:
+        new["wizard"]["done"] = bool(wz["done"])
     ai = incoming.get("ai")
     if isinstance(ai, dict):
         cur = new["ai"]
