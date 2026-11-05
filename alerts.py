@@ -46,7 +46,7 @@ DEFAULT_SETTINGS = {
     "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "",
                 "ingest_key": "", "forwards": [], "ignore_noise": True,
                 "syslog_from": [], "syslog_any": False, "auto_intel": True},
-    "local": {"enabled": True, "sweep_threshold": 40, "scan_threshold": 15, "ignore": [],
+    "local": {"enabled": True, "sweep_threshold": 40, "scan_threshold": 15, "lateral_threshold": 5, "ignore": [],
               "dhcp_check": True, "dhcp_probe": False, "dhcp_servers": [], "gateway_mac": ""},
     "summary": {"enabled": False, "time": "08:00", "last_sent": ""},
     "unifi": {"host": "", "api_key": "", "username": "", "password": "", "site": "default",
@@ -233,7 +233,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
         cur = new["local"]
         if "enabled" in lc:
             cur["enabled"] = bool(lc["enabled"])
-        for f, lo, hi in (("sweep_threshold", 10, 1000), ("scan_threshold", 5, 1000)):
+        for f, lo, hi in (("sweep_threshold", 10, 1000), ("scan_threshold", 5, 1000), ("lateral_threshold", 3, 100)):
             if f in lc:
                 try:
                     cur[f] = max(lo, min(hi, int(lc[f])))
