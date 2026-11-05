@@ -491,6 +491,22 @@ class VulnScanner:
                     "ransomware": bool(k and k.get("ransomware")), "distro": False,
                     "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
                     "os": False, "confidence": "version"})
+        # OpenVAS results: real vulnerability tests. QoD >= 80 means the test exercised the flaw or fingerprinted the
+        # exact version, so those rank as Confirmed; weaker detections stay "version".
+        for d in list(self.nm.devices.values()):
+            for ov in d.get("openvas", []):
+                conf = "confirmed" if ov.get("qod", 0) >= 80 else "version"
+                for cve in (ov.get("cve") or [""]):
+                    cid = cve or ("OPENVAS-" + (ov.get("oid", "").split(".")[-1] or "result"))
+                    k = self.kev.get(cve) if cve else None
+                    x = (self.exploits.get(cve) or {}) if cve else {}
+                    results.setdefault(d["id"], []).append({
+                        "cve": cid, "score": ov.get("severity"), "sev": severity(ov.get("severity")),
+                        "desc": ov.get("desc") or ov.get("name", ""), "pub": "", "port": ov.get("port") or 0,
+                        "software": ov.get("name", "")[:80], "product": "openvas", "ver": "", "kev": bool(k),
+                        "kev_name": (k or {}).get("name", ""), "ransomware": bool(k and k.get("ransomware")),
+                        "distro": False, "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                        "os": False, "confidence": conf, "probe": "openvas"})
         # Confirmed findings: NSE checks that actively TESTED a flaw and reported VULNERABLE (thorough scans).
         # These don't depend on a version string, so they catch patch-level holes banner-matching misses.
         for d in list(self.nm.devices.values()):

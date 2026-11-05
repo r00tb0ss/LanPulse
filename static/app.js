@@ -617,6 +617,8 @@ function renderSettings() {
     renderThreatSettings(body);
   } else if (setTab === "unifi") {
     renderUnifiSettings(body);
+  } else if (setTab === "scanner") {
+    renderScanner(body);
   } else if (setTab === "update") {
     renderUpdate(body);
   } else if (setTab === "system") {
@@ -784,7 +786,7 @@ function initUI() {
   $("btnSetClose").onclick = closeSettings;
   $("settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
   document.querySelectorAll("#setTabs button").forEach((b) => b.onclick = () => {
-    if (!["account", "update", "system"].includes(setTab)) collectSettings();
+    if (!["account", "update", "system", "scanner"].includes(setTab)) collectSettings();
     setTab = b.dataset.tab; renderSettings();
   });
   document.addEventListener("keydown", (e) => {

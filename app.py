@@ -51,6 +51,7 @@ from dns import DnsMonitor
 from vulns import VulnScanner
 import redteam
 import analyst
+from openvas import OpenVAS
 from services import ServiceMonitor
 from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
@@ -670,7 +671,7 @@ def wake_on_lan(mac: str, broadcast: str):
 DEVICE_DEFAULTS = {"name": "", "notes": "", "type_override": "", "trusted": False, "watched": False,
                    "findings": [], "ports": [], "ip_history": [], "os": "", "os_accuracy": 0, "os_type": "",
                    "os_family": "", "deep_scanned_at": 0, "scanning": False, "hostname": "", "vendor": "",
-                   "hints": {}, "evidence": [], "model": "", "friendly": "", "services": [], "probes": [], "vulners": []}
+                   "hints": {}, "evidence": [], "model": "", "friendly": "", "services": [], "probes": [], "vulners": [], "openvas": []}
 
 
 class LanPulse:
@@ -711,6 +712,7 @@ class LanPulse:
         self.vulns = VulnScanner(self)
         self.services = ServiceMonitor(self)
         self.honeypot = Honeypot(self)
+        self.openvas = OpenVAS(self)
         if args.demo:
             self.honeypot.seed_demo()
         self.discovery = Discovery(self)
@@ -1180,6 +1182,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         tasks.append(asyncio.create_task(nm.vulns.run()))
         tasks.append(asyncio.create_task(nm.services.run()))
         tasks.append(asyncio.create_task(nm.honeypot.run()))
+        tasks.append(asyncio.create_task(nm.openvas.run()))
         if nm.args.demo:
             tasks.append(asyncio.create_task(nm.flows.demo_loop()))
         yield
@@ -1883,6 +1886,63 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not d:
             return JSONResponse({"error": "Device not found"}, 404)
         return await asyncio.to_thread(nm.flows.summary, max(1, min(hours, 168)), d["ip"])
+
+    # ---- OpenVAS / Greenbone (Settings > Scanner). The sandboxed web app only writes a request file; a root-only
+    # helper (lanpulse-openvas) installs Docker and the Greenbone containers.
+    ov_dir = Path(nm.data_dir) / "openvas"
+    ov_unit = Path("/etc/systemd/system/lanpulse-openvas.path")
+
+    @app.get("/api/openvas")
+    async def openvas_status():
+        st = await asyncio.to_thread(nm.openvas.status)
+        st["helper_installed"] = ov_unit.exists() and not nm.args.demo
+        st["login"] = nm.auth.enabled
+        return st
+
+    @app.post("/api/openvas/install")
+    async def openvas_install(request: Request):
+        body = await request.json()
+        action = body.get("action") if isinstance(body, dict) else ""
+        if action not in ("install", "remove"):
+            return JSONResponse({"error": "Unknown action."}, 400)
+        if nm.args.demo:
+            return JSONResponse({"error": "Not available in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a login first (Login tab). Installing OpenVAS runs with administrator "
+                                          "rights, so LanPulse only allows it when the dashboard is password protected."}, 403)
+        if not ov_unit.exists():
+            return JSONResponse({"error": "The OpenVAS installer helper isn't set up yet. Re-run install.sh from the "
+                                          "terminal once (sudo ./install.sh --upgrade); after that it works from here."}, 400)
+        cur = nm.openvas.helper_state()
+        if cur.get("state") in ("installing", "queued") and (ov_dir / "request").exists():
+            return JSONResponse({"error": "An OpenVAS install is already in progress."}, 409)
+        ov_dir.mkdir(parents=True, exist_ok=True)
+        (ov_dir / "status.json").write_text(json.dumps({"state": "queued", "message": "Starting…", "t": time.time()}))
+        (ov_dir / "request").write_text(json.dumps({"action": action, "t": time.time()}))
+        log.info("OpenVAS %s requested from the dashboard", action)
+        return {"ok": True}
+
+    @app.post("/api/openvas/scan")
+    async def openvas_scan(request: Request):
+        body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Bad request."}, 400)
+        ips = [d["ip"] for d in nm.devices.values() if d.get("ip") and d.get("online") and not d.get("is_self")] \
+            if body.get("all") else [str(body.get("ip", ""))]
+        if not nm.openvas.cfg()["enabled"]:
+            return JSONResponse({"error": "Turn on OpenVAS in Settings > Scanner first."}, 400)
+        started, err = 0, ""
+        for ip in ips[:60]:
+            e = await asyncio.to_thread(nm.openvas.start_scan, ip)
+            if e:
+                err = e
+                if not body.get("all"):
+                    break
+            else:
+                started += 1
+        if not started and err:
+            return JSONResponse({"error": err}, 400)
+        return {"started": started}
 
     # ---- honeypot (built-in low-interaction decoy services)
     @app.get("/api/honeypot")
