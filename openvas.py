@@ -201,6 +201,9 @@ class OpenVAS:
                 g.find_id("get_scanners", "scanner", SCANNER_NAME)
             return True, "Ready."
         except GmpError as e:
+            if "auth" in str(e).lower():
+                return False, ("LanPulse can reach OpenVAS but its admin login doesn't match, so the installer's password "
+                               "step didn't finish. Press Install OpenVAS again to finish it.")
             return False, str(e)
         except Exception as e:
             return False, f"{type(e).__name__}: {e}"[:200]
