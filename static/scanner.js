@@ -48,7 +48,7 @@ function drawScanner(body, s) {
     ${s.installed && !s.ready ? `<div class="upd-note busy"><i class="fa-solid fa-spinner fa-spin"></i><div><b>Waiting for OpenVAS to finish loading</b>
       <span>${esc(s.message || "")} The first load of the vulnerability feed takes 30 to 90 minutes.</span></div></div>` : ""}
     ${s.ready ? `<div class="upd-note ok"><i class="fa-solid fa-circle-check"></i><div><b>OpenVAS is ready.</b></div></div>` : ""}
-    ${!s.installed && !installing ? `<div class="upd-staged"><div><b>Install OpenVAS on this server</b>
+    ${(!s.installed || /login doesn't match/.test(s.message || "")) && !installing ? `<div class="upd-staged"><div><b>Install OpenVAS on this server</b>
         <span class="muted">Needs about 4 GB of RAM, 15 GB of disk and internet access. It installs Docker (if missing) and the
         official Greenbone containers, and keeps their web page private to this machine.</span></div>
         <div class="btns"><button class="btn primary" id="ovInstall" ${blocked ? "disabled" : ""}><i class="fa-solid fa-download"></i>Install OpenVAS</button></div></div>` : ""}
