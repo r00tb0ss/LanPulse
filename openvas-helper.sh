@@ -68,7 +68,16 @@ for i in 1 2 3 4 5 6; do
   sleep 60
 done
 [[ -n "$pulled" ]] || fail "Downloading the Greenbone containers kept failing (the connection to registry.community.greenbone.net timed out). Check this server's internet access, DNS and IPv6, then press Install again; progress is kept."
-dc up -d || fail "Starting the Greenbone containers failed."
+# The data containers (scap-data, cert-bund-data, ...) sync Greenbone's feed on first start. That can take longer than
+# Docker waits, which makes "up" report a dependency as unhealthy even though it is still working. Retry for a while.
+started=""
+for i in $(seq 1 30); do
+  state installing "Starting OpenVAS and syncing its data (attempt $i of 30; the first start can take up to an hour)…"
+  if dc up -d; then started=1; break; fi
+  echo "-- containers not healthy yet (attempt $i); waiting 2 minutes"
+  sleep 120
+done
+[[ -n "$started" ]] || fail "OpenVAS's data containers never became healthy. Check this server's internet access (the feed uses rsync on port 873) and the log of greenbone-community-edition-scap-data-1."
 
 state installing "Creating the admin login…"
 PW=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)
