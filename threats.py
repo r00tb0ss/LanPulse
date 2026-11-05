@@ -611,6 +611,9 @@ class ThreatMonitor:
                 if flows:
                     flows.add(src, dst, raw.get("dport"), raw.get("proto", "tcp"), raw.get("action") == "blocked")
                 return None
+            fl = raw.get("flags") or []
+            if getattr(self.nm, "local", None) and dst and (not fl or ("SYN" in fl and "ACK" not in fl)):
+                self.nm.local.observe_lan(src, dst, raw.get("dport"))      # lateral-movement tracking (LAN to LAN)
             if self.cfg.get("ignore_noise", True) and lan_noise_reason(raw):
                 n = self.noise
                 n["total"] += 1
