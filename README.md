@@ -10,6 +10,10 @@ security score and an alert the moment something inside your network is compromi
 
 ![LanPulse threats dashboard](docs/images/threats.png)
 
+![Honeypot view](docs/images/honeypot.png)
+
+![AI Security Analyst](docs/images/analyst.png)
+
 Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberry Pi.
 
 ## Features
@@ -26,6 +30,9 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **One-click blocking** of attackers on your UniFi gateway (UDM, UDM Pro, UCG) through an IP group
 - **Research-scanner tagging**: Shodan, Censys, Shadowserver and others are verified by forward-confirmed reverse DNS (plus GreyNoise) and shown in grey
 - **IPS view**: what your UDM's intrusion prevention recognized (Mirai, router exploits, SSH scans...)
+- **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
+- **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
+- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data
 - **Daily summary** to any alert channel
 - **Device traffic on the attack map**: live arcs showing where each device connects (Google, Netflix, Amazon...), top destinations and busiest devices, and an alert when a device contacts an IP that attacked you
 - **Security warnings** for risky services: Telnet, VNC, FTP, exposed databases, Docker API, old SSH, HTTP-only admin pages
@@ -195,6 +202,48 @@ Old Windows is checked as an operating system too (Windows NT, 2000, XP, Server 
 updates are installed, so these list only flaws with a Metasploit module or on CISA's exploited list, marked
 "patch level unknown". Newer Windows is left out for the same reason: it is patched monthly.
 
+### Confirmed findings (active checks)
+
+Version matching can't see which patches are installed, so on **Thorough scans** LanPulse also runs nmap's safe
+vulnerability scripts (for example `smb-vuln-ms17-010` for EternalBlue, plus checks for Heartbleed, POODLE and others)
+and reads the Windows version from `smb-os-discovery`. Each finding carries a confidence tier: **Confirmed** (an active
+check proved it), **Version match**, or **OS guess**. Confirmed findings rank first, show a Confirmed count and badge
+on the Vulnerabilities tab, and weigh heavily in the Risk Profile. The checks are non-intrusive and exploit nothing.
+
+![Vulnerabilities view](docs/images/vulns.png)
+
+## Honeypot
+
+The **Honeypot** tab runs decoy services that no real device should ever touch. It is **off by default**; turn it on
+under Settings on that tab. Telnet, FTP, SMB, RDP and MySQL are on by default; SSH and HTTP are optional (they need
+their ports free). Every connection is logged with the credentials tried. Hits are split into **internal** (a device
+on your LAN touched a decoy: likely compromised, alerts immediately) and **external**. External sensors, such as an
+ESP32 honeypot, can post events to `/api/honeypot/ingest` using the ingest key shown in settings.
+
+The honeypot is low-interaction: it speaks just enough of each protocol to collect logins, never gives a shell or real
+access, caps its logging under floods and escapes everything it records.
+
+![Honeypot](docs/images/honeypot.png)
+
+## AI Security Analyst
+
+The wand button in the top bar opens a chat that answers questions about your network ("What should I fix first?",
+"What happened overnight?"). It is **off by default**. Choose a provider from the gear icon, press **Test**, then **Save
+& enable**:
+
+| Provider | Server address | Notes |
+|---|---|---|
+| Ollama | `http://localhost:11434` | Local; nothing leaves your network |
+| OpenAI-compatible | `http://localhost:1234/v1` | LM Studio, vLLM, LocalAI, Groq, OpenRouter, OpenAI... needs an API key if hosted |
+| Anthropic | `https://api.anthropic.com` | Needs an API key; a network summary is sent to Anthropic |
+
+The analyst is strictly read-only: it sees a capped summary of what LanPulse already knows (risk profile, devices and
+ports, vulnerabilities, threats, recent events), cites it in answers, and can only explain; for fixes it gives steps for
+you to run. Device names and banners are treated as untrusted data. With a cloud provider, that summary is sent to
+them with each question, and the panel says so. API keys are stored on the LanPulse box and masked in settings.
+
+![AI Security Analyst](docs/images/analyst.png)
+
 ## Risk Profile (network security score)
 
 A single **A–F grade** (0–100) for the whole network, shown at the top of the Red Team tab and in NOC mode. It rolls up
@@ -280,7 +329,7 @@ found (Plex, Pi-hole, your router, Proxmox, Home Assistant and more).
 
 ## Updating
 
-**From the dashboard:** Settings > Update, choose the new `lanpulse.zip`, check the version shown, and click Install.
+**From the dashboard:** download `lanpulse.zip` from the [latest release](https://github.com/r00tb0ss/LanPulse/releases/latest), then Settings > Update, choose it, check the version shown, and click Install.
 LanPulse backs up the current version, installs the update, restarts, and reloads the page. If the install fails,
 the previous version is restored automatically and the log is shown. Updates need a dashboard login, because they
 run with administrator rights. The web app itself can't change its own files: a separate root-only helper
