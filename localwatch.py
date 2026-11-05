@@ -90,6 +90,7 @@ class LocalWatch:
         self.ip_mac: dict[str, tuple[str, float]] = {}
         self.last_flag: dict[tuple, float] = {}
         self.kind_times: dict[str, collections.deque] = {}
+        self.fw_seen: dict[tuple, list] = {}            # (src, dst, port) -> [last shown, repeats hidden]
         self.lateral: dict[str, dict] = {}            # src -> {dst: {ports}} within the window
         self.lateral_t: dict[str, dict] = {}          # src -> {dst: last time}
         self.gw_seen = time.time()           # when the router's known MAC last answered a sweep
@@ -456,6 +457,21 @@ class LocalWatch:
                       f"Router dropped traffic to port {port}") if port else "Router dropped traffic"
         else:
             detail = f"Connected to port {port}" if port else ""
+        if kind == "firewall":
+            # The same blocked attempt repeats constantly (a VPN client retrying, a chatty app). Show it once per
+            # 10 minutes with a count instead of one row per packet.
+            now = time.time()
+            key = (src, target, port)
+            seen = self.fw_seen.get(key)
+            if seen and now - seen[0] < 600:
+                seen[1] += 1
+                return None
+            repeats = seen[1] if seen else 0
+            if len(self.fw_seen) > 2000:
+                self.fw_seen = {k: v for k, v in self.fw_seen.items() if now - v[0] < 600}
+            self.fw_seen[key] = [now, 0]
+            if repeats:
+                detail = f"{detail} (repeated {repeats} more time{'s' if repeats != 1 else ''} since the last alert)"
         ev = {"t": time.time(), "src": src, "mac": "", "kind": kind, "target": target, "dport": port,
               "severity": KINDS[kind][1], "detail": detail[:300], "sensor": raw.get("sensor") or sensor}
         return self.record(ev)
