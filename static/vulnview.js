@@ -22,6 +22,8 @@ function renderVulns() {
   if (!s) return;
   const t = s.totals, st = s.status || {};
   $("vulnKpis").innerHTML = `
+    ${t.confirmed ? `<div class="kpi danger"><span class="k-lbl">Confirmed</span><span class="k-num">${t.confirmed}</span>
+      <span class="k-sub">verified by active check</span></div>` : ""}
     <div class="kpi ${t.kev ? "danger" : ""}"><span class="k-lbl">Actively exploited</span><span class="k-num">${t.kev}</span>
       <span class="k-sub">${t.kev ? "attackers use these now" : "none found"}</span></div>
     <div class="kpi ${t.exploits ? "warn-kpi" : ""}"><span class="k-lbl">Exploit available</span><span class="k-num" style="${t.exploits ? "color:#fdba74" : ""}">${t.exploits || 0}</span>
@@ -47,12 +49,13 @@ function renderVulns() {
 
   $("vulnFix").innerHTML = s.fix.length ? s.fix.map((g) => {
     const key = `${g.id}|${g.port}`;
-    return `<div class="fix ${g.kev ? "kev" : ""}">
+    return `<div class="fix ${g.confidence === "confirmed" ? "confirmed-fix" : g.kev ? "kev" : ""}">
       <button class="fix-row" data-key="${esc(key)}" aria-expanded="${vulnOpen.has(key)}">
-        ${scoreChip(g.max)}
+        ${g.confidence === "confirmed" && !g.max ? '<span class="score-chip confirmed-chip" title="Confirmed vulnerable by an active check (no CVSS score)">!</span>' : scoreChip(g.max)}
         <span class="fix-main"><b>${esc(g.software)}</b> <span class="muted">port ${g.port}</span><br>
           <span class="fix-dev">${esc(g.name)} · ${esc(g.ip)}</span></span>
-        <span class="fix-tags">${g.kev ? `<span class="tagchip bad">${g.kev} exploited</span>` : ""}
+        <span class="fix-tags">${g.confidence === "confirmed" ? '<span class="tagchip confirmed" title="An active check connected to this service and confirmed the flaw — not a version guess."><i class="fa-solid fa-circle-check"></i>confirmed</span>' : ""}
+          ${g.kev ? `<span class="tagchip bad">${g.kev} exploited</span>` : ""}
           ${g.msf ? `<span class="tagchip msf">${g.msf} Metasploit</span>` : ""}${g.edb ? `<span class="tagchip edb">${g.edb} Exploit-DB</span>` : ""}
           ${g.os ? '<span class="tagchip" title="Windows was identified, but a scan can\'t see which updates are installed. If this machine has every update for its version, some of these are already fixed.">patch level unknown</span>' : g.unverified ? '<span class="tagchip">version unknown</span>' : ""}
           <span class="tagchip">${g.count} CVE${g.count === 1 ? "" : "s"}</span>${g.distro ? '<span class="tagchip">may be patched</span>' : ""}</span>
@@ -65,7 +68,7 @@ function renderVulns() {
   const dmax = Math.max(1, ...s.devices.map((d) => d.count));
   $("vulnDevs").innerHTML = s.devices.map((d) => { const ty = TYPES[d.type] || TYPES.unknown; return `<div class="rk click" data-dev-id="${esc(d.id)}">
       <span class="ico"><i class="${faClass(ty)}" style="color:${ty.color}"></i></span><span class="nm">${esc(d.name)}</span>
-      <span class="ct">${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
+      <span class="ct">${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
       <div class="bar"><i style="width:${(100 * d.count / dmax).toFixed(1)}%;background:${SEV_COLOR[sevOf(d.max)]}"></i></div></div>`; }).join("")
     || `<div class="muted">No affected devices.</div>`;
 
@@ -91,8 +94,9 @@ async function fillFixDetail(key) {
 
 function cveRow(f) {
   const msf = f.msf || [], edb = f.edb || [];
-  return `<div class="cve ${f.kev ? "kev" : msf.length ? "msf" : ""}">${scoreChip(f.score)}
+  return `<div class="cve ${f.confidence === "confirmed" ? "confirmed" : f.kev ? "kev" : msf.length ? "msf" : ""}">${scoreChip(f.score)}
     <div><a href="${esc(nvdLink(f.cve))}" target="_blank" rel="noopener"><b>${esc(f.cve)}</b></a>
+      ${f.confidence === "confirmed" ? '<span class="tagchip confirmed" title="An active check confirmed this flaw on the device — not inferred from a version number."><i class="fa-solid fa-circle-check"></i>confirmed</span>' : ""}
       ${f.kev ? `<span class="tagchip bad">exploited${f.ransomware ? " · ransomware" : ""}</span>` : ""}
       ${msf.length ? '<span class="tagchip msf">Metasploit</span>' : ""}${edb.length ? '<span class="tagchip edb">Exploit-DB</span>' : ""}
       ${f.os ? '<span class="tagchip" title="Windows was identified, but a scan can\'t see which updates are installed, so only flaws with a public exploit are listed.">patch level unknown</span>' : f.unverified ? '<span class="tagchip" title="LanPulse recognised the software but not its exact version, so it lists only flaws with a public exploit. Check the version.">version unknown</span>' : ""}

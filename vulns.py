@@ -127,9 +127,10 @@ def windows_version(d: dict):
 
 
 def rank_key(f: dict):
-    """Worst first: actively exploited, then a Metasploit module exists (exact version before unknown), then a
-    public exploit, then severity."""
-    return (not f["kev"], not f.get("msf"), bool(f.get("unverified")), not f.get("edb"), -(f["score"] or 0))
+    """Worst first: confirmed by an active check, then actively exploited, then a Metasploit module exists (exact
+    version before unknown), then a public exploit, then severity."""
+    return (f.get("confidence") != "confirmed", not f["kev"], not f.get("msf"),
+            bool(f.get("unverified")), not f.get("edb"), -(f["score"] or 0))
 DISTRO = re.compile(r"(ubuntu|debian|deb\d|\+deb|el\d|\.el|rhel|centos|fedora|suse|raspbian|alpine)", re.I)
 PRE = {"alpha": -4, "a": -4, "beta": -3, "b": -3, "pre": -2, "rc": -2, "dev": -5}
 
@@ -467,7 +468,23 @@ class VulnScanner:
                         "ver": it["ver"], "kev": bool(k), "kev_name": (k or {}).get("name", ""),
                         "ransomware": bool(k and k["ransomware"]), "distro": it["distro"],
                         "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": it["unknown"],
-                        "os": it.get("os", False)})
+                        "os": it.get("os", False),
+                        "confidence": "os-guess" if it.get("os") else "version"})
+        # Confirmed findings: NSE checks that actively TESTED a flaw and reported VULNERABLE (thorough scans).
+        # These don't depend on a version string, so they catch patch-level holes banner-matching misses.
+        for d in list(self.nm.devices.values()):
+            for pr in d.get("probes", []):
+                cve = (pr.get("cve") or "").upper()
+                k = self.kev.get(cve) if cve else None
+                x = (self.exploits.get(cve) or {}) if cve else {}
+                results.setdefault(d["id"], []).append({
+                    "cve": cve or pr.get("id", "probe").upper(), "score": None, "sev": "unknown",
+                    "desc": pr.get("title") or f"Confirmed vulnerable by {pr.get('id', 'an active check')}", "pub": "",
+                    "port": pr.get("port") or 0, "software": pr.get("title") or pr.get("id", ""),
+                    "product": pr.get("id", ""), "ver": "", "kev": bool(k), "kev_name": (k or {}).get("name", ""),
+                    "ransomware": bool(k and k.get("ransomware")), "distro": False,
+                    "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                    "os": False, "confidence": "confirmed", "probe": pr.get("id", "")})
         for dev_id, items in results.items():
             seen, uniq = set(), []
             for f in sorted(items, key=rank_key):
@@ -588,11 +605,12 @@ class VulnScanner:
             rows.append({"id": dev_id, "ip": d["ip"], "name": self.nm.label(d), "type": d.get("type", "unknown"),
                          "count": len(items), "kev": sum(f["kev"] for f in items),
                          "exploits": sum(1 for f in items if f.get("msf") or f.get("edb")),
+                         "confirmed": sum(1 for f in items if f.get("confidence") == "confirmed"),
                          "critical": sum(f["sev"] == "critical" for f in items),
                          "high": sum(f["sev"] == "high" for f in items),
                          "max": max((f["score"] or 0) for f in items) if items else 0,
                          "software": sorted({f["software"] for f in items})[:4]})
-        rows.sort(key=lambda r: (-r["kev"], -r["exploits"], -r["max"], -r["count"]))
+        rows.sort(key=lambda r: (-r["confirmed"], -r["kev"], -r["exploits"], -r["max"], -r["count"]))
         # "fix first": one line per device + software, worst first
         groups: dict[tuple, dict] = {}
         for dev_id, items in self.results.items():
@@ -603,13 +621,16 @@ class VulnScanner:
                 g = groups.setdefault((dev_id, f["software"], f["port"]), {
                     "id": dev_id, "name": self.nm.label(d), "ip": d["ip"], "software": f["software"], "port": f["port"],
                     "count": 0, "kev": 0, "max": 0, "top": f, "distro": f["distro"], "unverified": f.get("unverified", False),
-                    "os": f.get("os", False)})
+                    "os": f.get("os", False), "confirmed": 0, "confidence": f.get("confidence", "version")})
                 g["count"] += 1
                 g["kev"] += f["kev"]
+                g["confirmed"] += f.get("confidence") == "confirmed"
                 g["msf"] = g.get("msf", 0) + bool(f.get("msf"))
                 g["edb"] = g.get("edb", 0) + bool(f.get("edb") and not f.get("msf"))
                 g["max"] = max(g["max"], f["score"] or 0)
-        fix = sorted(groups.values(), key=lambda g: (-g["kev"], -g.get("msf", 0), g["unverified"], -g.get("edb", 0), -g["max"], -g["count"]))[:40]
+                if f.get("confidence") == "confirmed":       # a confirmed hit heads the group
+                    g["top"], g["confidence"] = f, "confirmed"
+        fix = sorted(groups.values(), key=lambda g: (-g["confirmed"], -g["kev"], -g.get("msf", 0), g["unverified"], -g.get("edb", 0), -g["max"], -g["count"]))[:40]
         # LanPulse's own checks (risky services, end-of-life Windows) belong on this page too
         config = [{"id": d["id"], "name": self.nm.label(d), "ip": d["ip"], "level": f["level"], "text": f["text"],
                    "port": f.get("port")}
@@ -620,6 +641,7 @@ class VulnScanner:
                 "totals": {"cves": len({f["cve"] for f in all_f}), "kev": len({f["cve"] for f in all_f if f["kev"]}),
                            "exploits": len({f["cve"] for f in all_f if f.get("msf") or f.get("edb")}),
                            "msf": len({f["cve"] for f in all_f if f.get("msf")}),
+                           "confirmed": sum(1 for f in all_f if f.get("confidence") == "confirmed"),
                            "critical": len({f["cve"] for f in all_f if f["sev"] == "critical"}),
                            "devices": len(rows), "scanned": sum(1 for d in devs.values() if d.get("deep_scanned_at"))},
                 "kev_list": len(self.kev), "has_key": bool(self.cfg.get("nvd_key")),
