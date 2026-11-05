@@ -833,6 +833,51 @@ label.check input { width: auto; }
 .cve-research{display:flex;gap:10px;flex-wrap:wrap;margin-top:3px;font-size:11px}
 .cve-research a{color:var(--muted);text-decoration:none}.cve-research a:hover{color:var(--accent)}
 
+/* ============================= HONEYPOT ============================= */
+.pot-listeners{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px}
+.pot-listener{display:inline-flex;align-items:center;gap:6px;font:600 12px Inter,sans-serif;padding:5px 10px;
+  border-radius:999px;border:1px solid var(--border2);background:var(--panel);color:var(--muted)}
+.pot-listener i{font-size:8px}
+.pot-listener.listening{color:var(--text);border-color:#166534}.pot-listener.listening i{color:#22c55e}
+.pot-listener.off i{color:var(--dim)}
+.pot-listener.error{border-color:#7f1d1d}.pot-listener.error i{color:#f87171}
+.pot-port{color:var(--dim);font-family:var(--mono);font-size:11px;font-weight:500}
+.pot-lerr{color:#fca5a5;font-weight:500;font-size:11px;margin-left:4px}
+.pot-hits{display:grid;gap:2px;max-height:460px;overflow:auto}
+.pot-hit{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;font-size:13px;
+  border-left:3px solid transparent}
+.pot-hit:nth-child(odd){background:var(--bg2)}
+.pot-hit.internal{border-left-color:#dc2626;background:rgba(220,38,38,.1)}
+.pot-when{color:var(--muted);font-size:12px;min-width:62px}
+.pot-svc{font-weight:600;min-width:76px}
+.pot-ip{color:var(--text)}
+.pot-creds{color:#fbbf24;font-size:12px;display:inline-flex;align-items:center;gap:4px;margin-left:auto}
+.pot-creds i{font-size:10px}
+.pot-data{color:var(--dim);font-size:11px;margin-left:auto;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pot-att{display:grid;gap:3px;padding:8px 10px;border-radius:9px;background:var(--bg2);cursor:default}
+.pot-att[data-dev-ip]{cursor:pointer}.pot-att[data-dev-ip]:hover{background:var(--panel2)}
+.pot-att.internal{border:1px solid #7f1d1d}
+.pot-att-ip{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pot-att-meta{display:flex;align-items:center;gap:8px;font-size:12px}
+.pot-hitn{font-weight:700;font-variant-numeric:tabular-nums;background:var(--panel);border:1px solid var(--border2);
+  border-radius:999px;padding:0 8px;font-size:12px}
+.pot-bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px}
+.pot-bar-l{min-width:64px;font-weight:600}
+.pot-bar-track{flex:1;height:8px;background:var(--bg2);border-radius:999px;overflow:hidden}
+.pot-bar-fill{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:999px}
+.pot-bar-n{min-width:26px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.pot-cred{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 2px;font-size:13px;border-bottom:1px solid var(--border)}
+.pot-cred:last-child{border-bottom:0}
+.pot-cred-n{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.pot-setup{margin:0 0 14px}
+.pot-svc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0}
+.pot-svc-opt{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:start;padding:8px 10px;
+  border:1px solid var(--border);border-radius:9px;background:var(--bg2);cursor:pointer;font-size:13px}
+.pot-svc-opt input{grid-row:1/3;align-self:center}
+.pot-svc-h{font-weight:600}
+.pot-svc-note{color:var(--muted);font-size:11px;grid-column:2}
+@media(max-width:720px){.pot-svc-grid{grid-template-columns:1fr}.pot-data{display:none}.pot-creds{margin-left:8px}}
+
 /* ============================= THEMES ============================= */
 /* Default (dark navy) is the :root palette above. Others override the tokens. */
 

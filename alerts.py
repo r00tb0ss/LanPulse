@@ -54,6 +54,9 @@ DEFAULT_SETTINGS = {
     "layout": {},
     "dns": {"enabled": False, "url": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
     "vulns": {"enabled": True, "nvd_key": ""},
+    "honeypot": {"enabled": False, "bind": "0.0.0.0", "ingest_key": "",
+                 "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
+                              "smb": True, "rdp": True, "mysql": True}},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
                "deep": True, "workers": 2, "port": 8080, "https": False, "host": "0.0.0.0", "allow_hosts": []},
@@ -150,6 +153,8 @@ def masked(s: dict) -> dict:
         out["dns"]["abuse_key"] = MASK
     if out.get("vulns", {}).get("nvd_key"):
         out["vulns"]["nvd_key"] = MASK
+    if out.get("honeypot", {}).get("ingest_key"):
+        out["honeypot"]["ingest_key"] = MASK
     for f in ("api_key", "password"):
         if out["unifi"].get(f):
             out["unifi"][f] = MASK
@@ -285,6 +290,26 @@ def apply_update(current: dict, incoming: dict) -> dict:
             cur["enabled"] = bool(vu["enabled"])
         if "nvd_key" in vu and vu["nvd_key"] != MASK:
             cur["nvd_key"] = re.sub(r"[^A-Za-z0-9-]", "", str(vu["nvd_key"]))[:64]
+    hp = incoming.get("honeypot")
+    if isinstance(hp, dict):
+        cur = new["honeypot"]
+        if "enabled" in hp:
+            cur["enabled"] = bool(hp["enabled"])
+        if "bind" in hp:
+            b = str(hp["bind"]).strip()
+            if b in ("0.0.0.0", "::", ""):
+                cur["bind"] = b or "0.0.0.0"
+            else:
+                try:
+                    cur["bind"] = str(ipaddress.ip_address(b))
+                except ValueError:
+                    pass
+        if "ingest_key" in hp and hp["ingest_key"] != MASK:
+            cur["ingest_key"] = re.sub(r"[^A-Za-z0-9_-]", "", str(hp["ingest_key"]))[:64]
+        if isinstance(hp.get("services"), dict):
+            for k in list(cur["services"]):
+                if k in hp["services"]:
+                    cur["services"][k] = bool(hp["services"][k])
     sv = incoming.get("services")
     if isinstance(sv, dict) and isinstance(sv.get("checks"), list):
         new["services"]["checks"] = [c for c in (clean_check(x) for x in sv["checks"][:50]) if c]
