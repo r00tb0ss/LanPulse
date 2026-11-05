@@ -54,6 +54,7 @@ DEFAULT_SETTINGS = {
     "layout": {},
     "dns": {"enabled": False, "url": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
     "vulns": {"enabled": True, "nvd_key": ""},
+    "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
                "deep": True, "workers": 2, "port": 8080, "https": False, "host": "0.0.0.0", "allow_hosts": []},
@@ -150,6 +151,8 @@ def masked(s: dict) -> dict:
         out["dns"]["abuse_key"] = MASK
     if out.get("vulns", {}).get("nvd_key"):
         out["vulns"]["nvd_key"] = MASK
+    if out.get("ai", {}).get("api_key"):
+        out["ai"]["api_key"] = MASK
     for f in ("api_key", "password"):
         if out["unifi"].get(f):
             out["unifi"][f] = MASK
@@ -285,6 +288,21 @@ def apply_update(current: dict, incoming: dict) -> dict:
             cur["enabled"] = bool(vu["enabled"])
         if "nvd_key" in vu and vu["nvd_key"] != MASK:
             cur["nvd_key"] = re.sub(r"[^A-Za-z0-9-]", "", str(vu["nvd_key"]))[:64]
+    ai = incoming.get("ai")
+    if isinstance(ai, dict):
+        cur = new["ai"]
+        if "enabled" in ai:
+            cur["enabled"] = bool(ai["enabled"])
+        if ai.get("provider") in ("ollama", "openai", "anthropic"):
+            cur["provider"] = ai["provider"]
+        if "base_url" in ai:
+            u = str(ai["base_url"]).strip()[:300]
+            if not u or re.match(r"^https?://[A-Za-z0-9.\-\[\]:]+(:\d+)?(/[\w./\-~%]*)?$", u):
+                cur["base_url"] = u.rstrip("/")
+        if "model" in ai:
+            cur["model"] = re.sub(r"[^\w.:/\-@]", "", str(ai["model"]))[:120]
+        if "api_key" in ai and ai["api_key"] != MASK:
+            cur["api_key"] = re.sub(r"[^\x21-\x7e]", "", str(ai["api_key"]))[:300]
     sv = incoming.get("services")
     if isinstance(sv, dict) and isinstance(sv.get("checks"), list):
         new["services"]["checks"] = [c for c in (clean_check(x) for x in sv["checks"][:50]) if c]

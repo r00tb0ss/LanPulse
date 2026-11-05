@@ -46,6 +46,7 @@
   <div class="scanstate hide-sm"><span class="pulse" id="pulse"></span><span id="mLast">waiting…</span></div>
   <span class="conn" id="conn" title="Live connection"><i class="fa-solid fa-circle"></i> <span class="conn-txt">Connecting</span></span>
   <a class="icon-btn hide-sm" id="btnExport" href="/api/export.csv" title="Export devices (CSV)"><i class="fa-solid fa-file-arrow-down"></i></a>
+  <button class="icon-btn ai-btn" id="btnAi" title="Ask the AI security analyst"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
   <button class="icon-btn" id="btnNoc" title="Wall-display mode (operations center)"><i class="fa-solid fa-display"></i></button>
   <button class="icon-btn" id="btnSettings" title="Settings &amp; alerts"><i class="fa-solid fa-gear"></i></button>
   <a class="icon-btn hidden" id="btnLogout" href="/logout" title="Sign out"><i class="fa-solid fa-right-from-bracket"></i></a>
@@ -278,6 +279,23 @@
   </div>
 </div>
 
+<!-- AI security analyst: read-only Q&A over what LanPulse already knows -->
+<aside class="ai-drawer hidden" id="aiDrawer" aria-hidden="true" aria-label="AI security analyst">
+  <div class="ai-head">
+    <div class="ai-title"><i class="fa-solid fa-wand-magic-sparkles"></i><div><b>Security Analyst</b>
+      <span class="muted" id="aiSub">explains your network &mdash; never changes anything</span></div></div>
+    <button class="icon-btn" id="aiCfgBtn" title="Analyst settings"><i class="fa-solid fa-gear"></i></button>
+    <button class="icon-btn" id="aiClose" title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="ai-setup hidden" id="aiSetup"></div>
+  <div class="ai-log" id="aiLog"></div>
+  <div class="ai-sugg" id="aiSugg"></div>
+  <form class="ai-ask" id="aiForm">
+    <textarea id="aiQ" rows="2" maxlength="1000" placeholder="Ask about your network… e.g. What should I fix first?"></textarea>
+    <button class="btn primary" id="aiSend" type="submit" title="Ask"><i class="fa-solid fa-paper-plane"></i></button>
+  </form>
+</aside>
+
 <!-- NOC / wall-display mode -->
 <div class="noc hidden" id="noc" aria-hidden="true">
   <div class="noc-head">
@@ -310,6 +328,7 @@
 <script src="/static/redteamview.js"></script>
 <script src="/static/score.js"></script>
 <script src="/static/noc.js"></script>
+<script src="/static/analyst.js"></script>
 <script src="/static/timeline.js"></script>
 <script>
 /* If the stylesheet or app code didn't arrive (a dropped request right after sign-in, a flaky connection),
