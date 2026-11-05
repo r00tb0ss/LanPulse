@@ -50,12 +50,13 @@ from flows import FlowStore
 from dns import DnsMonitor
 from vulns import VulnScanner
 import redteam
+import analyst
 from services import ServiceMonitor
 from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 
-VERSION = "1.18.4"
+VERSION = "1.19.0"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -1610,6 +1611,40 @@ def build_app(nm: LanPulse) -> FastAPI:
             cur["history"] = nm.posture.history(days)
             return cur
         return await asyncio.to_thread(build)
+
+    # ---- AI analyst (read-only; explains what LanPulse already knows, never acts)
+    @app.get("/api/ai")
+    async def ai_status():
+        return analyst.status(nm)
+
+    @app.post("/api/ai/ask")
+    async def ai_ask(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        q = str(body.get("question", ""))[:1000] if isinstance(body, dict) else ""
+        return await asyncio.to_thread(analyst.ask, nm, q)
+
+    @app.post("/api/ai/test")
+    async def ai_test(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        cfg = analyst._cfg(nm)
+        if isinstance(body, dict):              # test unsaved values from the form, keeping a saved (masked) key
+            for k in ("provider", "base_url", "model", "api_key"):
+                v = str(body.get(k) or "").strip()
+                if v and v != alerts.MASK:
+                    cfg[k] = v
+            if cfg["provider"] not in analyst.PROVIDERS:
+                return JSONResponse({"error": "Unknown provider"}, 400)
+            base, model = analyst.DEFAULTS[cfg["provider"]]
+            cfg["base_url"] = (cfg["base_url"] or base).rstrip("/")
+            cfg["model"] = cfg["model"] or model
+        ok, msg = await asyncio.to_thread(analyst.test, cfg)
+        return {"ok": ok, "message": msg}
 
     @app.get("/api/redteam")
     async def redteam_summary():
