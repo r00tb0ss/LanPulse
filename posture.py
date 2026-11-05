@@ -15,6 +15,7 @@ import time
 # (key, points each, cap for this category, label)
 WEIGHTS = {
     "compromised": (30, 60, "device talking to a known botnet C2"),
+    "confirmed": (20, 50, "flaw confirmed by an active check"),
     "kev": (12, 48, "actively exploited vulnerability"),
     "exploit": (6, 30, "vulnerability with a public exploit"),
     "eol_os": (10, 30, "end-of-life operating system"),
@@ -51,6 +52,11 @@ def compute(nm) -> dict:
 
     for d in devs:
         dv = results.get(d["id"], [])
+        confirmed = sum(1 for f in dv if f.get("confidence") == "confirmed")
+        if confirmed:
+            counts["confirmed"] += 1
+            findings.append(("confirmed", WEIGHTS["confirmed"][0],
+                             f"{nm.label(d)} has {confirmed} flaw{'s' if confirmed > 1 else ''} confirmed by an active check"))
         kev = sum(1 for f in dv if f.get("kev"))
         msf = sum(1 for f in dv if f.get("msf") and not f.get("kev"))
         if kev:
