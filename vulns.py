@@ -470,6 +470,27 @@ class VulnScanner:
                         "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": it["unknown"],
                         "os": it.get("os", False),
                         "confidence": "os-guess" if it.get("os") else "version"})
+        # vulners.com lookups (thorough scans): CVEs for the detected service version. Version-based, so they rank
+        # as "version" findings; only added when the NVD match above did not already list the CVE on that device.
+        for d in list(self.nm.devices.values()):
+            have = {f["cve"] for f in results.get(d["id"], [])}
+            ports = {p["port"]: p for p in d.get("ports", [])}
+            for vf in d.get("vulners", []):
+                cve = vf.get("cve", "")
+                if not cve or cve in have:
+                    continue
+                have.add(cve)
+                k = self.kev.get(cve)
+                x = self.exploits.get(cve) or {}
+                p = ports.get(vf.get("port"), {})
+                results.setdefault(d["id"], []).append({
+                    "cve": cve, "score": vf.get("cvss") or None, "sev": severity(vf.get("cvss") or None),
+                    "desc": "Listed by vulners.com for this service's detected version (not independently verified).",
+                    "pub": "", "port": vf.get("port") or 0, "software": (p.get("product") or p.get("service") or "service"),
+                    "product": "vulners", "ver": "", "kev": bool(k), "kev_name": (k or {}).get("name", ""),
+                    "ransomware": bool(k and k.get("ransomware")), "distro": False,
+                    "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                    "os": False, "confidence": "version"})
         # Confirmed findings: NSE checks that actively TESTED a flaw and reported VULNERABLE (thorough scans).
         # These don't depend on a version string, so they catch patch-level holes banner-matching misses.
         for d in list(self.nm.devices.values()):
