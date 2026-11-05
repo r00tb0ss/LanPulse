@@ -319,7 +319,9 @@ def arp_sweep(subnet: str, iface: str, gateway: str = "") -> tuple[dict[str, dic
 # Windows version (which also sharpens ordinary CVE matching). Intrusive/DoS checks (ms08-067, ms12-020) are
 # deliberately left out so LanPulse is safe to run against any home device.
 SAFE_NSE = ("smb-os-discovery,smb-security-mode,smb2-security-mode,smb2-capabilities,"
-            "smb-vuln-ms17-010,rdp-ntlm-info,ssl-heartbleed,ssl-poodle")
+            "smb-vuln-ms17-010,rdp-ntlm-info,ssl-heartbleed,ssl-poodle,vulners")
+# vulners looks up each detected service version (its CPE only) at vulners.com; keep just serious or exploitable ones
+NSE_ARGS = "vulners.mincvss=7.0"
 # Fallback CVE for a script that reports VULNERABLE without a machine-readable CVE in its output.
 SCRIPT_CVE = {"smb-vuln-ms17-010": "CVE-2017-0143", "smb-vuln-ms08-067": "CVE-2008-4250",
               "smb-vuln-cve-2017-7494": "CVE-2017-7494", "rdp-vuln-ms12-020": "CVE-2012-0002",
@@ -337,7 +339,7 @@ def nmap_deep(ip: str, top_ports: int, thorough: bool = False) -> dict | None:
     if not HAVE_NMAP:
         return None
     if thorough:
-        cmd = ["nmap", "-Pn", "-T4", "-p-", "-sV", "--version-all", "--script", SAFE_NSE, "-oX", "-", ip]
+        cmd = ["nmap", "-Pn", "-T4", "-p-", "-sV", "--version-all", "--script", SAFE_NSE, "--script-args", NSE_ARGS, "-oX", "-", ip]
     else:
         cmd = ["nmap", "-Pn", "-T4", "--top-ports", str(top_ports), "-sV", "--version-light", "-oX", "-", ip]
     if IS_ROOT:
@@ -387,10 +389,28 @@ def nmap_deep(ip: str, top_ports: int, thorough: bool = False) -> dict | None:
     hints = {x.get("product", "") for x in host.findall("ports/port/service")
              if x.get("ostype") == "Windows" or "windows" in x.get("product", "").lower()}
     info["probes"], smb_os = parse_scripts(host)
+    info["vulners"] = list(getattr(parse_scripts, "vulners", []))
     if smb_os:                       # smb-os-discovery names the exact Windows version; feed it to CVE matching
         hints.add(smb_os)
     info["os_hint"] = " | ".join(sorted(x for x in hints if x))[:300]
     return info
+
+
+def parse_vulners(scr, port: int) -> list[dict]:
+    """CVEs the vulners script lists for one service: [{cve, cvss, exploit, port}] (version-based, not confirmed)."""
+    out = []
+    for tbl in scr.iter("table"):
+        el = {e.get("key"): (e.text or "") for e in tbl.findall("elem")}
+        cid = el.get("id", "").strip().upper()
+        if not re.fullmatch(r"CVE-\d{4}-\d{4,7}", cid):
+            continue
+        try:
+            cvss = float(el.get("cvss", "") or 0)
+        except ValueError:
+            cvss = 0.0
+        out.append({"cve": cid, "cvss": round(min(max(cvss, 0.0), 10.0), 1),
+                    "exploit": el.get("is_exploit", "").lower() == "true", "port": port})
+    return out
 
 
 def parse_scripts(host) -> tuple[list[dict], str]:
@@ -399,6 +419,7 @@ def parse_scripts(host) -> tuple[list[dict], str]:
     A finding counts as confirmed only when a vuln script reports state VULNERABLE (not "LIKELY" or "NOT").
     Returns (probes, smb_os_string)."""
     probes, seen, smb_os = [], set(), ""
+    vul, vseen = [], set()
     # (script element, port it ran on) for host scripts and per-port scripts
     pairs = [(s, 0) for s in host.findall("hostscript/script")]
     for p in host.findall("ports/port"):
@@ -415,6 +436,12 @@ def parse_scripts(host) -> tuple[list[dict], str]:
                 m = re.search(r"OS:\s*([^\n]+)", scr.get("output", ""))
                 if m:
                     smb_os = clean_text(m.group(1), 120)
+            continue
+        if sid == "vulners":
+            for v in parse_vulners(scr, port):
+                if (v["cve"], v["port"]) not in vseen:
+                    vseen.add((v["cve"], v["port"]))
+                    vul.append(v)
             continue
         if "vuln" not in sid and sid not in SCRIPT_CVE and sid not in SCRIPT_TITLE:
             continue
@@ -447,6 +474,7 @@ def parse_scripts(host) -> tuple[list[dict], str]:
             if key not in seen:
                 seen.add(key)
                 probes.append({"id": sid, "cve": cve, "port": port, "title": SCRIPT_TITLE.get(sid, sid)})
+    parse_scripts.vulners = vul[:80]          # read right after the call by nmap_deep
     return probes[:40], smb_os
 
 
@@ -642,7 +670,7 @@ def wake_on_lan(mac: str, broadcast: str):
 DEVICE_DEFAULTS = {"name": "", "notes": "", "type_override": "", "trusted": False, "watched": False,
                    "findings": [], "ports": [], "ip_history": [], "os": "", "os_accuracy": 0, "os_type": "",
                    "os_family": "", "deep_scanned_at": 0, "scanning": False, "hostname": "", "vendor": "",
-                   "hints": {}, "evidence": [], "model": "", "friendly": "", "services": [], "probes": []}
+                   "hints": {}, "evidence": [], "model": "", "friendly": "", "services": [], "probes": [], "vulners": []}
 
 
 class LanPulse:
@@ -1090,6 +1118,8 @@ class LanPulse:
                     for k in ("os_cpe", "os_hint"):
                         if info.get(k):
                             d[k] = info[k]
+                    if "vulners" in info:
+                        d["vulners"] = info["vulners"]
                     if "probes" in info:                 # confirmed-vulnerable results from NSE checks (thorough scans)
                         d["probes"] = info["probes"]
                     if info["hostname"] and not d.get("hostname"):
