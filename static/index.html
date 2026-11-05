@@ -34,6 +34,7 @@
     <button id="vVuln" role="tab" aria-selected="false" title="Vulnerabilities"><i class="fa-solid fa-bug"></i><span>Vulns</span><b class="tbadge hidden" id="vulnBadge">0</b></button>
     <button id="vSvc" role="tab" aria-selected="false" title="Services"><i class="fa-solid fa-heart-pulse"></i><span>Services</span><b class="tbadge hidden" id="svcBadge">0</b></button>
     <button id="vRed" role="tab" aria-selected="false" title="Red Team"><i class="fa-solid fa-crosshairs"></i><span>Red Team</span></button>
+    <button id="vPot" role="tab" aria-selected="false" title="Honeypot"><i class="fa-solid fa-jar"></i><span>Honeypot</span><b class="tbadge hidden" id="potBadge">0</b></button>
   </div>
   <div class="chips net-only">
     <span class="chip"><i class="fa-solid fa-sitemap"></i><span id="mSubnet">—</span></span>
@@ -252,6 +253,28 @@
     Metasploit's own metadata via the Vulnerabilities tab. MITRE ATT&amp;CK&reg; is a trademark of The MITRE Corporation.</p>
 </section>
 
+<!-- Honeypot: built-in low-interaction decoy services -->
+<section class="tview hidden" id="potView" aria-label="Honeypot">
+  <div class="v-head"><div><h2><i class="fa-solid fa-jar"></i>Honeypot</h2>
+    <span class="muted">decoy services no real device should ever touch &mdash; every hit is a warning sign</span></div>
+    <div class="v-tools">
+      <button class="btn sm ghost" id="potCfgBtn"><i class="fa-solid fa-gear"></i>Settings</button>
+    </div></div>
+  <div class="pot-setup hidden" id="potSetup"></div>
+  <div class="v-note hidden" id="potStatus"></div>
+  <div class="t-kpis four" id="potKpis"></div>
+  <div class="pot-listeners" id="potListeners"></div>
+  <div class="v-grid two">
+    <div class="t-card wide"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4><div class="pot-hits" id="potHits"></div></div>
+    <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap an internal device for details</span></h4><div class="rank" id="potAttackers"></div></div>
+    <div class="t-card"><h4><span>Decoys hit</span><span class="muted">which services drew fire</span></h4><div id="potServices"></div></div>
+    <div class="t-card"><h4><span>Credentials tried</span><span class="muted">logins attackers attempted</span></h4><div id="potCreds"></div></div>
+  </div>
+  <p class="v-foot">This is a <b>low-interaction</b> honeypot: the decoys log connections and the logins attackers try, but never
+    grant access or run anything. A hit from a device on your own network is a strong sign that device is compromised or scanning the LAN.
+    An external sensor (such as an ESP32 honeypot) can feed in hits via <span class="mono">POST /api/honeypot/ingest</span>.</p>
+</section>
+
   <aside class="panel" id="panel" aria-hidden="true">
     <button class="icon-btn close" id="btnClose" title="Close"><i class="fa-solid fa-xmark"></i></button>
     <div id="panelBody"></div>
@@ -308,6 +331,7 @@
 <script src="/static/vulnview.js"></script>
 <script src="/static/svcview.js"></script>
 <script src="/static/redteamview.js"></script>
+<script src="/static/honeypotview.js"></script>
 <script src="/static/score.js"></script>
 <script src="/static/noc.js"></script>
 <script src="/static/timeline.js"></script>
