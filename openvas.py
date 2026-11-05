@@ -199,7 +199,7 @@ class OpenVAS:
             return False, "OpenVAS isn't installed yet."
         try:
             with self._open() as g:
-                g.find_id("get_scan_configs", "config", CONFIG_NAME)
+                g.find_id("get_configs", "config", CONFIG_NAME)
                 g.find_id("get_scanners", "scanner", SCANNER_NAME)
             return True, "Ready."
         except GmpError as e:
@@ -264,7 +264,7 @@ class OpenVAS:
             return "A scan of this device is already running."
         try:
             with self._open() as g:
-                cfg = g.find_id("get_scan_configs", "config", CONFIG_NAME)
+                cfg = g.find_id("get_configs", "config", CONFIG_NAME)
                 scanner = g.find_id("get_scanners", "scanner", SCANNER_NAME)
                 plist = g.find_id("get_port_lists", "port_list", PORTLIST_NAME)
                 stamp = time.strftime("%Y%m%d-%H%M%S")
