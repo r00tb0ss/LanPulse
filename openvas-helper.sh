@@ -59,7 +59,15 @@ mv -f "$COMPOSE.new" "$COMPOSE"
 chmod 600 "$COMPOSE"
 
 state installing "Downloading and starting OpenVAS (several GB, this takes a while)…"
-dc pull || fail "Downloading the Greenbone containers failed."
+# Large downloads often fail once on a slow or flaky route to the registry; layers already fetched are kept, so retry.
+pulled=""
+for i in 1 2 3 4 5 6; do
+  state installing "Downloading OpenVAS containers (attempt $i of 6; several GB, this takes a while)…"
+  if dc pull; then pulled=1; break; fi
+  echo "-- download attempt $i failed; retrying in 60 seconds"
+  sleep 60
+done
+[[ -n "$pulled" ]] || fail "Downloading the Greenbone containers kept failing (the connection to registry.community.greenbone.net timed out). Check this server's internet access, DNS and IPv6, then press Install again; progress is kept."
 dc up -d || fail "Starting the Greenbone containers failed."
 
 state installing "Creating the admin login…"

@@ -57,7 +57,7 @@ from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 
-VERSION = "1.20.0"
+VERSION = "1.20.1"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
