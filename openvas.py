@@ -51,6 +51,8 @@ class Gmp:
         self.s: socket.socket | None = None
 
     def __enter__(self):
+        if self.s is not None:                # already connected (and possibly logged in): keep that connection
+            return self
         self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.s.settimeout(self.timeout)
         try:
