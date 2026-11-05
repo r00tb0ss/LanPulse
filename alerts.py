@@ -58,6 +58,7 @@ DEFAULT_SETTINGS = {
                  "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
                               "smb": True, "rdp": True, "mysql": True}},
     "openvas": {"enabled": False, "auto": False, "username": "admin", "password": ""},
+    "wizard": {"done": False},
     "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
@@ -326,6 +327,9 @@ def apply_update(current: dict, incoming: dict) -> dict:
             cur["username"] = re.sub(r"[^\w.@\-]", "", str(ov["username"]))[:64] or "admin"
         if "password" in ov and ov["password"] != MASK:
             cur["password"] = re.sub(r"[^\x21-\x7e]", "", str(ov["password"]))[:128]
+    wz = incoming.get("wizard")
+    if isinstance(wz, dict) and "done" in wz:
+        new["wizard"]["done"] = bool(wz["done"])
     ai = incoming.get("ai")
     if isinstance(ai, dict):
         cur = new["ai"]

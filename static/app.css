@@ -1027,3 +1027,15 @@ html[data-pretheme="synthwave"]{background:#140a2e}
 .ov-list{display:grid;gap:6px;margin-top:8px}
 .ov-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border2);border-radius:9px;background:var(--ctrl);font-size:13px}
 @media(max-width:560px){.ov-row{grid-template-columns:1fr auto}.ov-row>span:nth-child(2){grid-column:1/-1;order:3}}
+/* First-run setup guide */
+.wiz{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.wiz.hidden{display:none}
+.wiz-card{width:min(560px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--border2);border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.wiz-card h3{margin:10px 0 12px;display:flex;gap:10px;align-items:center}.wiz-card h3 i{color:var(--accent)}
+.wiz-card p,.wiz-card li{line-height:1.5}.wiz-card ul{padding-left:20px;margin:8px 0}
+.wiz-dots{display:flex;gap:6px}.wiz-dots span{height:4px;flex:1;border-radius:2px;background:var(--border2)}
+.wiz-dots span.on{background:var(--accent)}.wiz-dots span.done{background:var(--accent2)}
+.wiz-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.wiz-facts div{background:var(--ctrl);border:1px solid var(--border2);border-radius:10px;padding:10px}
+.wiz-facts b{display:block;font-size:15px;word-break:break-all}.wiz-facts span{font-size:12px;color:var(--muted)}
+.wiz-foot{display:flex;gap:8px;margin-top:18px;align-items:center}
