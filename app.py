@@ -311,13 +311,31 @@ def arp_sweep(subnet: str, iface: str, gateway: str = "") -> tuple[dict[str, dic
     return found, pairs
 
 
+# Safe NSE scripts run on a thorough scan. These actively TEST for a flaw instead of guessing from a version
+# number, so they catch patch-level holes a banner can't see (SMB doesn't advertise its patch level). None of
+# these exploit or crash the target: smb-vuln-ms17-010 is a safe check, and smb-os-discovery pins the exact
+# Windows version (which also sharpens ordinary CVE matching). Intrusive/DoS checks (ms08-067, ms12-020) are
+# deliberately left out so LanPulse is safe to run against any home device.
+SAFE_NSE = ("smb-os-discovery,smb-security-mode,smb2-security-mode,smb2-capabilities,"
+            "smb-vuln-ms17-010,rdp-ntlm-info,ssl-heartbleed,ssl-poodle")
+# Fallback CVE for a script that reports VULNERABLE without a machine-readable CVE in its output.
+SCRIPT_CVE = {"smb-vuln-ms17-010": "CVE-2017-0143", "smb-vuln-ms08-067": "CVE-2008-4250",
+              "smb-vuln-cve-2017-7494": "CVE-2017-7494", "rdp-vuln-ms12-020": "CVE-2012-0002",
+              "ssl-heartbleed": "CVE-2014-0160", "ssl-poodle": "CVE-2014-3566",
+              "smb-vuln-cve2009-3103": "CVE-2009-3103", "http-shellshock": "CVE-2014-6271"}
+SCRIPT_TITLE = {"smb-vuln-ms17-010": "SMBv1 remote code execution (EternalBlue, MS17-010)",
+                "ssl-heartbleed": "OpenSSL Heartbleed memory disclosure",
+                "ssl-poodle": "SSLv3 POODLE information disclosure"}
+
+
 def nmap_deep(ip: str, top_ports: int, thorough: bool = False) -> dict | None:
     """Port + version scan. A thorough scan checks all 65,535 ports with nmap's strongest version detection
-    (slower, a few minutes per device), which finds far more software to check for vulnerabilities."""
+    (slower, a few minutes per device) and runs a set of safe NSE checks that actively test for well-known
+    holes (EternalBlue, weak SMB signing, Heartbleed) rather than only matching version numbers."""
     if not HAVE_NMAP:
         return None
     if thorough:
-        cmd = ["nmap", "-Pn", "-T4", "-p-", "-sV", "--version-all", "-oX", "-", ip]
+        cmd = ["nmap", "-Pn", "-T4", "-p-", "-sV", "--version-all", "--script", SAFE_NSE, "-oX", "-", ip]
     else:
         cmd = ["nmap", "-Pn", "-T4", "--top-ports", str(top_ports), "-sV", "--version-light", "-oX", "-", ip]
     if IS_ROOT:
@@ -364,9 +382,70 @@ def nmap_deep(ip: str, top_ports: int, thorough: bool = False) -> dict | None:
             info["os_family"] = oc.get("osfamily", "")
         info["os_cpe"] = [c.text.strip() for c in om.findall("osclass/cpe") if c.text][:6]
     # Windows reports its own version through SMB/RPC services ("Microsoft Windows XP microsoft-ds")
-    info["os_hint"] = " | ".join(sorted({x.get("product", "") for x in host.findall("ports/port/service")
-                                         if x.get("ostype") == "Windows" or "windows" in x.get("product", "").lower()}))[:300]
+    hints = {x.get("product", "") for x in host.findall("ports/port/service")
+             if x.get("ostype") == "Windows" or "windows" in x.get("product", "").lower()}
+    info["probes"], smb_os = parse_scripts(host)
+    if smb_os:                       # smb-os-discovery names the exact Windows version; feed it to CVE matching
+        hints.add(smb_os)
+    info["os_hint"] = " | ".join(sorted(x for x in hints if x))[:300]
     return info
+
+
+def parse_scripts(host) -> tuple[list[dict], str]:
+    """Pull confirmed-vulnerable results and the SMB-reported OS from NSE script output.
+
+    A finding counts as confirmed only when a vuln script reports state VULNERABLE (not "LIKELY" or "NOT").
+    Returns (probes, smb_os_string)."""
+    probes, seen, smb_os = [], set(), ""
+    # (script element, port it ran on) for host scripts and per-port scripts
+    pairs = [(s, 0) for s in host.findall("hostscript/script")]
+    for p in host.findall("ports/port"):
+        port = int(p.get("portid", 0) or 0)
+        pairs += [(s, port) for s in p.findall("script")]
+    for scr, port in pairs:
+        sid = scr.get("id", "")
+        if sid == "smb-os-discovery":
+            for e in scr.iter("elem"):
+                if e.get("key") == "os" and (e.text or "").strip():
+                    smb_os = clean_text(e.text, 120)
+                    break
+            if not smb_os:
+                m = re.search(r"OS:\s*([^\n]+)", scr.get("output", ""))
+                if m:
+                    smb_os = clean_text(m.group(1), 120)
+            continue
+        if "vuln" not in sid and sid not in SCRIPT_CVE and sid not in SCRIPT_TITLE:
+            continue
+        found_table = False
+        for tbl in scr.iter("table"):
+            state = title = ""
+            for e in tbl.findall("elem"):
+                if e.get("key") == "state":
+                    state = (e.text or "")
+                elif e.get("key") == "title":
+                    title = (e.text or "")
+            st = state.upper()
+            if "VULNERABLE" not in st or "NOT VULNERABLE" in st or "LIKELY" in st or st.strip().startswith("UNKNOWN"):
+                continue                               # only a definite VULNERABLE counts as confirmed
+            found_table = True
+            blob = ET.tostring(tbl, encoding="unicode")
+            m = re.search(r"CVE-\d{4}-\d{4,7}", tbl.get("key", "") + " " + blob, re.I)
+            cve = m.group(0).upper() if m else SCRIPT_CVE.get(sid, "")
+            key = (sid, cve, port)
+            if key in seen:
+                continue
+            seen.add(key)
+            probes.append({"id": sid, "cve": cve, "port": port,
+                           "title": clean_text(title, 160) or SCRIPT_TITLE.get(sid, sid)})
+        # Fallback: older output format carries only the "output" text
+        if not found_table and "State: VULNERABLE" in scr.get("output", "") and "NOT VULNERABLE" not in scr.get("output", ""):
+            m = re.search(r"CVE-\d{4}-\d{4,7}", scr.get("output", ""), re.I)
+            cve = (m.group(0).upper() if m else SCRIPT_CVE.get(sid, ""))
+            key = (sid, cve, port)
+            if key not in seen:
+                seen.add(key)
+                probes.append({"id": sid, "cve": cve, "port": port, "title": SCRIPT_TITLE.get(sid, sid)})
+    return probes[:40], smb_os
 
 
 # --------------------------------------------------------------------------- classification
@@ -561,7 +640,7 @@ def wake_on_lan(mac: str, broadcast: str):
 DEVICE_DEFAULTS = {"name": "", "notes": "", "type_override": "", "trusted": False, "watched": False,
                    "findings": [], "ports": [], "ip_history": [], "os": "", "os_accuracy": 0, "os_type": "",
                    "os_family": "", "deep_scanned_at": 0, "scanning": False, "hostname": "", "vendor": "",
-                   "hints": {}, "evidence": [], "model": "", "friendly": "", "services": []}
+                   "hints": {}, "evidence": [], "model": "", "friendly": "", "services": [], "probes": []}
 
 
 class LanPulse:
@@ -1006,6 +1085,8 @@ class LanPulse:
                     for k in ("os_cpe", "os_hint"):
                         if info.get(k):
                             d[k] = info[k]
+                    if "probes" in info:                 # confirmed-vulnerable results from NSE checks (thorough scans)
+                        d["probes"] = info["probes"]
                     if info["hostname"] and not d.get("hostname"):
                         d["hostname"] = info["hostname"]
                     if info["vendor"] and (not d.get("vendor") or d["vendor"].startswith("Private")):
