@@ -55,7 +55,7 @@ echo "==> Copying files to $DEST"
 mkdir -p "$DEST/data"
 chmod 700 "$DEST/data"
 if [[ "$SRC" != "$DEST" ]]; then
-  cp -r "$SRC"/*.py "$SRC"/requirements.txt "$SRC"/LICENSE "$SRC"/THIRD-PARTY-NOTICES.md "$SRC"/static "$DEST"/
+  cp -r "$SRC"/*.py "$SRC"/*.sh "$SRC"/requirements.txt "$SRC"/LICENSE "$SRC"/THIRD-PARTY-NOTICES.md "$SRC"/static "$DEST"/
 fi
 
 echo "==> Downloading map and icon libraries (so the dashboard works without internet)"
@@ -322,6 +322,35 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now lanpulse-update.path >/dev/null 2>&1 || true
+
+# ---- OpenVAS installer (Settings > Scanner): same pattern as the updater. Root-only helper + a path unit that fires
+# when the dashboard writes a request file. It does nothing unless you press Install in Settings.
+mkdir -p "$DEST/data/openvas"
+sed "s#@DEST@#$DEST#g" "$DEST/openvas-helper.sh" > /usr/local/sbin/lanpulse-openvas.new
+chmod 755 /usr/local/sbin/lanpulse-openvas.new
+mv -f /usr/local/sbin/lanpulse-openvas.new /usr/local/sbin/lanpulse-openvas
+cat > /etc/systemd/system/lanpulse-openvas.service <<UNIT
+[Unit]
+Description=LanPulse OpenVAS installer (started from Settings > Scanner)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lanpulse-openvas
+TimeoutStartSec=60min
+UNIT
+cat > /etc/systemd/system/lanpulse-openvas.path <<UNIT
+[Unit]
+Description=Watch for LanPulse OpenVAS install requests
+
+[Path]
+PathExists=$DEST/data/openvas/request
+Unit=lanpulse-openvas.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now lanpulse-openvas.path >/dev/null 2>&1 || true
 
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
   echo "==> Opening port $PORT in ufw (local networks only)"

@@ -37,10 +37,17 @@ KINDS = {
     "router_changed": ("Router hardware changed", "medium"),
     "ip_conflict": ("IP address conflict", "medium"),
     "port_scan": ("Port scan against LanPulse", "high"),
+    "lateral": ("Possible lateral movement", "high"),
     "honeypot": ("Touched the honeypot", "high"),
     "ips": ("IPS detection inside the LAN", "high"),
     "firewall": ("Blocked between networks", "low"),
 }
+
+
+# Ports an intruder uses to move from one machine to the next: SSH, Telnet, RPC, NetBIOS, SMB, RDP, WinRM, VNC,
+# SQL Server, MySQL, PostgreSQL, NFS. One device reaching many *different* machines on these is the classic sign.
+LATERAL_PORTS = {22, 23, 111, 135, 139, 445, 1433, 2049, 3306, 3389, 5432, 5900, 5985, 5986}
+LATERAL_WINDOW = 600
 
 
 def is_private(ip: str) -> bool:
@@ -83,6 +90,8 @@ class LocalWatch:
         self.ip_mac: dict[str, tuple[str, float]] = {}
         self.last_flag: dict[tuple, float] = {}
         self.kind_times: dict[str, collections.deque] = {}
+        self.lateral: dict[str, dict] = {}            # src -> {dst: {ports}} within the window
+        self.lateral_t: dict[str, dict] = {}          # src -> {dst: last time}
         self.gw_seen = time.time()           # when the router's known MAC last answered a sweep
         self.dhcp_servers: dict[str, dict] = {}     # server IP -> what it handed out, seen recently
         self.dlock = __import__("threading").Lock()
@@ -115,7 +124,8 @@ class LocalWatch:
             self.error = "LanPulse must run as root to watch the network"
             return []
         my = self.nm.net["my_ip"]
-        flt = (f"arp or (tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn and dst host {my})"
+        lports = " or ".join(f"dst port {p}" for p in sorted(LATERAL_PORTS))
+        flt = (f"arp or (tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn and (dst host {my} or ({lports})))"
                " or (udp and (port 67 or port 68 or port 5353))")
         try:
             self.sniffer = AsyncSniffer(iface=self.nm.net["iface"], filter=flt, prn=self.on_packet, store=False)
@@ -179,7 +189,10 @@ class LocalWatch:
             if ARP in pkt:
                 self.on_arp(pkt[ARP], now)
             elif IP in pkt and TCP in pkt:
-                self.on_syn(pkt[IP].src, int(pkt[TCP].dport), pkt.src.upper() if hasattr(pkt, "src") else "", now)
+                dport = int(pkt[TCP].dport)
+                if pkt[IP].dst == self.nm.net.get("my_ip"):
+                    self.on_syn(pkt[IP].src, dport, pkt.src.upper() if hasattr(pkt, "src") else "", now)
+                self.observe_lan(pkt[IP].src, pkt[IP].dst, dport, now)
         except Exception as e:
             log.debug("packet error: %s", e)
 
@@ -293,6 +306,47 @@ class LocalWatch:
             self.flag("port_scan", src, mac, self.nm.net["my_ip"], None,
                       f"Probed {len(ports)} ports on this server in 60 seconds ({sample}…).")
             q.clear()
+
+    # ---- lateral movement: one device reaching for many other machines on admin ports
+    def observe_lan(self, src: str, dst: str, dport, now: float | None = None):
+        """Called for every LAN-to-LAN connection attempt LanPulse can see (router logs between networks, and any
+        traffic that reaches this server's network card, e.g. through a mirror port)."""
+        try:
+            port = int(dport or 0)
+        except (TypeError, ValueError):
+            return
+        if port not in LATERAL_PORTS or not is_private(src) or not is_private(dst) or src == dst:
+            return
+        if dst in (self.nm.net.get("my_ip"),) or self.ignored(src):
+            return
+        now = now or time.time()
+        with self.dlock:
+            seen = self.lateral.setdefault(src, {})
+            seen.setdefault(dst, set()).add(port)
+            self.lateral_t.setdefault(src, {})[dst] = now
+            for d, t in list(self.lateral_t[src].items()):
+                if now - t > LATERAL_WINDOW:
+                    del self.lateral_t[src][d]
+                    seen.pop(d, None)
+            if len(self.lateral) > 500:                       # bound memory on a big or hostile network
+                for k in list(self.lateral)[:100]:
+                    self.lateral.pop(k, None)
+                    self.lateral_t.pop(k, None)
+            targets = list(seen)
+            ports = sorted({p for v in seen.values() for p in v})
+        need = int(self.cfg.get("lateral_threshold", 5))
+        if len(targets) >= need:
+            names = []
+            for ip in targets[:5]:
+                d = self.device_by_ip(ip)
+                names.append(self.nm.label(d) if d else ip)
+            self.flag("lateral", src, "", targets[0], ports[0] if ports else None,
+                      f"Tried to connect to {len(targets)} different devices in 10 minutes on admin ports "
+                      f"({', '.join(str(p) for p in ports[:6])}): {', '.join(names)}{'…' if len(targets) > 5 else ''}. "
+                      "This is how an intruder spreads from one machine to others.")
+            with self.dlock:
+                self.lateral.pop(src, None)
+                self.lateral_t.pop(src, None)
 
     # ---- rogue DHCP servers
     def dhcp_allowed(self, server_ip: str, mac: str) -> bool:

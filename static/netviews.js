@@ -227,7 +227,7 @@ function renderTable() {
 }
 
 /* ------------------------------------------------------------ local threats */
-const LOCAL_ICON = {arp_sweep: "fa-magnifying-glass-location", arp_spoof: "fa-masks-theater", rogue_dhcp: "fa-tower-broadcast", router_changed: "fa-arrows-rotate", ip_conflict: "fa-clone", port_scan: "fa-crosshairs",
+const LOCAL_ICON = {arp_sweep: "fa-magnifying-glass-location", arp_spoof: "fa-masks-theater", rogue_dhcp: "fa-tower-broadcast", router_changed: "fa-arrows-rotate", ip_conflict: "fa-clone", port_scan: "fa-crosshairs", lateral: "fa-diagram-project",
   honeypot: "fa-bug", ips: "fa-shield-virus", firewall: "fa-road-barrier"};
 
 function localRow(e) {
