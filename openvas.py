@@ -232,9 +232,20 @@ class OpenVAS:
 
     def helper_state(self) -> dict:
         try:
-            return json.loads((self.dir / "status.json").read_text())
+            st = json.loads((self.dir / "status.json").read_text())
         except (OSError, ValueError):
             return {}
+        # The installer updates this file at every step. If it says "installing" but nothing has touched it for a
+        # long while and no request is pending, the installer died (server restart, full disk): don't hang forever.
+        if st.get("state") in ("installing", "queued") and not (self.dir / "request").exists():
+            try:
+                age = time.time() - (self.dir / "status.json").stat().st_mtime
+            except OSError:
+                age = 0
+            if age > 45 * 60:
+                return {"state": "failed", "message": "The installer stopped before it finished (the server may have "
+                        "restarted or run out of disk space). Press Install to continue where it left off."}
+        return st
 
     # ------------------------------------------------------------------ scanning
     def start_scan(self, ip: str) -> str:
