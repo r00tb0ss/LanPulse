@@ -58,7 +58,7 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 
-VERSION = "1.25.20"
+VERSION = "1.25.21"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -996,6 +996,7 @@ class LanPulse:
                     # Router impersonation: anyone else answering for the router's IP is reported and never
                     # recorded as the router (it would otherwise take over the router's place on the map).
                     imposters = self.local.check_sweep(pairs, time.time())
+                    self.local.check_conflicts(pairs, time.time())
                     for mac in imposters:
                         if found.get(mac, {}).get("ip") == gw:
                             found.pop(mac, None)
