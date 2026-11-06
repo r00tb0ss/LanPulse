@@ -68,7 +68,7 @@ function renderVulns() {
   const dmax = Math.max(1, ...s.devices.map((d) => d.count));
   $("vulnDevs").innerHTML = s.devices.map((d) => { const ty = TYPES[d.type] || TYPES.unknown; return `<div class="rk click" data-dev-id="${esc(d.id)}">
       <span class="ico"><i class="${faClass(ty)}" style="color:${ty.color}"></i></span><span class="nm">${esc(d.name)}</span>
-      <span class="ct">${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
+      <span class="ct">${xBtn("redteam", d.id)}${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
       <div class="bar"><i style="width:${(100 * d.count / dmax).toFixed(1)}%;background:${SEV_COLOR[sevOf(d.max)]}"></i></div></div>`; }).join("")
     || `<div class="muted">No affected devices.</div>`;
 
@@ -80,6 +80,20 @@ function renderVulns() {
   if (badge) { badge.textContent = String(t.kev); badge.classList.toggle("hidden", !t.kev || view === "vulns"); }
 }
 
+
+// Jump between the findings view and the attacker view for one device, and flash its row.
+function xJump(target, devId) {
+  setView(target);
+  const box = target === "redteam" ? "rtDevs" : "vulnDevs";
+  let tries = 0;
+  const t = setInterval(() => {
+    const row = $(box) && [...$(box).querySelectorAll("[data-dev-id]")].find((r) => r.dataset.devId === devId);
+    if (row) { clearInterval(t); row.scrollIntoView({block: "center", behavior: "smooth"}); row.classList.add("xflash"); setTimeout(() => row.classList.remove("xflash"), 2200); }
+    else if (++tries > 20) clearInterval(t);
+  }, 150);
+}
+const xBtn = (target, id) => `<button class="btn sm xjump" data-xjump="${target}" data-xdev="${esc(id)}" title="${target === "redteam" ? "See this device the way an attacker would: ATT&CK techniques and Metasploit modules" : "See this device's vulnerabilities and what to fix"}"><i class="fa-solid ${target === "redteam" ? "fa-crosshairs" : "fa-bug"}"></i>${target === "redteam" ? "Attack view" : "Findings"}</button>`;
+
 async function fillFixDetail(key) {
   const [id, port] = key.split("|");
   const box = document.querySelector(`[data-detail="${CSS.escape(key)}"]`);
@@ -89,7 +103,7 @@ async function fillFixDetail(key) {
   const items = r.items.filter((f) => String(f.port) === port);
   box.innerHTML = items.slice(0, 40).map(cveRow).join("") +
     (items.length > 40 ? `<div class="muted" style="padding:6px 0">+${items.length - 40} more, mostly lower severity.</div>` : "") +
-    `<div class="btns" style="margin-top:8px"><button class="btn sm" data-dev-id="${esc(id)}"><i class="fa-solid fa-circle-info"></i>Open device</button></div>`;
+    `<div class="btns" style="margin-top:8px"><button class="btn sm" data-dev-id="${esc(id)}"><i class="fa-solid fa-circle-info"></i>Open device</button>${xBtn("redteam", id)}</div>`;
 }
 
 function cveRow(f) {
@@ -165,6 +179,8 @@ async function loadDeviceVulns(id) {
   $("vulnCheck").onclick = async () => { if (await api("/api/vulns/refresh", "POST")) { toast("Checking now"); setTimeout(loadVulns, 2500); } };
   $("vulnCfgBtn").onclick = showVulnSetup;
   $("vulnFix").addEventListener("click", (e) => {
+    const xj = e.target.closest("[data-xjump]");
+    if (xj) { xJump(xj.dataset.xjump, xj.dataset.xdev); return; }
     const dev = e.target.closest("[data-dev-id]");
     if (dev) { goDevice(dev.dataset.devId); return; }
     const b = e.target.closest(".fix-row"); if (!b) return;
@@ -173,7 +189,10 @@ async function loadDeviceVulns(id) {
     if (vulnOpen.has(key)) { vulnOpen.delete(key); det.classList.add("hidden"); b.setAttribute("aria-expanded", "false"); }
     else { vulnOpen.add(key); det.classList.remove("hidden"); b.setAttribute("aria-expanded", "true"); fillFixDetail(key); }
   });
-  for (const id of ["vulnDevs", "vulnConfig"]) $(id).addEventListener("click", (e) => { const r = e.target.closest("[data-dev-id]"); if (r) goDevice(r.dataset.devId); });
+  for (const id of ["vulnDevs", "vulnConfig"]) $(id).addEventListener("click", (e) => {
+    const xj = e.target.closest("[data-xjump]");
+    if (xj) { xJump(xj.dataset.xjump, xj.dataset.xdev); return; }
+    const r = e.target.closest("[data-dev-id]"); if (r) goDevice(r.dataset.devId); });
   $("panel").addEventListener("click", (e) => { if (e.target.closest("[data-goto-vulns]")) setView("vulns"); });
   setInterval(() => { if (view === "vulns" && vulnData?.status?.state === "checking") loadVulns(); }, 10000);
   setTimeout(async () => { const r = await api("/api/vulns", "GET"); if (r) { vulnData = r; renderVulns(); } }, 4000);
