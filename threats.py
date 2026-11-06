@@ -419,6 +419,16 @@ DEMO_DETAILS = {23: ["login root/xc3511", "login admin/admin", "login root/vizxv
 
 
 # --------------------------------------------------------------------------- monitor
+def SERVICES_LABEL(key: str) -> str:
+    from honeypot import SERVICES as HP
+    return HP.get(key, (0, key))[1]
+
+
+def _ports_from(hits: list) -> list:
+    c = collections.Counter((h["port"], h["service"]) for h in hits)
+    return [{"port": p, "service": sv, "n": n} for (p, sv), n in c.most_common(12)]
+
+
 class ThreatMonitor:
     def __init__(self, nm):
         self.nm = nm
@@ -810,6 +820,7 @@ class ThreatMonitor:
             e["lan_id"], e["lan_name"] = (d["id"], self.nm.label(d)) if d else ("", "")
         out = {
             "ip": ip, "geo": self.geo.lookup(ip), "count": len(rows), "blocked": blocked,
+            "reached": sum(1 for r in rows if r[3] == "allowed"),
             "first": rows[-1][0] if rows else None, "last": rows[0][0] if rows else None,
             "ports": [{"port": p, "service": svc[p], "count": n} for p, n in ports.most_common(12)],
             "targets": [{"lan": l, "count": n, "id": by_ip.get(l, {}).get("id", ""),
@@ -821,8 +832,26 @@ class ThreatMonitor:
             "signatures": [{"name": n, "count": c} for n, c in collections.Counter(
                 r[7] for r in rows if r[7] and "IPS" in (r[6] or "")).most_common(8)],
         }
-        creds = collections.Counter(e[7] for e in rows if e[7] and "IPS" not in (e[6] or ""))
+        creds = collections.Counter(e[7] for e in rows if e[7] and "IPS" not in (e[6] or "")
+                                    and not e[7].startswith("Honeypot "))
         out["credentials"] = [{"text": c, "count": n} for c, n in creds.most_common(10)]
+        pot = getattr(self.nm, "honeypot", None)
+        hp = pot.detail(ip) if pot else None
+        if hp and hp["total"]:
+            # the honeypot keeps its own log (older hits never reached this table): fold it in
+            out["honeypot"] = {"total": hp["total"], "services": hp["services"], "hits": hp["hits"][:40]}
+            for c in hp["creds"]:
+                out["credentials"].append({"text": c["cred"], "count": c["count"]})
+            for h in hp["hits"]:
+                if h["data"] and not h["creds"]:
+                    out["credentials"].append({"text": h["data"][:120], "count": 1})
+            out["credentials"] = out["credentials"][:20]
+            if not rows:                                   # only the honeypot has seen it
+                out["count"] = hp["total"]
+                out["first"], out["last"] = hp["first"], hp["last"]
+                out["reached"] = 0
+                out["ports"] = [{"port": h["port"], "service": SERVICES_LABEL(h["service"]), "count": h["n"]}
+                                for h in _ports_from(hp["hits"])]
         return out
 
     def reached_ips(self, hours: int = 168) -> set:
