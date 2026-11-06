@@ -1,0 +1,23 @@
+name: Release
+# When a merge to main changes VERSION in app.py, publish a GitHub release with lanpulse.zip.
+# Notes come from docs/releases/<version>.md if present, otherwise GitHub generates them.
+on:
+  push:
+    branches: [main]
+    paths: [app.py]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish if this version has no release yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
+          if gh release view "v$VER" >/dev/null 2>&1; then echo "v$VER already released"; exit 0; fi
+          git archive --prefix=lanpulse/ HEAD -o /tmp/lanpulse.zip --format=zip
+          if [ -f "docs/releases/$VER.md" ]; then NOTES=(-F "docs/releases/$VER.md"); else NOTES=(--generate-notes); fi
+          gh release create "v$VER" /tmp/lanpulse.zip --title "LanPulse $VER" --target "$GITHUB_SHA" "${NOTES[@]}"
