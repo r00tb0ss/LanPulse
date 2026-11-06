@@ -46,9 +46,18 @@
       <b>any hit is a warning</b>, and a hit from inside your network means a device is likely compromised.
       It never gives anyone a shell or real access.</p>
       <label class="chk"><input type="checkbox" id="wizPot" ${cfg.honeypot.enabled ? "checked" : ""}>Turn the honeypot on</label>
-      <p class="muted">The decoys use ports that must be free on this server. You can change which ones in the Honeypot tab.</p>`,
+      <p class="muted">The decoys use ports that must be free on this server. You can change which ones in the Honeypot tab.
+      Hits from the internet only arrive if you port-forward those ports to this server, which also exposes the decoys to scanners: do that on purpose.</p>`,
      save: async () => { const on = $("wizPot")?.checked; if (on !== undefined && on !== cfg.honeypot.enabled)
        await api("/api/settings", "POST", {honeypot: {enabled: on}}); }},
+    {t: "Block attackers and map your gear", i: "fa-ban", body: () => `
+      <p><b>UniFi:</b> connect your gateway to block an attacker with one tap and see real traffic on the Topology map.
+      LanPulse keeps an IP group up to date, but UniFi only blocks it once you add one policy: Action Block, Source zone
+      External with that group, Destination zone <b>Internal</b>. Settings &gt; UniFi has the steps.</p>
+      <p><b>Other routers and switches:</b> add their addresses and a read-only SNMP community (also in Settings &gt; UniFi)
+      and LanPulse reads LLDP and the MAC table to draw the real wiring.</p>
+      <div class="btns"><button class="btn primary" data-go="unifi"><i class="fa-solid fa-plug"></i>Open UniFi / SNMP settings</button></div>
+      <p class="muted">Optional. Skip it if you don't use UniFi or SNMP.</p>`},
     {t: "Find vulnerabilities accurately", i: "fa-bug", body: () => `
       <p>LanPulse's built-in scan (nmap) is a good first pass. For accurate results that find exploitable services
       banner-matching misses, install <b>OpenVAS</b> (Greenbone). LanPulse can install and run it for you. It needs about
