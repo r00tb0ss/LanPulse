@@ -280,14 +280,15 @@ function updateWorld() {
 }
 
 // Country names on the map, for BOTH attacker countries (red) and device-traffic destination countries (teal).
-// Shows the top 10 of each by activity; hovering any country still shows its name.
+// Every country with activity gets a name, busiest first; one that would land on a name already placed waits until you zoom in.
+// Hovering any country always shows its name.
 function updateCountryLabels() {
   if (!tChart) return;
   const attacksOn = typeof showAttacks !== "function" || showAttacks();
   const trafficOn = typeof showTraffic === "function" && showTraffic() && typeof flowSummary !== "undefined" && flowSummary;
   const label = {};   // map region name -> {name, atk, dst}
   const both = attacksOn && trafficOn;
-  const top = (arr) => [...(arr || [])].sort((a, b) => b.count - a.count).slice(0, both ? 6 : 10);
+  const top = (arr) => [...(arr || [])].sort((a, b) => b.count - a.count).slice(0, both ? 25 : 60);
   if (attacksOn && tSummary) top(tSummary.countries).forEach((c) => {
     if (c.count > 0) { const k = MAP_NAMES[c.country] || c.country; (label[k] = label[k] || {name: c.country}).atk = c.count; }
   });
@@ -296,7 +297,7 @@ function updateCountryLabels() {
   });
   // Labels can't be allowed to pile up (Europe is a few pixels wide at world zoom): walk the countries from busiest
   // down and skip any whose label would land on one already placed. Zooming in makes room, so more appear.
-  // With both layers on, also keep only the busiest few and drop the counts (hover shows the name; the cards have numbers).
+  // With both layers on, names are shown without counts (hover shows the name; the cards have numbers).
   {
     const total = (v) => (v.atk || 0) + (v.dst || 0);
     let gs = null;
@@ -313,7 +314,7 @@ function updateCountryLabels() {
     };
     const placed = [], kept = [];
     for (const [k, v] of Object.entries(label).sort((a, b) => total(b[1]) - total(a[1]))) {
-      if (kept.length >= (both ? 8 : 12)) break;
+      if (kept.length >= (both ? 25 : 60)) break;
       const px = where(k), w = (both ? v.name.length : v.name.length + 5) * 5.2 + 8;
       if (px && placed.some((q) => Math.abs(q[0] - px[0]) < (q[2] + w) / 2 && Math.abs(q[1] - px[1]) < 13)) continue;
       if (px) placed.push([px[0], px[1], w]);
