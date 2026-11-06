@@ -40,7 +40,10 @@ async function loadTopoTraffic() {
 
 /* connections per device, and summed up the tree for switches, access points and links */
 function topoTraffic(data) {
-  const own = TOPO.talkers, sub = new Map(), byId = new Map(data.nodes.map((n) => [n.id, n]));
+  // Real throughput from UniFi when it supplies it; otherwise connection counts from the router logs
+  const rates = !!(data.sources && data.sources.rates);
+  const own = rates ? new Map(data.nodes.filter((n) => n.rate > 0).map((n) => [n.id, n.rate])) : TOPO.talkers;
+  const sub = new Map(), byId = new Map(data.nodes.map((n) => [n.id, n]));
   for (const n of data.nodes) {
     const c = own.get(n.id) || 0;
     if (!c) continue;
@@ -49,7 +52,17 @@ function topoTraffic(data) {
   const max = Math.max(1, ...data.nodes.filter((n) => n.kind === "client").map((n) => own.get(n.id) || 0));
   const maxSub = Math.max(1, ...data.nodes.filter((n) => n.kind !== "gateway").map((n) => sub.get(n.id) || 0));
   const lg = (c, m) => (c > 0 ? Math.max(0.08, Math.log1p(c) / Math.log1p(m)) : 0);   // log scale: a busy device doesn't flatten the rest
-  return {own, sub, max, maxSub, lg};
+  const fmt = rates ? topoBps : (c) => c.toLocaleString() + " conn/h";
+  return {own, sub, max, maxSub, lg, rates, fmt};
+}
+
+/* bytes per second -> "4.2 Mbps" */
+function topoBps(b) {
+  const bits = b * 8;
+  if (bits >= 1e9) return (bits / 1e9).toFixed(1) + " Gbps";
+  if (bits >= 1e6) return (bits / 1e6).toFixed(bits >= 1e7 ? 0 : 1) + " Mbps";
+  if (bits >= 1e3) return Math.round(bits / 1e3) + " Kbps";
+  return Math.round(bits) + " bps";
 }
 
 function startTopoTimer() {
@@ -245,7 +258,7 @@ function topoSvg(L, T, opts = {}) {
       <text x="${c.x + 32}" y="${c.y + 36}" font-size="10.5" fill="${T.muted}">${esc(tx(n.ip, 16))}</text>
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
-      ${TR && TOPO.spread ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? cnt.toLocaleString() + " conn/h" : "no traffic"}</text>` : ""}
+      ${TR && TOPO.spread ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -484,7 +497,8 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpZoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
     <button class="btn sm" id="tpFit" title="Fit to screen"><i class="fa-solid fa-expand"></i></button>
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
-    ${TOPO.traffic && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
+    ${TOPO.traffic && d.sources.rates ? '<span class="tp-src ok" title="Live speeds reported by your UniFi gateway, refreshed about every 30 seconds. Cables and bars use a log scale so one busy device doesn\'t hide the rest."><i class="fa-solid fa-gauge-high"></i>Live throughput from UniFi</span>' : ""}
+    ${TOPO.traffic && !d.sources.rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
     <span class="tp-spacer"></span>
     ${wifi ? `<span class="tp-chipinfo"><i class="fa-solid fa-wifi"></i>${wifi} on Wi-Fi${weak.length ? ` · <b class="warn">${weak.length} weak</b>` : ""}</span>` : ""}
     ${src}`;
@@ -536,7 +550,12 @@ function renderTopoInfo() {
   if (n.kind === "switch" && e.ports_total) rows.push(["Ports", `${e.ports_up} of ${e.ports_total} up${e.poe_watts ? ` · ${e.poe_watts} W PoE` : ""}`]);
   if (n.kind !== "client" || e.clients) rows.push(["Connected devices", String(e.clients || 0)]);
   if (e.uptime) rows.push(["Uptime", fmtUp(e.uptime)]);
-  if (TOPO.traffic) { const c = n.kind === "client" ? TOPO.talkers.get(n.id) : topoTraffic(d).sub.get(n.id); rows.push(["Connections (1h)", c ? c.toLocaleString() : "none logged"]); }
+  if (TOPO.traffic) {
+    const T2 = topoTraffic(d), c = n.kind === "client" ? T2.own.get(n.id) : T2.sub.get(n.id);
+    if (T2.rates) rows.push([n.kind === "client" ? "Throughput now" : "Throughput below", c ? topoBps(c) : "idle"]);
+    const k = n.kind === "client" ? TOPO.talkers.get(n.id) : [...TOPO.talkers].filter(([id]) => { for (let cur = d.nodes.find((x) => x.id === id), i = 0; cur && i < 20; i++, cur = d.nodes.find((x) => x.id === cur.parent)) if (cur.id === n.id) return true; return false; }).reduce((a, [, v]) => a + v, 0);
+    if (!T2.rates || k) rows.push(["Connections (1h)", k ? k.toLocaleString() : "none logged"]);
+  }
   rows.push(["Status", n.online ? '<span style="color:#22c55e">online</span>' : "offline"]);
   const real = devices.has(n.id);
   const opts = d.nodes.filter((x) => x.id !== n.id && (TOPO_INFRA.has(x.kind) || x.kind === "client" && false)).sort((a, b) => a.name.localeCompare(b.name));

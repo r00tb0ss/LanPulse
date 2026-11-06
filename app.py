@@ -58,7 +58,7 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 
-VERSION = "1.25.15"
+VERSION = "1.25.16"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -2042,7 +2042,7 @@ def build_app(nm: LanPulse) -> FastAPI:
                 await refresh_topology()
             except Exception:
                 log.exception("topology loop")
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
 
     @app.get("/api/topology")
     async def topology_get():

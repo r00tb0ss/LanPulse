@@ -220,6 +220,7 @@ class Topology:
                     parent = by_mac[pm]
                     n["source"] = "unifi"
                 wired = bool(uclient.get("is_wired"))
+                n["rate"] = _client_rate(uclient)
                 if wired:
                     sw = ud.get(pm) or {}
                     port = uclient.get("sw_port")
@@ -327,9 +328,23 @@ class Topology:
             [e for e in log_out if e["t"] > now - 7 * 86400],
             key=lambda e: -e["t"])[:80]
 
+        rates = any((n.get("rate") or 0) > 0 for n in nodes.values())
         return {"nodes": list(nodes.values()), "zones": zones, "changes": changes, "gateway": gateway,
-                "sources": {"unifi": self.unifi_status, "manual": len(manual)},
+                "sources": {"unifi": self.unifi_status, "manual": len(manual), "rates": rates},
                 "custom_zones": self.state.get("zones", [])}
+
+
+def _client_rate(c: dict):
+    """Bytes per second a UniFi client is moving right now (both directions together), or None if UniFi didn't say.
+    Direction is left out on purpose: UniFi reports it from the access point's side, which is easy to read backwards."""
+    try:
+        v = c.get("bytes-r")
+        if v is None:
+            a, b = c.get("tx_bytes-r"), c.get("rx_bytes-r")
+            v = (a or 0) + (b or 0) if a is not None or b is not None else None
+        return max(0.0, float(v)) if v is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def demo_unifi(devices) -> dict:
@@ -356,10 +371,12 @@ def demo_unifi(devices) -> dict:
             iot = d.get("type") in ("iot", "speaker", "camera")
             clients.append({"mac": d["mac"], "is_wired": False, "ap_mac": ap["mac"], "essid": "Home-IoT" if iot else "Home",
                             "radio": "ng" if iot or d.get("type") == "tv" else "na", "channel": 6 if iot else 44, "signal": sig[i % len(sig)],
+                            "bytes-r": (1_800_000 if d.get("type") in ("tv", "laptop") else 40_000 if iot else 260_000) * (0.3 + (i * 37 % 10) / 7),
                             "tx_rate": 866000 if not iot else 72000, "rx_rate": 780000 if not iot else 65000, "uptime": 3600 * (i + 2),
                             "network": "IoT" if iot else "LAN"})
         else:
-            clients.append({"mac": d["mac"], "is_wired": True, "sw_mac": sw_mac, "sw_port": min(8, port), "network": "LAN"})
+            clients.append({"mac": d["mac"], "is_wired": True, "sw_mac": sw_mac, "sw_port": min(8, port), "network": "LAN",
+                            "bytes-r": (9_000_000 if d.get("type") in ("nas", "server", "desktop") else 35_000 if d.get("type") in ("printer", "scanner") else 600_000) * (0.2 + (i * 53 % 10) / 6)})
             port += 1
     return {"devices": out_d, "clients": clients, "networks": [{"name": "LAN", "vlan": 1, "ip_subnet": "192.168.1.1/24"},
             {"name": "IoT", "vlan": 20, "ip_subnet": "192.168.1.1/24"}]}
