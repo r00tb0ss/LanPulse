@@ -56,7 +56,7 @@ sudo ./install.sh
 
 The installer asks whether you want a login and HTTPS. Then open `http://<ubuntu-ip>:8080` (or `https://`) from another computer on the same network.
 
-Re-running `install.sh` upgrades LanPulse and keeps your devices, history and settings.
+Re-running `install.sh` upgrades LanPulse and keeps your devices, history and settings. Once installed, later updates come from **Settings > Update > Check for updates**.
 
 ## First steps
 
@@ -95,12 +95,18 @@ cable.
 - **UniFi:** connect your gateway in Settings and LanPulse reads the real connections (read-only): which switch port or
   access point each device uses, Wi-Fi signal, SSID, band, channel and link speed, switch ports and PoE, and your VLANs.
   The API key must come from the local console (**Network > Settings > Control Plane > Integrations**), not unifi.ui.com.
-- **Any other router:** devices are assumed to connect to the gateway. Click a device and choose where it connects, its
-  role (switch, access point, device) and whether it's wired or Wi-Fi. Add zones (VLANs or subnets) by network range
-  under **Zones**. Automatic discovery (SNMP/LLDP) for other brands isn't built yet.
-- **Traffic:** turn it on to see packets travel along each cable toward the switch or access point, bigger and faster with
-  more connections, colored green to red. It counts connections each device opened in the last hour, from your router's
-  firewall logs (see Supported routers), so without router logs there is nothing to show.
+- **Other routers and switches (SNMP):** in Settings > UniFi, add the addresses of your routers or switches and a
+  read-only SNMP v2c community. LanPulse reads LLDP neighbours and the switch MAC table (read-only, private addresses
+  only, about every two minutes) to place switches, access points and wired devices under the right port. Turn on SNMP
+  and LLDP on the device first. SNMP v2c sends the community in clear text, so use a read-only one on your LAN. It is
+  tested against a simulated agent, not yet widely against real hardware, so please report what you see.
+- **By hand:** anything not found automatically is assumed to connect to the gateway. Click a device and choose where it
+  connects, its role (switch, access point, device) and whether it's wired or Wi-Fi. Add zones (VLANs or subnets) by
+  network range under **Zones**. UniFi data wins over SNMP, and what you set by hand wins over both.
+- **Traffic:** turn it on to see packets travel along each cable toward the switch or access point, bigger and faster
+  with more traffic, colored green to red. With UniFi it shows real throughput (Mbps) per device and per switch or access
+  point uplink, and holds each link's recent peak so it doesn't blink. Without it, it counts the connections each device
+  opened in the last hour from your router's firewall logs (see Supported routers).
 - **Drag** devices to arrange them (saved in your browser, **Reset** puts them back), pinch or use +/- to zoom, and use
   the minimap. **Spread** off groups devices into boxes instead.
 - **Focus** a device to light up its path to the internet. Color by device type, status, risk, zone, Wi-Fi signal or new
@@ -117,9 +123,11 @@ Switch the attack map to **Device traffic** or **Both** to see where your device
 
 1. In UniFi, create an API key (Settings > Control Plane > Integrations) and paste it in LanPulse under Settings > UniFi. A local-only admin account also works.
 2. Press **Save & test**, then block any attacker from its panel. That creates the IP group **LanPulse Blocklist** on the gateway.
-3. In UniFi's Policy Engine, create one policy: Source zone External with the IP group *LanPulse Blocklist*, Destination any, Action Block.
+3. In UniFi's Policy Engine, create one policy: Action Block, Source zone External with the IP group *LanPulse Blocklist* (use the group name shown in Settings > UniFi), Destination zone **Internal**, Protocol All. Internal matters: forwarded traffic, such as your honeypot's, arrives External to Internal. Rules you create sit above UniFi's automatic port-forward allows, so this one wins.
 
 From then on, **Block on UDM** in an attacker's panel takes effect immediately. **Unblock** removes the address again.
+
+The **blocked** badge only means an IP is in the group. LanPulse can't see your firewall rules, so if a blocked IP keeps reaching your network the badge turns red ("blocked, still connecting"): that means the policy above is missing or wrong.
 
 ### Supported routers
 
