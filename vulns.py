@@ -501,7 +501,7 @@ class VulnScanner:
         # OpenVAS results: real vulnerability tests. QoD >= 80 means the test exercised the flaw or fingerprinted the
         # exact version, so those rank as Confirmed; weaker detections stay "version".
         for d in list(self.nm.devices.values()):
-            for ov in d.get("openvas", []):
+            for ov in self.nm.openvas.items_for(d):
                 conf = "confirmed" if ov.get("qod", 0) >= 80 else "version"
                 for cve in [str(c).strip().upper() for c in (ov.get("cve") or [])] or [""]:
                     cid = cve or ("OPENVAS-" + (ov.get("oid", "").split(".")[-1] or "result"))
