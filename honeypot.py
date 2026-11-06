@@ -587,29 +587,30 @@ class Honeypot:
     # ------------------------------------------------------------------ views
     def summary(self, hours: int = 168) -> dict:
         since = time.time() - hours * 3600
+        nb = 24                                       # activity chart: 24 equal slices of the window
+        span = hours * 3600 / nb
+        # Totals are counted in the database over the whole window; only the "recent" feed is limited to a few rows
         with self.lock:
-            rows = self.db.execute("SELECT t, ip, service, port, internal, creds, data, sensor "
-                                   "FROM hits WHERE t >= ? ORDER BY t DESC LIMIT 2000", (since,)).fetchall()
-            total_all = self.db.execute("SELECT COUNT(*) FROM hits").fetchone()[0]
+            q = self.db.execute
+            rows = q("SELECT t, ip, service, port, internal, creds, data, sensor "
+                     "FROM hits WHERE t >= ? ORDER BY t DESC LIMIT 60", (since,)).fetchall()
+            total_all = q("SELECT COUNT(*) FROM hits").fetchone()[0]
+            n_hits, internal_hits = q("SELECT COUNT(*), COALESCE(SUM(internal != 0), 0) FROM hits WHERE t >= ?", (since,)).fetchone()
+            svc_rows = q("SELECT service, COUNT(*) FROM hits WHERE t >= ? GROUP BY service", (since,)).fetchall()
+            ip_rows = q("SELECT ip, COUNT(*), MAX(internal), group_concat(DISTINCT service), MAX(t), MIN(t) "
+                        "FROM hits WHERE t >= ? GROUP BY ip", (since,)).fetchall()
+            cred_rows = q("SELECT creds, COUNT(*) FROM hits WHERE t >= ? AND creds != '' AND creds IS NOT NULL GROUP BY creds",
+                          (since,)).fetchall()
+            hist_rows = q("SELECT CAST((t - ?) / ? AS INTEGER), COUNT(*) FROM hits WHERE t >= ? GROUP BY 1",
+                          (since, span, since)).fetchall()
         hits = [{"t": t, "ip": ip, "service": svc, "port": port, "internal": bool(internal),
                  "creds": creds, "data": data, "sensor": sensor}
                 for t, ip, svc, port, internal, creds, data, sensor in rows]
-        by_service: dict[str, int] = {}
-        by_ip: dict[str, dict] = {}
-        by_cred: dict[str, int] = {}
-        internal_hits = 0
-        for h in hits:
-            by_service[h["service"]] = by_service.get(h["service"], 0) + 1
-            if h["internal"]:
-                internal_hits += 1
-            a = by_ip.setdefault(h["ip"], {"ip": h["ip"], "hits": 0, "internal": h["internal"],
-                                           "services": set(), "last": h["t"], "first": h["t"]})
-            a["hits"] += 1
-            a["services"].add(h["service"])
-            a["last"] = max(a["last"], h["t"])
-            a["first"] = min(a["first"], h["t"])
-            if h["creds"]:
-                by_cred[h["creds"]] = by_cred.get(h["creds"], 0) + 1
+        by_service = {svc: n for svc, n in svc_rows}
+        by_ip = {ip: {"ip": ip, "hits": n, "internal": bool(internal), "services": set((svcs or "").split(",")),
+                      "last": last, "first": first}
+                 for ip, n, internal, svcs, last, first in ip_rows}
+        by_cred = {c: n for c, n in cred_rows}
         attackers = sorted(by_ip.values(), key=lambda a: -a["hits"])
         for a in attackers:
             a["services"] = sorted(a["services"])
@@ -620,11 +621,9 @@ class Honeypot:
             users[u or "(blank)"] = users.get(u or "(blank)", 0) + n
             passwords[(pw if sep else "") or "(blank)"] = passwords.get((pw if sep else "") or "(blank)", 0) + n
         top = lambda d: [{"v": k, "count": v} for k, v in sorted(d.items(), key=lambda kv: -kv[1])[:12]]
-        nb = 24                                       # activity chart: 24 equal slices of the window
-        span = hours * 3600 / nb
         hist = [0] * nb
-        for h in hits:
-            hist[min(nb - 1, max(0, int((h["t"] - since) / span)))] += 1
+        for b, n in hist_rows:
+            hist[min(nb - 1, max(0, int(b)))] += n
         countries: dict[str, dict] = {}
         for a in attackers:
             g = self._geo(a["ip"])
@@ -643,8 +642,8 @@ class Honeypot:
             "services_on": self.cfg["services"],
             "catalog": {k: {"port": self._port(k), "default_port": v[0], "label": v[1], "note": v[3]} for k, v in SERVICES.items()},
             "listeners": self.listeners or {k: {"port": self._port(k), "state": "off", "error": ""} for k in SERVICES},
-            "totals": {"hits": len(hits), "all_time": total_all, "attackers": len(by_ip),
-                       "internal": internal_hits, "external": len(hits) - internal_hits,
+            "totals": {"hits": n_hits, "all_time": total_all, "attackers": len(by_ip),
+                       "internal": internal_hits, "external": n_hits - internal_hits,
                        "creds": sum(by_cred.values())},
             "by_service": sorted(({"service": k, "label": SERVICES.get(k, (0, k))[1], "count": v}
                                   for k, v in by_service.items()), key=lambda x: -x["count"]),
