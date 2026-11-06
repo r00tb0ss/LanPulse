@@ -226,7 +226,7 @@ a.icon-btn{text-decoration:none}
 body.mode-threats .net-only,body.mode-threats #btnSidebar{display:none!important}
 
 .tview{height:100%;overflow-y:auto;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));
-  display:grid;gap:14px;align-content:start;background:radial-gradient(ellipse at 50% 0%,#141d36 0%,var(--bg) 60%)}
+  display:grid;gap:14px;align-content:start;background:radial-gradient(ellipse at 50% 0%,var(--glow,#141d36) 0%,var(--bg) 60%)}
 .t-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
 .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:grid;gap:2px;min-width:0}
 .k-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
@@ -237,7 +237,7 @@ body.mode-threats .net-only,body.mode-threats #btnSidebar{display:none!important
 
 .t-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px}
 .t-mapcard{position:relative;border:1px solid var(--border);border-radius:14px;overflow:hidden;min-height:440px;
-  background:radial-gradient(ellipse at 50% 55%,#10203f 0%,#0a1122 75%)}
+  background:radial-gradient(ellipse at 50% 55%,var(--map-glow,#10203f) 0%,var(--map-deep,#0a1122) 75%)}
 #worldMap{position:absolute;inset:0}
 .map-top{position:absolute;left:12px;right:12px;top:12px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
 .map-top>*{pointer-events:auto}
@@ -892,7 +892,7 @@ body[data-theme="light"]{
   --text:#0f172a; --muted:#475569; --dim:#8294ab; --accent:#0284c7; --accent2:#0369a1;
   --green:#16a34a; --red:#dc2626; --amber:#d97706;
   --topbar:linear-gradient(180deg,#ffffff,#eef2f7); --map-area:#1a2742; --map-border:#2b4170;
-  --ctrl:#ffffff; --ctrl-solid:#ffffff;
+  --ctrl:#ffffff; --ctrl-solid:#ffffff; --glow:#e4ecf5;
   color-scheme:light;
 }
 body[data-theme="light"] .topbar{box-shadow:0 1px 3px rgba(15,23,42,.06)}
@@ -924,6 +924,28 @@ body[data-theme="synthwave"]{
 }
 body[data-theme="synthwave"] .brand i,body[data-theme="synthwave"] .brand b{color:var(--accent);text-shadow:0 0 8px rgba(255,79,216,.6)}
 
+/* Ember — near-black with warm copper accents, like a control-room console */
+body[data-theme="ember"]{
+  --bg:#0c0a09; --bg2:#120f0d; --panel:#1a1512; --panel2:#241c17; --border:#33281f; --border2:#4a3a2c;
+  --text:#f3e9df; --muted:#b39d88; --dim:#7d6b5b; --accent:#ff8a4c; --accent2:#e8702f;
+  --green:#5fd38d; --red:#ff5d6c; --amber:#f5c542;
+  --topbar:linear-gradient(180deg,#1f1813,#100c0a); --map-area:#221913; --map-border:#4d3828;
+  --ctrl:#241c17; --ctrl-solid:#241c17; --glow:#2a1b12; --map-glow:#2a1d14; --map-deep:#100b08;
+  color-scheme:dark;
+}
+body[data-theme="ember"] .brand i,body[data-theme="ember"] .brand b{color:var(--accent);text-shadow:0 0 10px rgba(255,138,76,.35)}
+
+/* Deep Ocean — deep teal and sea-green surfaces with an aqua accent */
+body[data-theme="ocean"]{
+  --bg:#041a1f; --bg2:#06232a; --panel:#0a2d34; --panel2:#0e3a43; --border:#14515a; --border2:#1d6b76;
+  --text:#e3f6f5; --muted:#8dc4c6; --dim:#5d9498; --accent:#22d3c5; --accent2:#0ea5a0;
+  --green:#4ade80; --red:#fb7185; --amber:#fbbf24;
+  --topbar:linear-gradient(180deg,#0b343c,#05222a); --map-area:#0b3d46; --map-border:#21808c;
+  --ctrl:#0e3a43; --ctrl-solid:#0e3a43; --glow:#0b4650; --map-glow:#0d4650; --map-deep:#041c22;
+  color-scheme:dark;
+}
+body[data-theme="ocean"] .brand i,body[data-theme="ocean"] .brand b{color:var(--accent)}
+
 /* theme picker in settings */
 .theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .theme-card{border:2px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;background:var(--panel2);text-align:left}
@@ -936,6 +958,8 @@ body[data-theme="synthwave"] .brand i,body[data-theme="synthwave"] .brand b{colo
 html[data-pretheme="light"]{background:#f1f5f9}
 html[data-pretheme="hacker"]{background:#000700}
 html[data-pretheme="synthwave"]{background:#140a2e}
+html[data-pretheme="ember"]{background:#0c0a09}
+html[data-pretheme="ocean"]{background:#041a1f}
 
 /* ---- Network Security Score bar ---- */
 .posture-bar{display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--border);
