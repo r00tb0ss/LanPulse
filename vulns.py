@@ -681,6 +681,7 @@ class VulnScanner:
                     "count": 0, "kev": 0, "max": 0, "top": f, "distro": f["distro"], "unverified": f.get("unverified", False),
                     "os": f.get("os", False), "confirmed": 0, "confidence": f.get("confidence", "version")})
                 g["count"] += 1
+                g["cves"] = g.get("cves", 0) + bool(re.match(r"CVE-\d{4}-\d+$", f["cve"] or ""))   # others are scanner-test ids
                 g["kev"] += f["kev"]
                 g["confirmed"] += f.get("confidence") == "confirmed"
                 g["msf"] = g.get("msf", 0) + bool(f.get("msf"))

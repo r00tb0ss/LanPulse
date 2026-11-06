@@ -46,6 +46,9 @@ function drawUpdate(body, u, staged = u.staged, note = "") {
         <div class="btns"><button class="btn" id="updDiscard">Remove</button>
           <button class="btn primary" id="updApply" ${blocked ? "disabled" : ""}><i class="fa-solid fa-download"></i>Install v${esc(staged.version)}</button></div>
       </div>` : ""}
+    ${!busy ? `<div class="upd-latest" id="updLatest">
+        <button class="btn" id="updCheck" ${blocked ? "disabled" : ""}><i class="fa-solid fa-cloud-arrow-down"></i>Check for updates</button>
+        <span class="muted">Looks at the LanPulse releases on GitHub. Or choose a file yourself below.</span></div>` : ""}
     ${!busy ? `<label class="upd-drop ${blocked ? "off" : ""}" id="updDrop">
         <input type="file" id="updFile" accept=".zip,application/zip" ${blocked ? "disabled" : ""}>
         <i class="fa-solid fa-file-zipper"></i>
@@ -65,6 +68,7 @@ function drawUpdate(body, u, staged = u.staged, note = "") {
     const r = await api("/api/update/apply", "POST");
     if (r) { drawUpdate(body, r); startUpdatePoll(body); }
   });
+  $("updCheck")?.addEventListener("click", () => checkLatest(body, u));
   const file = $("updFile"), drop = $("updDrop");
   if (file) file.addEventListener("change", () => file.files[0] && uploadUpdate(body, u, file.files[0]));
   if (drop && !blocked) {
@@ -143,4 +147,39 @@ function showUpdatedBar(version) {
     <button class="btn sm primary">Reload</button>`;
   bar.querySelector("button").onclick = () => location.reload();
   document.body.appendChild(bar);
+}
+
+
+// "Check for updates": ask GitHub for the newest release; if it's newer, offer to download it into the staging slot
+// (then the usual Install button appears, so nothing installs without a click).
+async function checkLatest(body, u) {
+  const box = $("updLatest");
+  if (!box) return;
+  box.innerHTML = `<div class="loading-line"><i class="fa-solid fa-spinner fa-spin"></i>Checking GitHub…</div>`;
+  const r = await api("/api/update/check?force=true", "GET");
+  if (!$("updLatest")) return;
+  if (!r || r.error) {
+    box.innerHTML = `<div class="upd-note bad"><i class="fa-solid fa-triangle-exclamation"></i><div>${esc((r && r.error) || "Couldn't check for updates.")}</div></div>
+      <button class="btn" id="updCheck"><i class="fa-solid fa-rotate"></i>Try again</button>`;
+    $("updCheck").onclick = () => checkLatest(body, u);
+    return;
+  }
+  const notes = (r.notes || "").trim();
+  box.innerHTML = r.newer
+    ? `<div class="upd-note ok"><i class="fa-solid fa-circle-arrow-up"></i><div><b>v${esc(r.version)} is available</b>
+        <span>You're on v${esc(u.current)}.${r.size ? ` Download is about ${(r.size / 1048576).toFixed(1)} MB.` : ""}</span>
+        ${notes ? `<details class="upd-log"><summary>What's new</summary><pre>${esc(notes)}</pre></details>` : ""}
+        <div class="btns" style="margin-top:8px"><button class="btn primary" id="updFetch" ${r.asset_url ? "" : "disabled"}><i class="fa-solid fa-download"></i>Download v${esc(r.version)}</button>
+          ${r.url ? `<a class="btn" href="${esc(r.url)}" target="_blank" rel="noopener">Release page</a>` : ""}</div>
+        ${r.asset_url ? "" : '<span class="muted">This release has no lanpulse.zip attached yet.</span>'}</div></div>`
+    : `<div class="upd-note ok"><i class="fa-solid fa-circle-check"></i><div><b>You're up to date</b><span>v${esc(u.current)} is the newest release.</span></div></div>
+       <button class="btn" id="updCheck"><i class="fa-solid fa-rotate"></i>Check again</button>`;
+  const again = $("updCheck"); if (again) again.onclick = () => checkLatest(body, u);
+  const f = $("updFetch");
+  if (f) f.onclick = async () => {
+    f.disabled = true; f.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>Downloading…`;
+    const st = await api("/api/update/fetch", "POST");
+    if (st) renderUpdate(body);   // shows the staged file with its Install button
+    else { f.disabled = false; f.innerHTML = `<i class="fa-solid fa-download"></i>Download v${esc(r.version)}`; }
+  };
 }

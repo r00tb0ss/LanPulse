@@ -1074,3 +1074,16 @@ html[data-pretheme="ocean"]{background:#041a1f}
 .xjump i{margin-right:5px}
 @keyframes xflash{0%,60%{box-shadow:0 0 0 2px var(--accent);background:var(--panel2)}100%{box-shadow:0 0 0 0 transparent}}
 .xflash{animation:xflash 2.2s ease-out;border-radius:8px}
+
+.upd-latest{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}
+.upd-latest .upd-note{flex:1 1 100%}
+
+.fixdev{border:1px solid var(--border);border-radius:12px;background:var(--panel);margin-bottom:10px;overflow:hidden}
+.fixdev.open{border-color:var(--border2)}
+.fixdev-head{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;cursor:pointer}
+.fixdev-head:hover{background:var(--panel2)}
+.fixdev-head .chev{margin-left:auto;transition:transform .15s;color:var(--dim)}
+.fixdev.open .fixdev-head .chev{transform:rotate(180deg)}
+.fixdev-body{padding:4px 10px 10px;border-top:1px solid var(--border)}
+.fixdev-body .fix{margin-top:8px}
+.fixdev-body .fix-dev{display:none}
