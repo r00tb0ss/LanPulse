@@ -387,14 +387,27 @@ class VulnScanner:
             wait = self.last_nvd + gap - time.time()
             if wait > 0:
                 time.sleep(wait)
-            q = urllib.parse.urlencode({"virtualMatchString": f"cpe:2.3:{part}:{vendor}:{product}",
-                                        "resultsPerPage": 2000, "startIndex": start})
             headers = {"User-Agent": "LanPulse", "Accept": "application/json"}
             if key:
                 headers["apiKey"] = key
-            self.last_nvd = time.time()
-            with urllib.request.urlopen(urllib.request.Request(f"{NVD}?{q}", headers=headers), timeout=60) as r:
-                data = json.loads(r.read(120_000_000))
+            data = None
+            base = f"cpe:2.3:{part}:{vendor}:{product}"
+            # NVD answers 404 when a match string names no CPE it knows. Some products only exist with a version part
+            # (for example windows_server_2008), so try the other spellings before giving up.
+            for i, vms in enumerate((base, base + ":*", base + ":-")):
+                q = urllib.parse.urlencode({"virtualMatchString": vms, "resultsPerPage": 2000, "startIndex": start})
+                self.last_nvd = time.time()
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(f"{NVD}?{q}", headers=headers), timeout=60) as r:
+                        data = json.loads(r.read(120_000_000))
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 404:
+                        raise
+                    log.warning("NVD 404 for %s (%s): %s", vms, product, e.headers.get("message", ""))
+                    time.sleep(gap)
+            if data is None:
+                break                       # NVD has no CPE under this name: nothing to list, not an error
             items += data.get("vulnerabilities") or []
             start += data.get("resultsPerPage") or 0
             if start >= (data.get("totalResults") or 0) or not data.get("resultsPerPage"):
