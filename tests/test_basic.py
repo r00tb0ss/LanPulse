@@ -47,6 +47,36 @@ class HoneypotParsing(unittest.TestCase):
         self.assertEqual(d("smb", b""), "")
 
 
+class HoneypotSummary(unittest.TestCase):
+    def test_counts_are_not_capped_at_2000(self):
+        import tempfile
+        import time
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        class Pot(honeypot.Honeypot):
+            cfg = {"enabled": False, "bind": "0.0.0.0", "ingest_key": "", "services": {}, "ports": {}, "banners": {}, "retention_days": 90}
+
+            def _geo(self, ip):
+                return {"iso": "", "country": "", "city": "", "org": "", "asn": None}
+
+        d = tempfile.mkdtemp()
+        pot = Pot(SimpleNamespace(args=SimpleNamespace(demo=False), data_dir=Path(d), settings={}, threats=None))
+        now = time.time()
+        rows = [(now - i, "203.0.113.%d" % (i % 50 + 1), "telnet" if i % 2 else "ftp", 23, 0,
+                 "root / x%d" % (i % 7) if i % 3 == 0 else "", "", "") for i in range(5000)]
+        pot.db.executemany("INSERT INTO hits (t, ip, service, port, internal, creds, data, sensor) VALUES (?,?,?,?,?,?,?,?)", rows)
+        pot.db.commit()
+        s = pot.summary(24)
+        self.assertEqual(s["totals"]["hits"], 5000)
+        self.assertEqual(s["totals"]["attackers"], 50)
+        self.assertEqual(sum(x["count"] for x in s["by_service"]), 5000)
+        self.assertEqual(s["totals"]["creds"], len([r for r in rows if r[5]]))
+        self.assertEqual(sum(s["hist"]), 5000)
+        self.assertEqual(len(s["recent"]), 60)
+        self.assertEqual(s["attackers"][0]["hits"], 100)
+
+
 class TopologyRates(unittest.TestCase):
     def test_client_rate(self):
         self.assertEqual(topology._client_rate({"bytes-r": 1500}), 1500.0)
