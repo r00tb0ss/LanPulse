@@ -63,7 +63,7 @@ function renderHoneypot() {
       ${h.internal ? `<span class="tagchip bad" title="A device on your own network hit the honeypot">internal</span>`
                    : (h.sensor ? `<span class="tagchip">${esc(h.sensor)}</span>` : "")}
       ${h.creds ? `<span class="pot-creds" title="login attempted"><i class="fa-solid fa-key"></i>${esc(h.creds)}</span>` : ""}
-      ${!h.creds && h.data ? `<span class="pot-data mono">${esc(h.data)}</span>` : ""}
+      ${h.data ? `<span class="pot-data mono">${esc(h.data)}</span>` : ""}
     </div>`).join("") : `<div class="muted">No hits yet. Once the decoys are on, anything that connects shows up here.</div>`;
 
   // attackers (internal ones tappable if we know the device)

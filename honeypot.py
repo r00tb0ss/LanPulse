@@ -18,6 +18,7 @@ ESP32 honeypot, say) so hardware and software decoys share one dashboard.
 from __future__ import annotations
 
 import asyncio
+import re
 import ipaddress
 import json
 import secrets
@@ -36,6 +37,15 @@ IO_TIMEOUT = 20.0        # seconds to wait on a slow/idle client before dropping
 HIT_RETENTION_DAYS = 90
 FLOOD_WINDOW = 600       # one scanner shouldn't be able to flood the log or the alerts
 FLOOD_MAX = 12           # at most this many logged hits per source IP per FLOOD_WINDOW
+
+_IAC = re.compile(rb"\xff[\xfb-\xfe][\x00-\xff]|\xff\xfa.*?\xff\xf0|\xff[\xf0-\xfa]", re.S)
+
+
+def _printable(raw: bytes, limit: int = 120) -> str:
+    """Text of what a client sent, with control and telnet-negotiation bytes removed."""
+    raw = _IAC.sub(b"", raw)
+    return "".join(c if 32 <= ord(c) < 127 else "." for c in raw[:limit].decode("latin-1")).strip()
+
 
 # key -> (default port, display label, handler name, one-line note shown in the UI)
 SERVICES = {
@@ -301,7 +311,8 @@ class Honeypot:
             raw = await asyncio.wait_for(reader.readline(), IO_TIMEOUT)
         except (asyncio.TimeoutError, OSError):
             return ""
-        return raw[:limit].decode("latin-1", "replace").strip()
+        raw = _IAC.sub(b"", raw)                      # telnet option negotiation is not part of the username
+        return raw[:limit].decode("latin-1", "replace").replace("\x00", "").strip()
 
     async def _h_ssh(self, r, w, ip):
         await self._pause()
@@ -316,23 +327,36 @@ class Honeypot:
         ban = self.cfg["banners"].get("telnet") or "Ubuntu 22.04.3 LTS"
         w.write(b"\r\n" + ban.encode("ascii", "ignore") + b"\r\n\r\nlogin: ")
         await w.drain()
-        user = await self._recv_line(r, 64)
-        await self._pause()
-        w.write(b"Password: ")
-        await w.drain()
-        pw = await self._recv_line(r, 64)
-        await self._pause()
-        w.write(b"\r\nLogin incorrect\r\n")
-        await w.drain()
-        self.record(ip, "telnet", self._port("telnet"), f"{user} / {pw}" if (user or pw) else "")
+        tried = 0
+        for _ in range(3):                            # bots usually try a few logins per connection
+            user = await self._recv_line(r, 64)
+            if not user and tried:
+                break
+            await self._pause()
+            w.write(b"Password: ")
+            await w.drain()
+            pw = await self._recv_line(r, 64)
+            await self._pause()
+            w.write(b"\r\nLogin incorrect\r\n")
+            tried += 1
+            self.record(ip, "telnet", self._port("telnet"), f"{user} / {pw}" if (user or pw) else "")
+            if not user and not pw:
+                break
+            w.write(b"login: ")
+            try:
+                await w.drain()
+            except OSError:
+                break
+        if not tried:
+            self.record(ip, "telnet", self._port("telnet"), "")
 
     async def _h_ftp(self, r, w, ip):
         await self._pause()
         ban = self.cfg["banners"].get("ftp") or "(vsFTPd 3.0.5)"
         w.write(b"220 " + ban.encode("ascii", "ignore") + b"\r\n")
         await w.drain()
-        user = pw = ""
-        for _ in range(4):
+        user, tries, other = "", 0, []
+        for _ in range(12):
             line = await self._recv_line(r, 128)
             if not line:
                 break
@@ -343,37 +367,71 @@ class Honeypot:
             elif up.startswith("PASS"):
                 pw = line[4:].strip()[:64]
                 w.write(b"530 Login incorrect.\r\n")
-                await w.drain()
-                break
+                self.record(ip, "ftp", self._port("ftp"), f"{user} / {pw}" if (user or pw) else "")
+                tries, user = tries + 1, ""
+                if tries >= 3:
+                    await w.drain()
+                    break
             else:
+                other.append(_printable(line.encode("latin-1", "replace"), 40))
                 w.write(b"530 Please login with USER and PASS.\r\n")
             await w.drain()
-        self.record(ip, "ftp", self._port("ftp"), f"{user} / {pw}" if (user or pw) else "")
+        if not tries:
+            self.record(ip, "ftp", self._port("ftp"), f"{user} / " if user else "",
+                        ("commands: " + ", ".join(other[:6])) if other else "")
 
     async def _h_http(self, r, w, ip):
         import base64
-        req, creds = "", ""
-        for i in range(20):
+        from urllib.parse import parse_qsl
+        req, creds, hdr = "", "", {}
+        for i in range(30):
             line = await self._recv_line(r, 512)
             if i == 0:
                 req = line[:200]
-            if not line:
+            elif not line:
                 break
-            if line.lower().startswith("authorization: basic "):
-                try:
-                    creds = base64.b64decode(line.split(None, 2)[2]).decode("latin-1", "replace")[:120]
-                except Exception:
-                    creds = ""
+            elif ":" in line:
+                k, _, v = line.partition(":")
+                hdr[k.strip().lower()] = v.strip()
+        auth = hdr.get("authorization", "")
+        if auth.lower().startswith("basic "):
+            try:
+                creds = base64.b64decode(auth.split(None, 1)[1]).decode("latin-1", "replace")[:120].replace(":", " / ", 1)
+            except Exception:
+                creds = ""
+        body = ""
+        try:
+            n = max(0, min(int(hdr.get("content-length", "0") or 0), MAX_READ))
+        except ValueError:
+            n = 0
+        if n:
+            try:
+                body = (await asyncio.wait_for(r.readexactly(n), IO_TIMEOUT)).decode("latin-1", "replace")
+            except (asyncio.TimeoutError, asyncio.IncompleteReadError, OSError):
+                body = ""
+        if body and not creds:
+            f = {k.lower(): v for k, v in parse_qsl(body, keep_blank_values=True)}
+            u = next((f[k] for k in ("username", "user", "login", "email", "uname", "log", "usr") if k in f), "")
+            pw = next((f[k] for k in ("password", "pass", "pwd", "passwd", "pw") if k in f), "")
+            if u or pw:
+                creds = f"{u} / {pw}"[:120]
+        parts = [req]
+        if hdr.get("user-agent"):
+            parts.append("UA: " + _printable(hdr["user-agent"].encode("latin-1", "replace"), 80))
+        if hdr.get("host"):
+            parts.append("Host: " + _printable(hdr["host"].encode("latin-1", "replace"), 40))
+        if body and not creds:
+            parts.append("body: " + _printable(body.encode("latin-1", "replace"), 80))
         await self._pause()
         bn = self.cfg["banners"]
         title = (bn.get("http_title") or "Router Admin").replace("<", "").replace(">", "")
         server = (bn.get("http_server") or "lighttpd/1.4.69").encode("ascii", "ignore")
-        body = f"<html><head><title>{title}</title></head><body><h3>Authentication required</h3></body></html>".encode()
+        page = f"<html><head><title>{title}</title></head><body><h3>Authentication required</h3></body></html>".encode()
         w.write(b"HTTP/1.1 401 Unauthorized\r\nServer: " + server + b"\r\n"
                 b"WWW-Authenticate: Basic realm=\"Admin\"\r\nContent-Type: text/html\r\n"
-                b"Content-Length: " + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
+                b"Content-Length: " + str(len(page)).encode() + b"\r\nConnection: close\r\n\r\n" + page)
         await w.drain()
-        self.record(ip, "http", self._port("http"), creds, req)
+        self.record(ip, "http", self._port("http"), creds, " | ".join(parts)[:400])
 
     async def _h_raw(self, r, w, ip, service, port):
         """SMB / RDP / MySQL: binary protocols. The connection attempt itself is the signal; log a short
@@ -390,8 +448,35 @@ class Honeypot:
             data = await asyncio.wait_for(r.read(MAX_READ), IO_TIMEOUT)
         except (asyncio.TimeoutError, OSError):
             data = b""
-        preview = data[:64].hex()
-        self.record(ip, service, port, "", f"hex={preview}" if preview else "")
+        self.record(ip, service, port, "", self._describe(service, data))
+
+    @staticmethod
+    def _describe(service: str, data: bytes) -> str:
+        """What a scanner's first bytes say: tool or user names where the protocol carries them, else a preview."""
+        if not data:
+            return ""
+        note = ""
+        try:
+            if service == "rdp":
+                m = re.search(rb"Cookie: mstshash=([^\r\n]{1,64})", data)
+                if m:
+                    note = "RDP login name: " + _printable(m.group(1), 64)
+                elif data[:1] == b"\x03":
+                    note = "RDP connection request"
+            elif service == "smb":
+                if b"\xffSMB" in data[:8]:
+                    dia = [d.decode("latin-1") for d in re.findall(rb"\x02([ -~]{3,30})\x00", data[36:])][:5]
+                    note = "SMBv1 negotiate" + (": " + ", ".join(dia) if dia else "")
+                elif b"\xfeSMB" in data[:8]:
+                    note = "SMBv2/3 negotiate"
+            elif service == "mysql" and len(data) > 37:
+                end = data.find(b"\x00", 36)
+                if end > 36:
+                    note = "MySQL login name: " + _printable(data[36:end], 64)
+        except Exception:
+            note = ""
+        tail = f"hex={data[:48].hex()}"
+        return (note + " | " + tail)[:400] if note else tail
 
     HANDLERS = {"ssh": "_h_ssh", "telnet": "_h_telnet", "ftp": "_h_ftp", "http": "_h_http"}
 
