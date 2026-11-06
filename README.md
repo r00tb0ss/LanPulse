@@ -1,8 +1,9 @@
 # LanPulse
 
 **Real-time LAN mapper and security dashboard** — a self-hosted, live view of your home or lab network, viewed from
-any browser. Discover every device, watch attacks on a live world map, scan for vulnerabilities, and get an at-a-glance
-security score and an alert the moment something inside your network is compromised.
+any browser. Discover every device and see how they connect with live traffic on each link, watch attacks on a live
+world map, catch scanners in a built-in honeypot, scan for vulnerabilities, and get an at-a-glance security score and an
+alert the moment something inside your network is compromised.
 
 > **Project page with full feature tour and screenshots:** https://r00tb0ss.github.io/LanPulse/
 
