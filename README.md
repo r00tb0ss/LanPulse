@@ -8,6 +8,8 @@ security score and an alert the moment something inside your network is compromi
 
 ![LanPulse operations-center view](docs/images/noc.png)
 
+![Network topology with live traffic](docs/images/topology.png)
+
 ![LanPulse threats dashboard](docs/images/threats.png)
 
 ![Honeypot view](docs/images/honeypot.png)
@@ -81,6 +83,30 @@ LanPulse can't see internet traffic by itself, so it listens to sources that do:
 3. **Port forwards.** List them in Settings > Threats so attacks on forwarded ports are tied to the right device.
 
 Attackers are placed on the map with the free DB-IP City Lite database (refreshed monthly). Investigating an IP also queries ip-api.com, Shodan InternetDB and, if you add a free key, AbuseIPDB. Attack data is kept for 30 days.
+
+## Network topology
+
+![Network topology](docs/images/topology.png)
+
+The **Network** tab opens on a topology map: Internet, gateway, switches, access points, then every device on its own
+cable.
+
+- **UniFi:** connect your gateway in Settings and LanPulse reads the real connections (read-only): which switch port or
+  access point each device uses, Wi-Fi signal, SSID, band, channel and link speed, switch ports and PoE, and your VLANs.
+  The API key must come from the local console (**Network > Settings > Control Plane > Integrations**), not unifi.ui.com.
+- **Any other router:** devices are assumed to connect to the gateway. Click a device and choose where it connects, its
+  role (switch, access point, device) and whether it's wired or Wi-Fi. Add zones (VLANs or subnets) by network range
+  under **Zones**. Automatic discovery (SNMP/LLDP) for other brands isn't built yet.
+- **Traffic:** turn it on to see packets travel along each cable toward the switch or access point, bigger and faster with
+  more connections, colored green to red. It counts connections each device opened in the last hour, from your router's
+  firewall logs (see Supported routers), so without router logs there is nothing to show.
+- **Drag** devices to arrange them (saved in your browser, **Reset** puts them back), pinch or use +/- to zoom, and use
+  the minimap. **Spread** off groups devices into boxes instead.
+- **Focus** a device to light up its path to the internet. Color by device type, status, risk, zone, Wi-Fi signal or new
+  devices. **Changes** lists what joined, left, moved or roamed.
+- **Export** to SVG, PNG (icons are left out), draw.io or CSV.
+
+![Access point details](docs/images/topology_ap.png)
 
 ## Device traffic layer
 
