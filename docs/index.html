@@ -25,6 +25,12 @@
   img{max-width:100%;display:block}
   code,kbd{font-family:var(--mono);font-size:.9em}
   h1,h2,h3{line-height:1.2;letter-spacing:-.02em}
+  .rt-wrap{overflow-x:auto;margin-top:26px;border:1px solid var(--border);border-radius:12px}
+  .rt{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+  .rt th,.rt td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border)}
+  .rt th{color:var(--dim);font-size:12px;letter-spacing:1px;text-transform:uppercase}
+  .rt tr:last-child td{border-bottom:0}.rt td{color:var(--muted)}.rt td b{color:var(--text)}
+  .rt-note{color:var(--dim);font-size:13px;margin-top:14px}
   /* nav */
   .nav{position:sticky;top:0;z-index:10;background:rgba(10,15,28,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
   .nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
@@ -99,6 +105,7 @@
   <nav>
     <a href="#features">Features</a>
     <a href="#security">Security</a>
+    <a href="#routers">Routers</a>
     <a href="#themes">Themes</a>
     <a href="#install">Install</a>
   </nav>
@@ -266,6 +273,25 @@
 </div></section>
 
 <div class="divider"></div>
+
+<section id="routers"><div class="wrap">
+  <p class="eyebrow">Works with your router</p>
+  <h2 class="title">Not tied to one brand</h2>
+  <p class="lead2">Device discovery, scanning, the honeypot, OpenVAS and the AI analyst work on any network. The attack map
+    and botnet detection read your router's firewall log over syslog, and the setup guide shows the steps for yours.</p>
+  <div class="rt-wrap"><table class="rt">
+    <thead><tr><th>Router / firewall</th><th>Log format</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><b>UniFi</b> (UDM, UDM Pro, UCG)</td><td>netfilter, CEF (IPS)</td><td>Also one-click blocking and the IPS view</td></tr>
+      <tr><td><b>pfSense / OPNsense</b></td><td>filterlog</td><td>Tick <i>Log</i> on the rules you want to see</td></tr>
+      <tr><td><b>OpenWrt, DD-WRT, Linux</b> (iptables, nftables, UFW)</td><td>netfilter</td><td>Add LOG rules and forward with syslog</td></tr>
+      <tr><td><b>MikroTik RouterOS</b></td><td>firewall log</td><td>Log rules with a prefix containing drop or accept</td></tr>
+      <tr><td><b>Fortinet, SonicWall, Sophos, WatchGuard</b></td><td>key=value</td><td>Needs srcip, dstip, dstport and action</td></tr>
+      <tr><td><b>Anything else</b></td><td>JSON</td><td>POST events to the ingest API from scripts or IDS</td></tr>
+    </tbody></table></div>
+  <p class="rt-note">One-click blocking currently needs a UniFi gateway. Many consumer routers on stock firmware can't send
+    firewall logs, so they get device mapping and scanning but no attack map.</p>
+</div></section>
 
 <section id="themes"><div class="wrap">
   <p class="eyebrow">Make it yours</p>
