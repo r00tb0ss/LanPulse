@@ -559,7 +559,7 @@ class VulnScanner:
                 if (f["cve"], f["port"]) not in seen:
                     seen.add((f["cve"], f["port"]))
                     uniq.append(f)
-            results[dev_id] = uniq[:300]
+            results[dev_id] = uniq[:2000]
         self.results = results
         if alert:
             self._alert_new_kev()
@@ -699,14 +699,14 @@ class VulnScanner:
                 g["max"] = max(g["max"], f["score"] or 0)
                 if f.get("confidence") == "confirmed":       # a confirmed hit heads the group
                     g["top"], g["confidence"] = f, "confirmed"
-        fix = sorted(groups.values(), key=lambda g: (-g["confirmed"], -g["kev"], -g.get("msf", 0), g["unverified"], -g.get("edb", 0), -g["max"], -g["count"]))[:40]
+        fix = sorted(groups.values(), key=lambda g: (-g["confirmed"], -g["kev"], -g.get("msf", 0), g["unverified"], -g.get("edb", 0), -g["max"], -g["count"]))[:1000]
         # LanPulse's own checks (risky services, end-of-life Windows) belong on this page too
         config = [{"id": d["id"], "name": self.nm.label(d), "ip": d["ip"], "level": f["level"], "text": f["text"],
                    "port": f.get("port")}
                   for d in devs.values() for f in d.get("findings", []) if f["level"] in ("high", "medium") and not f.get("dismissed")]
         all_f = [f for items in self.results.values() for f in items]
         return {"type": "vuln_summary", "status": self.status, "enabled": self.cfg.get("enabled", True),
-                "devices": rows, "fix": fix, "config": config[:40],
+                "devices": rows, "fix": fix, "config": config[:500],
                 "totals": {"cves": len({f["cve"] for f in all_f}), "kev": len({f["cve"] for f in all_f if f["kev"]}),
                            "exploits": len({f["cve"] for f in all_f if f.get("msf") or f.get("edb")}),
                            "msf": len({f["cve"] for f in all_f if f.get("msf")}),
