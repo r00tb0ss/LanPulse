@@ -145,6 +145,37 @@
 
   <div class="feature">
     <div class="ftext">
+      <span class="tag">NETWORK TOPOLOGY</span>
+      <h3>See how your network is actually wired</h3>
+      <p>The Network tab draws your real topology: Internet, gateway, switches, access points, then every device on its own
+        cable. With a UniFi gateway it reads the connections automatically. On any other router you tell LanPulse where a
+        device plugs in, and add VLANs or subnets as zones.</p>
+      <ul>
+        <li><b>Live traffic on every cable</b> — packets travel along each link, bigger and faster with more connections, from green (quiet) to red (busy).</li>
+        <li><b>Drag devices</b> to arrange the map your way, zoom and pinch on a phone, and use the minimap on big networks.</li>
+        <li><b>Focus a device</b> to light up its path to the internet, color by risk, status, zone or Wi-Fi signal, and see what changed in the last 24 hours.</li>
+        <li><b>Export</b> to SVG, PNG, draw.io or CSV.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/topology.png" alt="Network topology: internet, router, switch and access point with a cable to every device and traffic flowing along each link"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">WI-FI &amp; ACCESS POINTS</span>
+      <h3>Know what's on each access point, and how good the signal is</h3>
+      <p>Click an access point or switch for the details UniFi already knows, in one place, with a way to open the full device page.</p>
+      <ul>
+        <li><b>Access points</b> — model, radios and channels, SSIDs, client counts and a good / fair / weak signal summary.</li>
+        <li><b>Switches</b> — ports up, PoE draw, uplink port and speed.</li>
+        <li><b>Each Wi-Fi device</b> — SSID, band, channel, signal strength and link speed.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/topology_ap.png" alt="Access point details panel beside the topology map, colored by Wi-Fi signal"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
       <span class="tag">LIVE ATTACK MAP</span>
       <h3>Watch attacks hit your network in real time</h3>
       <p>Every blocked probe and every connection that gets through is placed on a live world map, with the attacking
@@ -289,7 +320,8 @@
       <tr><td><b>Fortinet, SonicWall, Sophos, WatchGuard</b></td><td>key=value</td><td>Needs srcip, dstip, dstport and action</td></tr>
       <tr><td><b>Anything else</b></td><td>JSON</td><td>POST events to the ingest API from scripts or IDS</td></tr>
     </tbody></table></div>
-  <p class="rt-note">One-click blocking currently needs a UniFi gateway. Many consumer routers on stock firmware can't send
+  <p class="rt-note">The Topology view reads real connections from UniFi automatically; on other routers you set where devices
+    connect, and add zones by network range. One-click blocking currently needs a UniFi gateway. Many consumer routers on stock firmware can't send
     firewall logs, so they get device mapping and scanning but no attack map.</p>
 </div></section>
 
