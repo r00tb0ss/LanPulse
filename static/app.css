@@ -1149,3 +1149,13 @@ html[data-pretheme="ocean"]{background:#041a1f}
 .pot-d-actions{margin-top:12px;display:flex;gap:8px}
 #potDetail h5{margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 #potTimeline{margin-bottom:14px}
+
+/* honeypot custom settings */
+.pot-port-in{width:78px;padding:2px 6px;font:12px var(--mono);background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:6px}
+.pot-adv{margin:10px 0;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--bg2)}
+.pot-adv summary{cursor:pointer;font-weight:600}
+.pot-adv-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0}
+.pot-adv label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.pot-adv input:not([type=checkbox]),.pot-adv textarea{padding:7px 9px;background:var(--panel);color:var(--text);border:1px solid var(--border2);border-radius:8px;font:13px var(--mono)}
+.pot-adv .chk-line{display:flex;gap:8px;align-items:flex-start;margin:8px 0;color:var(--text);font-size:13px}
+@media(max-width:720px){.pot-adv-grid{grid-template-columns:1fr}}
