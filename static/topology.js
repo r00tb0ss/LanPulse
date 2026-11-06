@@ -415,7 +415,7 @@ function topoRedraw() {      // re-draw after a drag without refitting or closin
   const L = topoLayout(d);
   if (!L) return;
   TOPO.layout = L;
-  $("topoRoot").innerHTML = topoSvg(L, topoTheme());
+  $("topoRoot").innerHTML = topoSvg(L, topoTheme()); TOPO.lastSvg = null;
   topoMini();
 }
 
@@ -475,7 +475,9 @@ function renderTopology() {
     $("topoRoot").innerHTML = `<text x="40" y="60" fill="${T.muted}" font-size="14">LanPulse hasn't found your gateway yet. Once it has, the map appears here.</text>`;
     return;
   }
-  $("topoRoot").innerHTML = topoSvg(L, T);
+  // Only touch the SVG when it actually changed, so the cable animation isn't restarted by every background refresh
+  const svgNow = topoSvg(L, T);
+  if (svgNow !== TOPO.lastSvg || !$("topoRoot").firstChild) { $("topoRoot").innerHTML = svgNow; TOPO.lastSvg = svgNow; }
   if (TOPO.fit) { TOPO.fit = false; requestAnimationFrame(topoFitView); } else topoApplyView();
   if (TOPO.sel) renderTopoInfo();
 }
