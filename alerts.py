@@ -56,7 +56,9 @@ DEFAULT_SETTINGS = {
     "vulns": {"enabled": True, "nvd_key": ""},
     "honeypot": {"enabled": False, "bind": "0.0.0.0", "ingest_key": "",
                  "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
-                              "smb": True, "rdp": True, "mysql": True}},
+                              "smb": True, "rdp": True, "mysql": True},
+                 "ports": {}, "banners": {}, "retention_days": 90, "flood_max": 12, "flood_minutes": 10,
+                 "alert_external": True, "ignore": "", "delay_ms": 0},
     "openvas": {"enabled": False, "auto": False, "username": "admin", "password": ""},
     "wizard": {"done": False},
     "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
@@ -317,6 +319,36 @@ def apply_update(current: dict, incoming: dict) -> dict:
             for k in list(cur["services"]):
                 if k in hp["services"]:
                     cur["services"][k] = bool(hp["services"][k])
+        if isinstance(hp.get("ports"), dict):
+            ports = {}
+            for k in cur["services"]:
+                try:
+                    n = int(hp["ports"].get(k))
+                except (TypeError, ValueError):
+                    continue
+                if 1 <= n <= 65535:
+                    ports[k] = n
+            cur["ports"] = ports                      # a missing key means "use the default port"
+        if isinstance(hp.get("banners"), dict):
+            keep = ("ssh", "telnet", "ftp", "http_server", "http_title")
+            cur["banners"] = {k: " ".join("".join(c for c in str(hp["banners"][k]) if 32 <= ord(c) < 127).split())[:80]
+                              for k in keep if str(hp["banners"].get(k) or "").strip()}
+        for k, lo, hi in (("retention_days", 1, 365), ("flood_max", 1, 500), ("flood_minutes", 1, 120), ("delay_ms", 0, 5000)):
+            if k in hp:
+                try:
+                    cur[k] = max(lo, min(hi, int(hp[k])))
+                except (TypeError, ValueError):
+                    pass
+        if "alert_external" in hp:
+            cur["alert_external"] = bool(hp["alert_external"])
+        if "ignore" in hp:
+            ok = []
+            for tok in re.split(r"[\s,;]+", str(hp["ignore"])):
+                try:
+                    ok.append(str(ipaddress.ip_network(tok, strict=False)) if "/" in tok else str(ipaddress.ip_address(tok)))
+                except ValueError:
+                    continue
+            cur["ignore"] = "\n".join(ok[:100])
     ov = incoming.get("openvas")
     if isinstance(ov, dict):
         cur = new["openvas"]
