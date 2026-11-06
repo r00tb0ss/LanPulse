@@ -56,6 +56,22 @@ SIGNATURES = [
 _COMPILED = [(k, re.compile(sv, re.I), re.compile(pr, re.I), re.compile(vr) if vr else None, cve, score, title, desc, msf)
              for k, sv, pr, vr, cve, score, title, desc, msf in SIGNATURES]
 
+# Well-known CVEs with a Metasploit module, so a finding from any source (OpenVAS, vulners, an NSE check) gets its
+# badge even when the exploit index hasn't downloaded yet or doesn't list it. The signatures above add theirs.
+_EXTRA_MSF = {
+    "CVE-2020-1938": ("auxiliary/admin/http/tomcat_ghostcat", "Apache Tomcat AJP file read (Ghostcat)"),
+    "CVE-2017-0143": ("exploit/windows/smb/ms17_010_eternalblue", "MS17-010 EternalBlue SMB remote code execution"),
+    "CVE-2008-4250": ("exploit/windows/smb/ms08_067_netapi", "MS08-067 Server service remote code execution"),
+}
+MSF_BY_CVE = {**{cve: (msf, title) for _, _, _, _, cve, _, title, _, msf in SIGNATURES if msf and cve.startswith("CVE-")},
+              **_EXTRA_MSF}
+
+
+def msf_for_cve(cve: str) -> list:
+    """Metasploit module for a CVE as [[module, title, rank]] (the exploit index's shape), or []."""
+    m = MSF_BY_CVE.get((cve or "").upper())
+    return [[m[0], m[1][:160], 0]] if m else []
+
 
 def match_port(p: dict) -> list[dict]:
     """Signatures that fit one port entry from nmap ({service, product, ver, ...})."""
