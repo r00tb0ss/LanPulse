@@ -3,7 +3,7 @@
 "use strict";
 /* Vulnerabilities tab: known flaws (CVEs) in the software your devices run, worst first. */
 
-let vulnData = null, vulnOpen = new Set();
+let vulnData = null, vulnOpen = new Set(), vulnDevOpen = new Set(), vulnDevSeen = new Set();
 
 const SEV_COLOR = {critical: "#f43f5e", high: "#fb923c", medium: "#fbbf24", low: "#7dd3fc", unknown: "#8b9bb6"};
 const sevOf = (s) => (s == null ? "unknown" : s >= 9 ? "critical" : s >= 7 ? "high" : s >= 4 ? "medium" : "low");
@@ -47,7 +47,7 @@ function renderVulns() {
   if (st.no_cpe) parts.push(`<span class="muted">Tip: for lab machines, open the device and turn on <b>Thorough scan</b> to find more software.</span>`);
   $("vulnStatus").innerHTML = `<div>${parts.join("<br>")}</div>`;
 
-  $("vulnFix").innerHTML = s.fix.length ? s.fix.map((g) => {
+  const rowHtml = (g) => {
     const key = `${g.id}|${g.port}`;
     return `<div class="fix ${g.confidence === "confirmed" ? "confirmed-fix" : g.kev ? "kev" : ""}">
       <button class="fix-row" data-key="${esc(key)}" aria-expanded="${vulnOpen.has(key)}">
@@ -61,6 +61,26 @@ function renderVulns() {
           <span class="tagchip">${g.count} CVE${g.count === 1 ? "" : "s"}</span>${g.distro ? '<span class="tagchip">may be patched</span>' : ""}</span>
         <i class="fa-solid fa-chevron-down chev"></i></button>
       <div class="fix-detail ${vulnOpen.has(key) ? "" : "hidden"}" data-detail="${esc(key)}"></div></div>`;
+  };
+  const byDev = new Map();
+  for (const g of s.fix) { if (!byDev.has(g.id)) byDev.set(g.id, []); byDev.get(g.id).push(g); }
+  if (byDev.size === 1 && !vulnDevSeen.size) vulnDevOpen.add([...byDev.keys()][0]);   // a lone device opens by itself
+  for (const id of byDev.keys()) vulnDevSeen.add(id);
+  $("vulnFix").innerHTML = s.fix.length ? [...byDev.entries()].map(([id, gs]) => {
+    const top = gs.reduce((m, g) => Math.max(m, g.max || 0), 0) || null;
+    const cves = gs.reduce((n, g) => n + g.count, 0), conf = gs.filter((g) => g.confidence === "confirmed").length;
+    const kev = gs.reduce((n, g) => n + (g.kev || 0), 0), msf = gs.reduce((n, g) => n + (g.msf || 0), 0);
+    const open = vulnDevOpen.has(id);
+    return `<div class="fixdev ${open ? "open" : ""}" data-devgrp="${esc(id)}">
+      <button class="fixdev-head" data-devtoggle="${esc(id)}" aria-expanded="${open}">
+        ${top == null && conf ? '<span class="score-chip confirmed-chip">!</span>' : scoreChip(top)}
+        <span class="fix-main"><b>${esc(gs[0].name)}</b> <span class="muted mono">${esc(gs[0].ip)}</span><br>
+          <span class="fix-dev">${gs.length} service${gs.length === 1 ? "" : "s"} with flaws</span></span>
+        <span class="fix-tags">${conf ? `<span class="tagchip confirmed"><i class="fa-solid fa-circle-check"></i>${conf} confirmed</span>` : ""}
+          ${kev ? `<span class="tagchip bad">${kev} exploited</span>` : ""}${msf ? `<span class="tagchip msf">${msf} Metasploit</span>` : ""}
+          <span class="tagchip">${cves} CVE${cves === 1 ? "" : "s"}</span></span>
+        <i class="fa-solid fa-chevron-down chev"></i></button>
+      <div class="fixdev-body ${open ? "" : "hidden"}">${open ? gs.map(rowHtml).join("") : ""}</div></div>`;
   }).join("") : `<div class="all-clear" style="margin:0"><i class="fa-solid fa-circle-check"></i><div><b>No known flaws found</b>
       <span>${t.scanned ? "in the software versions LanPulse could identify." : "yet. Devices are checked after their first port scan."}</span></div></div>`;
   for (const key of vulnOpen) fillFixDetail(key);
@@ -181,6 +201,8 @@ async function loadDeviceVulns(id) {
   $("vulnFix").addEventListener("click", (e) => {
     const xj = e.target.closest("[data-xjump]");
     if (xj) { xJump(xj.dataset.xjump, xj.dataset.xdev); return; }
+    const tg = e.target.closest("[data-devtoggle]");
+    if (tg) { const id = tg.dataset.devtoggle; if (vulnDevOpen.has(id)) vulnDevOpen.delete(id); else vulnDevOpen.add(id); renderVulns(); return; }
     const dev = e.target.closest("[data-dev-id]");
     if (dev) { goDevice(dev.dataset.devId); return; }
     const b = e.target.closest(".fix-row"); if (!b) return;
