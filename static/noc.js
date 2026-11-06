@@ -34,13 +34,75 @@ function nocClock() {
   if (c) c.textContent = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
 }
 
+let nocMisses = 0;
 async function nocTick() {
-  const [p, t] = await Promise.all([api("/api/posture?days=30", "GET"), api("/api/threats/summary?hours=24", "GET")]);
+  const [p, t, topo, hp, sv, fl] = await Promise.all([api("/api/posture?days=30", "GET"), api("/api/threats/summary?hours=24", "GET"),
+    api("/api/topology", "GET"), api("/api/honeypot?hours=24", "GET"), api("/api/services", "GET"), api("/api/flows?hours=1", "GET")]);
+  // a wall display runs unattended: say so on screen when the server stops answering instead of silently going stale
+  nocMisses = p || t ? 0 : nocMisses + 1;
+  if ($("nocStale")) $("nocStale").classList.toggle("hidden", nocMisses < 2);
+  if (nocMisses) return;
+  if ($("nocUpd")) $("nocUpd").textContent = "updated " + new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
   if (p) { postureData = p; nocScore(p); }
   if (t) nocStats(t);
   nocMapUpdate(t);
   nocFeed();
   nocCompromised();
+  nocHealth(topo); nocServices(sv); nocHoneypot(hp); nocTalkers(fl);
+}
+
+const nocTileHead = (icon, title, sub) => `<h4><i class="fa-solid ${icon}"></i> ${esc(title)}${sub ? `<span class="muted">${sub}</span>` : ""}</h4>`;
+
+function nocHealth(d) {
+  const el = $("nocHealth");
+  if (!el) return;
+  if (!d || !d.nodes) { el.innerHTML = nocTileHead("fa-network-wired", "Network health") + `<div class="muted">Waiting for the network map…</div>`; return; }
+  const infra = d.nodes.filter((n) => ["gateway", "switch", "ap"].includes(n.kind));
+  const down = infra.filter((n) => !n.online);
+  const wifi = d.nodes.filter((n) => n.link && n.link.medium === "wifi" && n.kind === "client");
+  const weak = wifi.filter((n) => n.link.quality === "poor");
+  const state = down.length ? "bad" : weak.length ? "warn" : "ok";
+  el.innerHTML = nocTileHead("fa-network-wired", "Network health") + `
+    <div class="noc-big ${state}">${down.length ? `${down.length} DOWN` : weak.length ? "FAIR" : "HEALTHY"}</div>
+    <div class="noc-line"><span>Switches, APs, gateway</span><b class="${down.length ? "bad" : ""}">${infra.length - down.length}/${infra.length} up</b></div>
+    ${down.length ? `<div class="noc-line bad">${down.slice(0, 3).map((n) => esc(n.name)).join(", ")} offline</div>` : ""}
+    <div class="noc-line"><span>Wi-Fi clients</span><b>${wifi.length}${weak.length ? ` · <span class="warn">${weak.length} weak</span>` : ""}</b></div>`;
+}
+
+function nocServices(s) {
+  const el = $("nocSvc");
+  if (!el) return;
+  if (!s || !s.total) { el.innerHTML = nocTileHead("fa-heart-pulse", "Services") + `<div class="muted">No services monitored yet. Add some in the Services tab.</div>`; return; }
+  const bad = (s.checks || []).filter((c) => c.up === false);
+  const slow = [...(s.checks || [])].filter((c) => c.up === true && c.ms != null).sort((a, b) => b.ms - a.ms)[0];
+  el.innerHTML = nocTileHead("fa-heart-pulse", "Services") + `
+    <div class="noc-big ${bad.length ? "bad" : "ok"}">${s.up}<small>/${s.total} up</small></div>
+    ${bad.length ? bad.slice(0, 3).map((c) => `<div class="noc-line bad"><span>${esc(c.name)}</span><b>down</b></div>`).join("")
+      : `<div class="noc-line"><span>Everything is answering</span></div>`}
+    ${slow ? `<div class="noc-line"><span>Slowest: ${esc(slow.name)}</span><b>${Math.round(slow.ms)} ms</b></div>` : ""}`;
+}
+
+function nocHoneypot(h) {
+  const el = $("nocPot");
+  if (!el) return;
+  if (!h || !h.totals) { el.innerHTML = nocTileHead("fa-jar", "Honeypot") + `<div class="muted">Waiting for data…</div>`; return; }
+  if (!h.enabled && !h.totals.all_time) { el.innerHTML = nocTileHead("fa-jar", "Honeypot") + `<div class="muted">Off. Turn it on in the Honeypot tab.</div>`; return; }
+  const t = h.totals, top = (h.attackers || []).find((a) => !a.internal), cred = (h.creds || [])[0];
+  el.innerHTML = nocTileHead("fa-jar", "Honeypot", "24h") + `
+    <div class="noc-big ${t.internal ? "bad" : ""}">${fmtN(t.hits)}<small> hits</small></div>
+    <div class="noc-line"><span>From your own network</span><b class="${t.internal ? "bad" : ""}">${t.internal ? t.internal + " ⚠" : "none"}</b></div>
+    ${top ? `<div class="noc-line"><span>Top: ${typeof flag === "function" && top.iso ? flag(top.iso) + " " : ""}<span class="mono">${esc(top.ip)}</span></span><b>${top.hits}×</b></div>` : ""}
+    ${cred ? `<div class="noc-line"><span>Top login</span><b class="mono">${esc(cred.cred)}</b></div>` : ""}`;
+}
+
+function nocTalkers(f) {
+  const el = $("nocTalk");
+  if (!el) return;
+  const tk = ((f && f.talkers) || []).slice(0, 4);
+  if (!tk.length) { el.innerHTML = nocTileHead("fa-arrow-right-arrow-left", "Busiest devices", "last hour") + `<div class="muted">No device traffic logged yet.</div>`; return; }
+  const max = Math.max(1, ...tk.map((x) => x.count));
+  el.innerHTML = nocTileHead("fa-arrow-right-arrow-left", "Busiest devices", "last hour") +
+    tk.map((x) => `<div class="noc-cbar"><span class="cn">${esc(x.name || x.ip)}</span><span class="cb"><span style="width:${Math.round(100 * x.count / max)}%;background:var(--accent)"></span></span><span class="cc">${fmtN(x.count)}</span></div>`).join("");
 }
 
 function nocScore(p) {
@@ -107,7 +169,17 @@ function nocCountries() {
 // A dedicated small world map for the NOC (separate ECharts instance from the main map).
 function nocInitMap() {
   const host = $("nocMap");
-  if (!host || typeof echarts === "undefined" || !echarts.getMap || !echarts.getMap("world")) return;
+  if (!host) return;
+  nocCountries();                                  // the country list doesn't need the map
+  if (typeof echarts === "undefined" || !echarts.getMap || !echarts.getMap("world")) {
+    // the map library loads on demand: if the Operations Center is the first thing opened, fetch it now (once)
+    if (!nocInitMap.tried && typeof loadWorldLib === "function") {
+      nocInitMap.tried = true;
+      loadWorldLib().then(() => { if (typeof fixWorldMap === "function") fixWorldMap(); setTimeout(nocInitMap, 50); });
+    }
+    return;
+  }
+  if (nocChart) return;
   try {
     nocChart = echarts.init(host, null, {renderer: "canvas"});
     const area = (typeof cssVar === "function" ? cssVar("--map-area", "#16243f") : "#16243f");
@@ -139,7 +211,22 @@ function nocMapUpdate(t) {
   } catch (_) {}
 }
 
+function nocApplyDim(on) {
+  const el = $("noc");
+  if (el) el.classList.toggle("dim", on);
+  const b = $("nocDim");
+  if (b) b.setAttribute("aria-pressed", String(on));
+  try { localStorage.setItem("lp_noc_dim", on ? "1" : "0"); } catch (_) {}
+}
+
 (function initNoc() {
+  const d = $("nocDim");
+  if (d) {
+    let on = false;
+    try { on = localStorage.getItem("lp_noc_dim") === "1"; } catch (_) {}
+    nocApplyDim(on);
+    d.onclick = () => nocApplyDim(!$("noc").classList.contains("dim"));
+  }
   const b = $("btnNoc");
   if (b) b.onclick = openNoc;
   const c = $("nocClose");
