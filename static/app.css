@@ -1069,3 +1069,8 @@ html[data-pretheme="ocean"]{background:#041a1f}
 .wiz-how{font-size:13px}
 
 .pot-hit.click,.pot-att[data-ext-ip]{cursor:pointer}.pot-hit.click:hover,.pot-att[data-ext-ip]:hover{background:var(--panel2)}
+
+.xjump{margin-left:8px;padding:3px 9px;font-size:11.5px;white-space:nowrap}
+.xjump i{margin-right:5px}
+@keyframes xflash{0%,60%{box-shadow:0 0 0 2px var(--accent);background:var(--panel2)}100%{box-shadow:0 0 0 0 transparent}}
+.xflash{animation:xflash 2.2s ease-out;border-radius:8px}
