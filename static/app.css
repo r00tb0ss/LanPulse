@@ -1039,3 +1039,7 @@ html[data-pretheme="synthwave"]{background:#140a2e}
 .wiz-facts div{background:var(--ctrl);border:1px solid var(--border2);border-radius:10px;padding:10px}
 .wiz-facts b{display:block;font-size:15px;word-break:break-all}.wiz-facts span{font-size:12px;color:var(--muted)}
 .wiz-foot{display:flex;gap:8px;margin-top:18px;align-items:center}
+
+.wiz-rt{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);margin:10px 0}
+.wiz-rt select{background:var(--ctrl);color:var(--text);border:1px solid var(--border2);border-radius:8px;padding:7px 8px;font-size:13px}
+.wiz-how{font-size:13px}

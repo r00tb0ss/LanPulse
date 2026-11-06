@@ -6,6 +6,15 @@
 (() => {
   let step = 0, cfg = null;
   const host = () => location.hostname;
+  let router = "unifi";
+  const ROUTERS = {
+    unifi: {n: "UniFi (UDM, UCG, Gateway)", h: "Settings &gt; CyberSecure / System Logging &gt; SIEM server (syslog), then turn on logging for your firewall rules. One-click blocking is also supported on UniFi."},
+    pfsense: {n: "pfSense / OPNsense", h: "Status &gt; System Logs &gt; Settings (pfSense) or System &gt; Settings &gt; Logging &gt; Remote (OPNsense): enable remote logging, enter the server above and include firewall events. Make sure your firewall rules have <b>Log</b> ticked."},
+    openwrt: {n: "OpenWrt / DD-WRT / Linux (iptables, nftables)", h: "OpenWrt: System &gt; Logging &gt; External log server, port above, protocol UDP. Add LOG rules for the traffic you want to see (for example drops on WAN). Plain Linux: use a netfilter LOG rule and rsyslog forwarding."},
+    mikrotik: {n: "MikroTik RouterOS", h: "System &gt; Logging: add an action of type <b>remote</b> to the address above, and a rule for topic <b>firewall</b>. On the firewall rules you want to see, set action <b>log</b> (or add a log rule) with a prefix containing <b>drop</b> for blocked traffic."},
+    fortinet: {n: "Fortinet, SonicWall, Sophos, WatchGuard", h: "Enable remote syslog to the server above and log traffic/firewall events in key=value format (srcip, dstip, dstport, action). Blocked traffic should carry action=deny or drop."},
+    other: {n: "Another router or firewall", h: "Look for <b>remote syslog</b> or <b>log server</b> in the router's settings, enter the server and port above, and turn on firewall logging for blocked and allowed traffic. LanPulse understands iptables/nftables, pfSense/OPNsense, MikroTik, UniFi, key=value and JSON formats."},
+  };
 
   const STEPS = [
     {t: "Welcome to LanPulse", i: "fa-hand-wave", body: () => `
@@ -20,12 +29,18 @@
       <p>Choose where LanPulse should reach you when something serious happens: ntfy push, Telegram, email,
       Discord/Slack webhook or IRC.</p>
       <div class="btns"><button class="btn primary" data-go="channels"><i class="fa-solid fa-bell"></i>Set up alerts</button></div>`},
-    {t: "See attacks on your network", i: "fa-earth-americas", body: () => `
-      <p>To fill the attack map and catch devices talking to botnets, send your router's firewall log to LanPulse:</p>
-      <ul><li>Syslog server: <code>${esc(host())}</code> port <code>514</code> (UDP)</li>
-      <li><b>UniFi:</b> Settings &gt; CyberSecure / System Logging &gt; SIEM server (syslog), then enable firewall logging on your rules.</li>
-      <li><b>Other routers:</b> enable remote syslog to the address above and log blocked and allowed traffic.</li></ul>
-      <p class="muted">Without this LanPulse still maps your devices, scans them and runs the honeypot.</p>`},
+    {t: "See attacks on your network", i: "fa-earth-americas", body: () => {
+      const port = (cfg.threats && cfg.threats.syslog_port) || 514;
+      const R = ROUTERS[router] || ROUTERS.other;
+      return `
+      <p>To fill the attack map and catch devices talking to botnets, send your router's firewall log to LanPulse
+      as <b>syslog (UDP)</b>:</p>
+      <ul><li>Server: <code>${esc(host())}</code> &nbsp; port: <code>${port}</code></li></ul>
+      <label class="wiz-rt">Your router
+        <select id="wizRouter">${Object.entries(ROUTERS).map(([k, v]) => `<option value="${k}" ${k === router ? "selected" : ""}>${esc(v.n)}</option>`).join("")}</select></label>
+      <p class="wiz-how">${R.h}</p>
+      <p class="muted">Without this LanPulse still maps your devices, scans them and runs the honeypot.</p>`;
+    }},
     {t: "Turn on the honeypot", i: "fa-jar", body: () => `
       <p>The honeypot runs decoy Telnet, FTP, SMB, RDP and MySQL services. No real device should ever touch them, so
       <b>any hit is a warning</b>, and a hit from inside your network means a device is likely compromised.
@@ -67,6 +82,7 @@
     $("wizSkipAll").onclick = () => finish();
     $("wizBack") && ($("wizBack").onclick = () => { step--; draw(); });
     $("wizNext").onclick = async () => { if (s.save) await s.save(); if (last) finish(); else { cfg = await api("/api/settings", "GET") || cfg; step++; draw(); } };
+    const rs = $("wizRouter"); if (rs) rs.onchange = () => { router = rs.value; draw(); };
     $("wizCard").querySelectorAll("[data-go]").forEach((b) => b.onclick = async () => {
       await finish(false); setTab = b.dataset.go; await openSettings();
     });
