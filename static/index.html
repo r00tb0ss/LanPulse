@@ -335,9 +335,12 @@
 <div class="noc hidden" id="noc" aria-hidden="true">
   <div class="noc-head">
     <div class="noc-brand"><i class="fa-solid fa-wave-square"></i>Lan<b>Pulse</b> <span>Operations Center</span></div>
+    <div class="noc-upd" id="nocUpd"></div>
     <div class="noc-clock" id="nocClock"></div>
+    <button class="icon-btn" id="nocDim" title="Dim the screen (good for a TV at night)" aria-pressed="false"><i class="fa-solid fa-moon"></i></button>
     <button class="icon-btn" id="nocClose" title="Exit (Esc)"><i class="fa-solid fa-xmark"></i></button>
   </div>
+  <div class="noc-stale hidden" id="nocStale"><i class="fa-solid fa-triangle-exclamation"></i> LanPulse isn't answering. Showing the last data and retrying.</div>
   <div class="noc-grid">
     <div class="noc-tile noc-score" id="nocScore"></div>
     <div class="noc-tile noc-stats" id="nocStats"></div>
@@ -345,6 +348,12 @@
     <div class="noc-tile noc-alert" id="nocAlert"></div>
     <div class="noc-tile noc-feed"><h4>Live activity</h4><div id="nocFeed"></div></div>
     <div class="noc-tile noc-countries"><h4>Top sources</h4><div id="nocCountries"></div></div>
+  </div>
+  <div class="noc-strip">
+    <div class="noc-tile" id="nocHealth"></div>
+    <div class="noc-tile" id="nocSvc"></div>
+    <div class="noc-tile" id="nocPot"></div>
+    <div class="noc-tile" id="nocTalk"></div>
   </div>
 </div>
 
