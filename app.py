@@ -56,8 +56,9 @@ from services import ServiceMonitor
 from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
+from topology import Topology, demo_unifi
 
-VERSION = "1.24.0"
+VERSION = "1.25.0"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -713,6 +714,7 @@ class LanPulse:
         self.services = ServiceMonitor(self)
         self.honeypot = Honeypot(self)
         self.openvas = OpenVAS(self)
+        self.topology = Topology(self, self.data_dir / "topology.json")
         if args.demo:
             self.honeypot.seed_demo()
         self.discovery = Discovery(self)
@@ -1185,6 +1187,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         tasks.append(asyncio.create_task(nm.vulns.run()))
         tasks.append(asyncio.create_task(nm.services.run()))
         tasks.append(asyncio.create_task(nm.honeypot.run()))
+        tasks.append(asyncio.create_task(topology_loop()))
         tasks.append(asyncio.create_task(nm.openvas.run()))
         if nm.args.demo:
             tasks.append(asyncio.create_task(nm.flows.demo_loop()))
@@ -2006,6 +2009,60 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not d:
             return JSONResponse({"error": "Device not found"}, 404)
         return await asyncio.to_thread(nm.local.for_device, d["ip"], d.get("mac", ""))
+
+    # ---- network topology (who connects to what)
+    async def refresh_topology():
+        if nm.args.demo:
+            nm.topology.set_unifi(demo_unifi(nm.devices.values()))
+            return
+        c = unifi_client()
+        if not c.configured:
+            nm.topology.set_unifi(None, "", configured=False)
+            return
+        try:
+            nm.topology.set_unifi(await asyncio.to_thread(c.topology_data))
+        except UniFiError as e:
+            nm.topology.set_unifi(None, str(e))
+        except Exception as e:
+            log.exception("topology refresh failed")
+            nm.topology.set_unifi(None, f"Unexpected error ({e.__class__.__name__}).")
+
+    async def topology_loop():
+        await asyncio.sleep(8)
+        while True:
+            try:
+                await refresh_topology()
+            except Exception:
+                log.exception("topology loop")
+            await asyncio.sleep(60)
+
+    @app.get("/api/topology")
+    async def topology_get():
+        return nm.topology.build()
+
+    @app.post("/api/topology/refresh")
+    async def topology_refresh():
+        await refresh_topology()
+        return nm.topology.build()
+
+    @app.post("/api/topology/device/{key}")
+    async def topology_device(key: str, request: Request):
+        d = get_dev(key)
+        if not d:
+            return JSONResponse({"error": "Device not found"}, 404)
+        b = await request.json()
+        try:
+            nm.topology.set_manual(d["id"], str(b.get("parent", "")), str(b.get("role", "auto")), str(b.get("medium", "auto")),
+                                   str(b.get("zone", ""))[:40])
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return nm.topology.build()
+
+    @app.post("/api/topology/zones")
+    async def topology_zones(request: Request):
+        b = await request.json()
+        nm.topology.set_zones(b.get("zones", []) if isinstance(b, dict) else [])
+        return nm.topology.build()
 
     # ---- blocking on the UniFi gateway
     def unifi_client():
