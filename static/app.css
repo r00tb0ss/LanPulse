@@ -410,6 +410,8 @@ pre.code{margin:0;font:12px/1.5 var(--mono);background:var(--bg);border:1px soli
 
 .tagchip{display:inline-block;font:600 10px Inter,sans-serif;padding:1px 6px;border-radius:999px;vertical-align:1px;
   background:#1c2538;border:1px solid #33415c;color:#9fb0cc;letter-spacing:.2px}
+.tagchip.leak{background:#450a0a;border-color:#b91c1c;color:#fecaca}
+.leak-note{color:#fca5a5;font-size:11px;font-weight:600}
 .tagchip.blk{background:#052e16;border-color:#166534;color:#86efac}
 .fi.scanner{border-left-color:#7c8aa5;opacity:.75}
 .atk-table tr.scanner td{opacity:.7}
