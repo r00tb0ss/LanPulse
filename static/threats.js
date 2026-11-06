@@ -172,10 +172,12 @@ function initWorld() {
     else if (p.seriesId === "dests" && typeof openDest === "function") openDest(p.data.d);
   });
   // Re-place dots and arcs whenever the map is dragged or zoomed so they stay pinned to their locations.
-  let roamFrame = 0;
+  // ECharts moves the dots and arcs with the map on its own, so rebuilding everything on each drag frame only made
+  // panning slow (about 6 redraws per frame). Do one tidy-up pass once the map stops moving.
+  let roamTimer = 0;
   tChart.on("georoam", () => {
-    cancelAnimationFrame(roamFrame);
-    roamFrame = requestAnimationFrame(() => { updateWorld(); drawArcs(); });
+    clearTimeout(roamTimer);
+    roamTimer = setTimeout(() => { updateWorld(); drawArcs(); }, 300);
   });
   if (pendingGeoView) {             // keep the zoom and position the person had before the rebuild
     tChart.setOption({geo: {center: pendingGeoView.center, zoom: pendingGeoView.zoom}});
@@ -272,8 +274,8 @@ function updateWorld() {
       {id: "home", data: home ? [{value: home, place: [s.home.city, s.home.country].filter(Boolean).join(", ") + (s.public_ip ? ` · ${s.public_ip}` : "")}] : []},
     ],
   });
-  if (typeof updateTrafficLayer === "function") updateTrafficLayer();
-  updateCountryLabels();
+  if (typeof updateTrafficLayer === "function") updateTrafficLayer();   // also refreshes the labels
+  else updateCountryLabels();
 }
 
 // Country names on the map, for BOTH attacker countries (red) and device-traffic destination countries (teal).
@@ -283,17 +285,45 @@ function updateCountryLabels() {
   const attacksOn = typeof showAttacks !== "function" || showAttacks();
   const trafficOn = typeof showTraffic === "function" && showTraffic() && typeof flowSummary !== "undefined" && flowSummary;
   const label = {};   // map region name -> {name, atk, dst}
-  const top = (arr) => [...(arr || [])].sort((a, b) => b.count - a.count).slice(0, 10);
+  const both = attacksOn && trafficOn;
+  const top = (arr) => [...(arr || [])].sort((a, b) => b.count - a.count).slice(0, both ? 6 : 10);
   if (attacksOn && tSummary) top(tSummary.countries).forEach((c) => {
     if (c.count > 0) { const k = MAP_NAMES[c.country] || c.country; (label[k] = label[k] || {name: c.country}).atk = c.count; }
   });
   if (trafficOn) top(flowSummary.countries).forEach((c) => {
     if (c.country && c.count) { const k = MAP_NAMES[c.country] || c.country; (label[k] = label[k] || {name: c.country}).dst = c.count; }
   });
+  // Labels can't be allowed to pile up (Europe is a few pixels wide at world zoom): walk the countries from busiest
+  // down and skip any whose label would land on one already placed. Zooming in makes room, so more appear.
+  // With both layers on, also keep only the busiest few and drop the counts (hover shows the name; the cards have numbers).
+  {
+    const total = (v) => (v.atk || 0) + (v.dst || 0);
+    let gs = null;
+    try { gs = tChart.getModel().getComponent("geo").coordinateSystem; } catch (_) {}
+    const anchor = {};
+    (tSummary ? tSummary.attackers || [] : []).forEach((a) => { const k = MAP_NAMES[a.country] || a.country; if (a.lat != null && !anchor[k]) anchor[k] = [a.lon, a.lat]; });
+    if (trafficOn) (flowSummary.dests || []).forEach((d) => { const k = MAP_NAMES[d.country] || d.country; if (d.lat != null && !anchor[k]) anchor[k] = [d.lon, d.lat]; });
+    const where = (k) => {
+      try {
+        const r = gs && gs.getRegion(k), c = r && r.getCenter && r.getCenter();
+        const px = c ? gs.dataToPoint(c) : tChart.convertToPixel({geoIndex: 0}, anchor[k]);
+        return px && px.every(Number.isFinite) ? px : null;
+      } catch (_) { return null; }
+    };
+    const placed = [], kept = [];
+    for (const [k, v] of Object.entries(label).sort((a, b) => total(b[1]) - total(a[1]))) {
+      if (kept.length >= (both ? 8 : 12)) break;
+      const px = where(k), w = (both ? v.name.length : v.name.length + 5) * 5.2 + 8;
+      if (px && placed.some((q) => Math.abs(q[0] - px[0]) < (q[2] + w) / 2 && Math.abs(q[1] - px[1]) < 13)) continue;
+      if (px) placed.push([px[0], px[1], w]);
+      kept.push(k);
+    }
+    Object.keys(label).forEach((k) => { if (!kept.includes(k)) delete label[k]; });
+  }
   const fmt = (v) => {
     const kind = v.atk && v.dst ? "both" : v.atk ? "atk" : "dst";
     const n = (v.atk || 0) + (v.dst || 0);
-    return `{${kind}|${v.name} (${fmtN(n)})}`;
+    return `{${kind}|${both ? v.name : `${v.name} (${fmtN(n)})`}}`;
   };
   tChart.setOption({geo: {label: {show: true, fontSize: 9, fontFamily: "Inter, system-ui, sans-serif",
     textShadowColor: "#0a0f1c", textShadowBlur: 3,
@@ -310,8 +340,13 @@ function pushArc(ev) {
   if (arcs.length > 40) arcs = arcs.slice(-40);
   drawArcs();
 }
-function drawArcs() {
-  if (tChart) tChart.setOption({series: [{id: "arcs", data: arcs.map(({coords, lineStyle}) => ({coords, lineStyle}))}]});
+let arcDrawTimer = 0;
+function drawArcs(now) {
+  if (!tChart) return;
+  if (now) { clearTimeout(arcDrawTimer); arcDrawTimer = 0; }
+  else if (arcDrawTimer) return;                       // a redraw is already queued: this arc rides along
+  else { arcDrawTimer = setTimeout(() => drawArcs(true), 250); return; }
+  tChart.setOption({series: [{id: "arcs", data: arcs.map(({coords, lineStyle}) => ({coords, lineStyle}))}]});
 }
 setInterval(() => {
   const before = arcs.length;
@@ -345,6 +380,7 @@ function flyTo(center, zoom, ms = 650) {
     tChart.setOption({geo: {center: [from.center[0] + (center[0] - from.center[0]) * e, from.center[1] + (center[1] - from.center[1]) * e],
       zoom: from.zoom + (zoom - from.zoom) * e}});
     if (k < 1) requestAnimationFrame(step);
+    else updateCountryLabels();                 // the labels that fit depend on the zoom, so redo them when it settles
   };
   requestAnimationFrame(step);
 }
@@ -881,7 +917,7 @@ function initThreatUI() {
   $("tHideScanners").onchange = (e) => {
     hideScanners = e.target.checked;
     try { localStorage.setItem("nm_hide_scanners", hideScanners ? "1" : "0"); } catch (_) {}
-    arcs = []; drawArcs();
+    arcs = []; drawArcs(true);
     if (tSummary) renderThreats(tSummary, true);
   };
   loadBlocked();
