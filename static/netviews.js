@@ -277,11 +277,12 @@ async function loadDeviceLocal(id) {
       tableSort = {key: th.dataset.sort, dir: tableSort.key === th.dataset.sort ? -tableSort.dir : 1};
       renderTable(); return;
     }
+    if (e.target.closest(".topo")) return;       // Topology has its own small inspector
     const el = e.target.closest("[data-id]");
     if (el) openPanel(el.dataset.id);
   });
   $("altView").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
+    if (e.key !== "Enter" || e.target.closest(".topo")) return;
     const th = e.target.closest("th[data-sort]");
     if (th) { th.click(); return; }
     const el = e.target.closest("[data-id]");
