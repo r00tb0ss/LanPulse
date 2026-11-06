@@ -325,8 +325,9 @@ auto-refreshing. Press **Esc** to exit.
 
 ## Themes
 
-**Settings → Appearance** offers four looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
-**80s Hacker** (green phosphor on black) and **Midnight Synthwave** (neon magenta and cyan). The choice is saved in your
+**Settings → Appearance** offers six looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
+**Graphite** (neutral charcoal, soft indigo), **Sandstone** (warm off-white, deep teal), **80s Hacker** (green phosphor on black)
+and **Midnight Synthwave** (neon magenta and cyan). The choice is saved in your
 browser.
 
 ## Red Team
