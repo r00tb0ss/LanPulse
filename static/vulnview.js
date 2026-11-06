@@ -129,9 +129,14 @@ async function fillFixDetail(key) {
   const r = await api(`/api/vulns/device/${encodeURIComponent(id)}`, "GET");
   if (!r) return;
   const items = r.items.filter((f) => String(f.port) === port);
-  box.innerHTML = items.slice(0, 40).map(cveRow).join("") +
-    (items.length > 40 ? `<div class="muted" style="padding:6px 0">+${items.length - 40} more, mostly lower severity.</div>` : "") +
-    `<div class="btns" style="margin-top:8px"><button class="btn sm" data-dev-id="${esc(id)}"><i class="fa-solid fa-circle-info"></i>Open device</button>${xBtn("redteam", id)}</div>`;
+  const foot = `<div class="btns" style="margin-top:8px"><button class="btn sm" data-dev-id="${esc(id)}"><i class="fa-solid fa-circle-info"></i>Open device</button>${xBtn("redteam", id)}</div>`;
+  const draw = (n) => {
+    box.innerHTML = items.slice(0, n).map(cveRow).join("") +
+      (items.length > n ? `<button class="btn sm" data-showmore="1" style="margin-top:6px"><i class="fa-solid fa-angles-down"></i>Show all ${items.length}</button>` : "") + foot;
+    const more = box.querySelector("[data-showmore]");
+    if (more) more.onclick = (e) => { e.stopPropagation(); draw(items.length); };
+  };
+  draw(40);
 }
 
 function cveRow(f) {
@@ -183,6 +188,7 @@ async function showVulnSetup() {
 }
 
 /* ---- device panel */
+const vulnPanelAll = new Set();
 async function loadDeviceVulns(id) {
   const r = await api(`/api/vulns/device/${encodeURIComponent(id)}`, "GET");
   const box = $("vulnBox");
@@ -193,7 +199,8 @@ async function loadDeviceVulns(id) {
   box.innerHTML = `<h4>Known vulnerabilities</h4>
     <div class="muted" style="font-size:12px;margin-bottom:6px">${r.items.length} CVE${r.items.length === 1 ? "" : "s"} in this device's software${kev ? `, <b style="color:#fca5a5">${kev} actively exploited</b>` : ""}
       ${r.items.some((f) => f.distro) ? " · some may already be patched by OS updates" : ""}</div>
-    ${r.items.slice(0, 6).map(cveRow).join("")}
+    ${r.items.slice(0, vulnPanelAll.has(id) ? r.items.length : 6).map(cveRow).join("")}
+    ${r.items.length > 6 ? `<button class="btn sm" data-vulnall="${esc(id)}" style="margin-top:6px"><i class="fa-solid ${vulnPanelAll.has(id) ? "fa-angles-up" : "fa-angles-down"}"></i>${vulnPanelAll.has(id) ? "Show fewer" : `Show all ${r.items.length}`}</button>` : ""}
     <div class="btns" style="margin-top:10px"><button class="btn" data-goto-vulns="1"><i class="fa-solid fa-bug"></i>Open Vulnerabilities</button></div>`;
   const dev = devices.get(id);
   if (dev && typeof msfPanelSection === "function") {
@@ -261,7 +268,11 @@ document.addEventListener("click", (e) => {
     const xj = e.target.closest("[data-xjump]");
     if (xj) { xJump(xj.dataset.xjump, xj.dataset.xdev); return; }
     const r = e.target.closest("[data-dev-id]"); if (r) goDevice(r.dataset.devId); });
-  $("panel").addEventListener("click", (e) => { if (e.target.closest("[data-goto-vulns]")) setView("vulns"); });
+  $("panel").addEventListener("click", (e) => {
+    if (e.target.closest("[data-goto-vulns]")) setView("vulns");
+    const all = e.target.closest("[data-vulnall]");
+    if (all) { const id = all.dataset.vulnall; if (vulnPanelAll.has(id)) vulnPanelAll.delete(id); else vulnPanelAll.add(id); loadDeviceVulns(id); }
+  });
   setInterval(() => { if (view === "vulns" && vulnData?.status?.state === "checking") loadVulns(); }, 10000);
   setTimeout(async () => { const r = await api("/api/vulns", "GET"); if (r) { vulnData = r; renderVulns(); } }, 4000);
 })();
