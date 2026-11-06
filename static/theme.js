@@ -9,6 +9,8 @@ const THEMES = [
   {id: "light", name: "Enterprise Light", sub: "clean white, for the office", sw: ["#ffffff", "#0284c7", "#16a34a"]},
   {id: "hacker", name: "80s Hacker", sub: "green phosphor on black", sw: ["#000700", "#39ff14", "#157a32"]},
   {id: "synthwave", name: "Midnight Synthwave", sub: "neon magenta & cyan", sw: ["#140a2e", "#ff4fd8", "#2dd4bf"]},
+  {id: "graphite", name: "Graphite", sub: "neutral charcoal, soft indigo", sw: ["#0e0f12", "#8b9dff", "#3ecf8e"]},
+  {id: "sandstone", name: "Sandstone", sub: "warm off-white, deep teal", sw: ["#f6f3ee", "#0f766e", "#15803d"]},
 ];
 
 function currentTheme() {
