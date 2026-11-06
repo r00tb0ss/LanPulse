@@ -86,11 +86,43 @@ class Honeypot:
         base.update({k: c[k] for k in ("enabled", "bind", "ingest_key") if k in c})
         svc = c.get("services") or {}
         base["services"] = {k: bool(svc.get(k, base["services"][k])) for k in SERVICES}
+        base["ports"] = {k: int((c.get("ports") or {}).get(k) or SERVICES[k][0]) for k in SERVICES}
+        base["banners"] = dict(c.get("banners") or {})
+        for k, d in (("retention_days", HIT_RETENTION_DAYS), ("flood_max", FLOOD_MAX), ("flood_minutes", FLOOD_WINDOW // 60),
+                     ("delay_ms", 0)):
+            base[k] = c.get(k, d)
+        base["alert_external"] = bool(c.get("alert_external", True))
+        base["ignore"] = str(c.get("ignore") or "")
         return base
 
     def _config_sig(self):
         c = self.cfg
-        return (c["enabled"], c["bind"], tuple(sorted(k for k, v in c["services"].items() if v)))
+        return (c["enabled"], c["bind"], tuple(sorted((k, c["ports"][k]) for k, v in c["services"].items() if v)))
+
+    def _port(self, service: str) -> int:
+        return self.cfg["ports"].get(service) or SERVICES.get(service, (0,))[0]
+
+    def _ignored(self, ip: str) -> bool:
+        """Addresses the owner chose not to log (their own scanners, a monitoring box, a friend's VPN...)."""
+        raw = self.cfg["ignore"]
+        if not raw:
+            return False
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        for tok in raw.split():
+            try:
+                if addr in ipaddress.ip_network(tok, strict=False):
+                    return True
+            except ValueError:
+                continue
+        return False
+
+    async def _pause(self):
+        ms = int(self.cfg["delay_ms"] or 0)
+        if ms:
+            await asyncio.sleep(ms / 1000)                 # slows scanners down: a very small tarpit
 
     # ------------------------------------------------------------------ helpers
     def _local_nets(self):
@@ -160,15 +192,18 @@ class Honeypot:
 
     def _flooding(self, ip: str) -> bool:
         now = time.time()
-        q = [t for t in self._flood.get(ip, []) if now - t < FLOOD_WINDOW]
+        window = int(self.cfg["flood_minutes"]) * 60
+        q = [t for t in self._flood.get(ip, []) if now - t < window]
         q.append(now)
         self._flood[ip] = q
-        return len(q) > FLOOD_MAX
+        return len(q) > int(self.cfg["flood_max"])
 
     # ------------------------------------------------------------------ recording
     def record(self, ip: str, service: str, port: int, creds: str = "", data: str = "", sensor: str = ""):
         if not sensor and self._is_self(ip):
             return                                    # LanPulse scanning itself (nmap/OpenVAS), not an attacker
+        if self._ignored(ip):
+            return                                    # on the owner's ignore list
         internal = self._internal(ip)
         with self.lock:
             self.db.execute("INSERT INTO hits (t, ip, service, port, internal, creds, data, sensor) "
@@ -195,7 +230,7 @@ class Honeypot:
                 else:
                     self.nm.notify_plain("local_threats", f"pot-{ip}",
                                          f"Unknown device {ip} hit the honeypot", detail, 4)
-            else:
+            elif self.cfg["alert_external"]:
                 self.nm.notify_plain("local_threats", f"pot-{ip}",
                                      f"Honeypot probe from {ip}",
                                      f"{ip} connected to {where}'s fake {label} service (port {port})"
@@ -244,24 +279,32 @@ class Honeypot:
         return raw[:limit].decode("latin-1", "replace").strip()
 
     async def _h_ssh(self, r, w, ip):
-        w.write(b"SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6\r\n")
+        await self._pause()
+        ban = self.cfg["banners"].get("ssh") or "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6"
+        w.write(ban.encode("ascii", "ignore") + b"\r\n")
         await w.drain()
         client = await self._recv_line(r, 120)       # the client's own SSH version string often names the tool
-        self.record(ip, "ssh", 22, "", f"client={client}" if client else "")
+        self.record(ip, "ssh", self._port("ssh"), "", f"client={client}" if client else "")
 
     async def _h_telnet(self, r, w, ip):
-        w.write(b"\r\nUbuntu 22.04.3 LTS\r\n\r\nlogin: ")
+        await self._pause()
+        ban = self.cfg["banners"].get("telnet") or "Ubuntu 22.04.3 LTS"
+        w.write(b"\r\n" + ban.encode("ascii", "ignore") + b"\r\n\r\nlogin: ")
         await w.drain()
         user = await self._recv_line(r, 64)
+        await self._pause()
         w.write(b"Password: ")
         await w.drain()
         pw = await self._recv_line(r, 64)
+        await self._pause()
         w.write(b"\r\nLogin incorrect\r\n")
         await w.drain()
-        self.record(ip, "telnet", 23, f"{user} / {pw}" if (user or pw) else "")
+        self.record(ip, "telnet", self._port("telnet"), f"{user} / {pw}" if (user or pw) else "")
 
     async def _h_ftp(self, r, w, ip):
-        w.write(b"220 (vsFTPd 3.0.5)\r\n")
+        await self._pause()
+        ban = self.cfg["banners"].get("ftp") or "(vsFTPd 3.0.5)"
+        w.write(b"220 " + ban.encode("ascii", "ignore") + b"\r\n")
         await w.drain()
         user = pw = ""
         for _ in range(4):
@@ -280,7 +323,7 @@ class Honeypot:
             else:
                 w.write(b"530 Please login with USER and PASS.\r\n")
             await w.drain()
-        self.record(ip, "ftp", 21, f"{user} / {pw}" if (user or pw) else "")
+        self.record(ip, "ftp", self._port("ftp"), f"{user} / {pw}" if (user or pw) else "")
 
     async def _h_http(self, r, w, ip):
         import base64
@@ -296,12 +339,16 @@ class Honeypot:
                     creds = base64.b64decode(line.split(None, 2)[2]).decode("latin-1", "replace")[:120]
                 except Exception:
                     creds = ""
-        body = b"<html><head><title>Router Admin</title></head><body><h3>Authentication required</h3></body></html>"
-        w.write(b"HTTP/1.1 401 Unauthorized\r\nServer: lighttpd/1.4.69\r\n"
+        await self._pause()
+        bn = self.cfg["banners"]
+        title = (bn.get("http_title") or "Router Admin").replace("<", "").replace(">", "")
+        server = (bn.get("http_server") or "lighttpd/1.4.69").encode("ascii", "ignore")
+        body = f"<html><head><title>{title}</title></head><body><h3>Authentication required</h3></body></html>".encode()
+        w.write(b"HTTP/1.1 401 Unauthorized\r\nServer: " + server + b"\r\n"
                 b"WWW-Authenticate: Basic realm=\"Admin\"\r\nContent-Type: text/html\r\n"
                 b"Content-Length: " + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
         await w.drain()
-        self.record(ip, "http", 80, creds, req)
+        self.record(ip, "http", self._port("http"), creds, req)
 
     async def _h_raw(self, r, w, ip, service, port):
         """SMB / RDP / MySQL: binary protocols. The connection attempt itself is the signal; log a short
@@ -348,7 +395,7 @@ class Honeypot:
         bind = c["bind"] or "0.0.0.0"
         self.listeners = {}
         for key, on in c["services"].items():
-            port = SERVICES[key][0]
+            port = c["ports"][key]
             if not on:
                 self.listeners[key] = {"port": port, "state": "off", "error": ""}
                 continue
@@ -387,7 +434,7 @@ class Honeypot:
                     if self.cfg["enabled"]:
                         await self._open()
                     else:
-                        self.listeners = {k: {"port": SERVICES[k][0], "state": "off", "error": ""} for k in SERVICES}
+                        self.listeners = {k: {"port": self._port(k), "state": "off", "error": ""} for k in SERVICES}
                     self._sig = sig
                 if time.time() - last_prune > 3600:
                     await asyncio.to_thread(self._prune)
@@ -399,7 +446,7 @@ class Honeypot:
     def _prune(self):
         try:
             with self.lock:
-                self.db.execute("DELETE FROM hits WHERE t < ?", (time.time() - HIT_RETENTION_DAYS * 86400,))
+                self.db.execute("DELETE FROM hits WHERE t < ?", (time.time() - int(self.cfg["retention_days"]) * 86400,))
                 self.db.commit()
         except sqlite3.Error:
             pass
@@ -461,8 +508,8 @@ class Honeypot:
             "bind": self.cfg["bind"],
             "has_ingest_key": bool(self.cfg["ingest_key"]),
             "services_on": self.cfg["services"],
-            "catalog": {k: {"port": v[0], "label": v[1], "note": v[3]} for k, v in SERVICES.items()},
-            "listeners": self.listeners or {k: {"port": SERVICES[k][0], "state": "off", "error": ""} for k in SERVICES},
+            "catalog": {k: {"port": self._port(k), "default_port": v[0], "label": v[1], "note": v[3]} for k, v in SERVICES.items()},
+            "listeners": self.listeners or {k: {"port": self._port(k), "state": "off", "error": ""} for k in SERVICES},
             "totals": {"hits": len(hits), "all_time": total_all, "attackers": len(by_ip),
                        "internal": internal_hits, "external": len(hits) - internal_hits,
                        "creds": sum(by_cred.values())},

@@ -172,6 +172,7 @@ async function showPotSetup(force) {
   const c = set.honeypot || {};
   const cat = (potData && potData.catalog) || {};
   const svcOn = c.services || {};
+  const bn = c.banners || {};
   const lst = (potData && potData.listeners) || {};
   const rows = Object.keys(cat).length ? Object.entries(cat) :
     Object.entries(svcOn).map(([k]) => [k, {port: (lst[k] || {}).port || 0, label: k, note: ""}]);
@@ -184,11 +185,30 @@ async function showPotSetup(force) {
       ${rows.map(([k, v]) => {
         const l = lst[k] || {};
         const err = l.state === "error" ? `<span class="pot-lerr">${esc(l.error || "can't start")}</span>` : "";
-        return `<label class="pot-svc-opt"><input type="checkbox" data-pot-svc="${esc(k)}" ${svcOn[k] ? "checked" : ""}>
-          <span class="pot-svc-h">${esc(v.label)} <span class="pot-port">:${v.port}</span>${err}</span>
-          <span class="pot-svc-note">${esc(v.note || "")}</span></label>`;
+        const dp = v.default_port || v.port;
+        return `<div class="pot-svc-opt"><input type="checkbox" data-pot-svc="${esc(k)}" ${svcOn[k] ? "checked" : ""} aria-label="${esc(v.label)}">
+          <span class="pot-svc-h">${esc(v.label)} <span class="pot-port">port <input class="pot-port-in" type="number" min="1" max="65535" data-pot-port="${esc(k)}" value="${(c.ports || {})[k] || dp}" title="default ${dp}"></span>${err}</span>
+          <span class="pot-svc-note">${esc(v.note || "")}</span></div>`;
       }).join("")}
     </div>
+    <details class="pot-adv"><summary>Customize how the decoys look and behave</summary>
+      <div class="pot-adv-grid">
+        <label>SSH banner<input id="potBnSsh" maxlength="80" value="${esc(bn.ssh || "")}" placeholder="SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6"></label>
+        <label>Telnet greeting<input id="potBnTel" maxlength="80" value="${esc(bn.telnet || "")}" placeholder="Ubuntu 22.04.3 LTS"></label>
+        <label>FTP banner<input id="potBnFtp" maxlength="80" value="${esc(bn.ftp || "")}" placeholder="(vsFTPd 3.0.5)"></label>
+        <label>Web server name<input id="potBnSrv" maxlength="80" value="${esc(bn.http_server || "")}" placeholder="lighttpd/1.4.69"></label>
+        <label>Web page title<input id="potBnTitle" maxlength="80" value="${esc(bn.http_title || "")}" placeholder="Router Admin"></label>
+        <label>Slow scanners down (ms per reply)<input id="potDelay" type="number" min="0" max="5000" value="${c.delay_ms ?? 0}"></label>
+        <label>Keep hits for (days)<input id="potKeep" type="number" min="1" max="365" value="${c.retention_days ?? 90}"></label>
+        <label>Log at most (hits per address)<input id="potFloodMax" type="number" min="1" max="500" value="${c.flood_max ?? 12}"></label>
+        <label>...within (minutes)<input id="potFloodMin" type="number" min="1" max="120" value="${c.flood_minutes ?? 10}"></label>
+      </div>
+      <label class="chk-line"><input type="checkbox" id="potAlertExt" ${c.alert_external === false ? "" : "checked"}> Send an alert when something from the internet hits a decoy (hits from your own network always alert)</label>
+      <label class="full">Never log these addresses (one per line, IPs or ranges like 10.0.0.0/24)
+        <textarea id="potIgnore" rows="3" placeholder="e.g. a monitoring server, your own scanner">${esc(c.ignore || "")}</textarea></label>
+      <p class="hint" style="font-size:12px">Banners are what a scanner sees when it connects. Changing a port restarts that decoy within a few seconds.
+        Ports below 1024 need LanPulse to run with permission for them.</p>
+    </details>
     <div class="chan-fields" style="padding:8px 0 0">
       <label class="full">Listen on<input id="potBind" value="${esc(c.bind || "0.0.0.0")}" placeholder="0.0.0.0 (all interfaces)"></label>
       <label class="full">External-sensor key (optional)<input id="potKey" type="password" value="${esc(c.ingest_key || "")}" autocomplete="off"
@@ -201,8 +221,14 @@ async function showPotSetup(force) {
   $("potSave").onclick = async () => {
     const services = {};
     box.querySelectorAll("[data-pot-svc]").forEach((el) => { services[el.dataset.potSvc] = el.checked; });
+    const ports = {};
+    box.querySelectorAll("[data-pot-port]").forEach((el) => { if (el.value) ports[el.dataset.potPort] = parseInt(el.value, 10); });
+    const banners = {ssh: $("potBnSsh").value, telnet: $("potBnTel").value, ftp: $("potBnFtp").value,
+      http_server: $("potBnSrv").value, http_title: $("potBnTitle").value};
     const body = {honeypot: {enabled: $("potEnabled").checked, bind: $("potBind").value.trim() || "0.0.0.0",
-      ingest_key: $("potKey").value.trim(), services}};
+      ingest_key: $("potKey").value.trim(), services, ports, banners,
+      delay_ms: $("potDelay").value, retention_days: $("potKeep").value, flood_max: $("potFloodMax").value,
+      flood_minutes: $("potFloodMin").value, alert_external: $("potAlertExt").checked, ignore: $("potIgnore").value}};
     if (await api("/api/settings", "POST", body)) {
       toast($("potEnabled").checked ? "Honeypot settings saved — decoys start within a few seconds." : "Honeypot turned off.");
       box.classList.add("hidden");
