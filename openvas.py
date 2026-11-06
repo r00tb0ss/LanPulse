@@ -278,8 +278,9 @@ class OpenVAS:
             return str(e)
         except Exception as e:
             return f"{type(e).__name__}: {e}"[:200]
+        dev = next((d for d in self.nm.devices.values() if d.get("ip") == ip), {})
         self.scans[ip] = {"task": tid, "status": "Requested", "progress": 0, "started": int(time.time()),
-                          "finished": 0, "error": "", "count": 0}
+                          "finished": 0, "error": "", "count": 0, "mac": str(dev.get("mac") or "").lower()}
         self._save()
         self.wake.set()
         return ""
@@ -319,10 +320,29 @@ class OpenVAS:
                     s["error"] = str(e)
         self._save()
 
+    def items_for(self, d: dict) -> list:
+        """OpenVAS findings that really belong to this device. Scans are requested by IP address, and addresses get
+        reused (DHCP, swapped VMs), so findings are tied to the machine's MAC and ignored if the device differs."""
+        items = d.get("openvas") or []
+        if not items:
+            return []
+        f = d.get("openvas_for") or {}
+        mac = str(d.get("mac") or "").lower()
+        if f.get("mac"):
+            return items if f["mac"] == mac else []
+        # Older results with no record of which machine was scanned: a scan that finished before this device first
+        # appeared can't be about it
+        fin = (self.scans.get(d.get("ip")) or {}).get("finished") or 0
+        if fin and d.get("first_seen") and fin < d["first_seen"]:
+            return []
+        return items
+
     def _import(self, ip: str, items: list[dict]):
+        mac = str((self.scans.get(ip) or {}).get("mac") or "").lower()
         for d in self.nm.devices.values():
-            if d.get("ip") == ip:
+            if (mac and str(d.get("mac") or "").lower() == mac) or (not mac and d.get("ip") == ip):
                 d["openvas"] = items
+                d["openvas_for"] = {"ip": ip, "mac": mac or str(d.get("mac") or "").lower()}
                 crit = sum(1 for i in items if i["severity"] >= 9)
                 self.nm.event("openvas", d, f"OpenVAS scan finished: {len(items)} findings"
                               + (f", {crit} critical" if crit else ""), "bad" if crit else "info", feed=False)
@@ -354,8 +374,11 @@ class OpenVAS:
         if any(s.get("status") in ("Requested", "Queued", "Running", "New") for s in self.scans.values()):
             return
         week = 7 * 86400
+        def mine(d):    # a scan record only counts for the machine that was scanned, not whoever holds the IP now
+            s = self.scans.get(d["ip"], {})
+            return s if not s.get("mac") or s["mac"] == str(d.get("mac") or "").lower() else {}
         due = [d for d in self.nm.devices.values() if d.get("online") and d.get("ip") and not d.get("is_self")
-               and time.time() - self.scans.get(d["ip"], {}).get("finished", 0) > week
-               and time.time() - self.scans.get(d["ip"], {}).get("started", 0) > week]
+               and time.time() - mine(d).get("finished", 0) > week
+               and time.time() - mine(d).get("started", 0) > week]
         if due:
             self.start_scan(due[0]["ip"])
