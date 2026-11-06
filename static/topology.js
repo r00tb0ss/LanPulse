@@ -39,7 +39,24 @@ async function loadTopoTraffic() {
 }
 
 /* connections per device, and summed up the tree for switches, access points and links */
+/* UniFi reports each link's speed as a short snapshot, so a busy switch can read 0 right now and its neighbour read high,
+   then swap on the next refresh. Hold the recent peak and let it fade, so a link doesn't blink on and off. */
+function topoSmooth(data) {
+  if (TOPO.smFor === data) return;
+  TOPO.smFor = data;
+  const prev = TOPO.sm || new Map(), now = new Map();
+  for (const n of data.nodes) {
+    const p = prev.get(n.id) || {rate: 0, up: 0};
+    const hold = (cur, old) => Math.max(cur || 0, (old || 0) * 0.65);      // fades to a third in ~2 refreshes
+    const r = hold(n.rate, p.rate), u = hold(n.uplink_rate, p.up);
+    now.set(n.id, {rate: r < 50 ? 0 : r, up: u < 50 ? 0 : u});            // under 50 bytes/s counts as idle
+  }
+  TOPO.sm = now;
+  for (const n of data.nodes) { const s = now.get(n.id); if (s.rate > 0) n.rate = s.rate; if (s.up > 0) n.uplink_rate = s.up; }
+}
+
 function topoTraffic(data) {
+  topoSmooth(data);
   // Real throughput from UniFi when it supplies it; otherwise connection counts from the router logs
   // ...but only when several devices report a speed; a lone reading would leave the rest of the map still
   const live = data.nodes.filter((n) => n.kind === "client" && n.rate > 0).length;
