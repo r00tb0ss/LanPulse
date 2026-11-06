@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import re
 import json
 import logging
 import threading
@@ -70,6 +71,7 @@ class Topology:
     def set_manual(self, dev_id: str, parent: str = "", role: str = "auto", medium: str = "auto", zone: str = ""):
         if role not in ROLES or medium not in MEDIA:
             raise ValueError("Unknown role or connection type.")
+        parent, zone = str(parent or "")[:64], str(zone or "")[:40]
         with self.lock:
             if parent == dev_id:
                 raise ValueError("A device can't connect to itself.")
@@ -83,13 +85,17 @@ class Topology:
     def set_zones(self, zones: list):
         out = []
         for z in zones[:40]:
+            if not isinstance(z, dict):
+                continue
             name = str(z.get("name", "")).strip()[:40]
             try:
                 net = str(ipaddress.ip_network(str(z.get("cidr", "")).strip(), strict=False))
             except ValueError:
                 continue
             if name:
-                out.append({"cidr": net, "name": name, "color": z.get("color") or _color_for(name)})
+                col = str(z.get("color") or "")
+                out.append({"cidr": net, "name": name,
+                            "color": col if re.fullmatch(r"#[0-9A-Fa-f]{6}", col) else _color_for(name)})
         with self.lock:
             self.state["zones"] = out
             self._save()
