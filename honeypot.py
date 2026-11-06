@@ -178,6 +178,8 @@ class Honeypot:
             self.db.commit()
         if self._flooding(ip):
             return                                    # keep logging to the DB, but stop alerting on a flood
+        if not internal:
+            self._to_map(ip, service, port, creds, sensor)
         label = SERVICES.get(service, (0, service))[1]
         where = f"{sensor} honeypot" if sensor else "the honeypot"
         try:
@@ -200,6 +202,19 @@ class Honeypot:
                                      + (f" and tried the login {creds}" if creds else "") + ".", 3)
         except Exception:
             log.exception("honeypot alert failed")
+
+    def _to_map(self, ip: str, service: str, port: int, creds: str, sensor: str):
+        """Show an outside visitor on the Threats map and feed ("logged" = hit a decoy, never reached a real device)."""
+        th = getattr(self.nm, "threats", None)
+        if not th:
+            return
+        label = SERVICES.get(service, (0, service))[1]
+        try:
+            th.ingest({"src": ip, "dst": self.nm.net.get("my_ip") or "", "dport": int(port), "proto": "tcp",
+                       "action": "logged", "service": label, "sensor": sensor or "Honeypot",
+                       "detail": f"Honeypot {label} decoy" + (f" - tried login {creds}" if creds else "")})
+        except Exception:
+            log.exception("honeypot map feed failed")
 
     def ingest(self, payload: dict, key: str) -> tuple[bool, str]:
         """Accept a hit from an external sensor (POST /api/honeypot/ingest). Requires the configured key."""
