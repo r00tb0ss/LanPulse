@@ -846,7 +846,7 @@ function collectThreatSettings() {
 }
 
 function renderUnifiSettings(body) {
-  const u = settings.unifi;
+  const u = settings.unifi, sn = settings.snmp || {};
   body.innerHTML = `<p class="hint">Connect your UniFi gateway so you can block an attacker with one tap. LanPulse keeps an IP group
       called <b>${esc(u.group || "LanPulse Blocklist")}</b> up to date.</p>
     <div class="chan"><div class="chan-fields" style="padding:12px">
@@ -866,7 +866,25 @@ function renderUnifiSettings(body) {
       <li><b>Create one block policy</b> in Settings &gt; Policy Engine: Source zone External with the IP group <b>${esc(u.group || "LanPulse Blocklist")}</b>,
         Destination any zone, Action Block. Every IP LanPulse adds is then blocked immediately.</li>
     </ol></div>
+    <div class="chan"><div class="chan-head"><i class="fa-solid fa-sitemap ci"></i>
+      <div class="txt"><b>Other routers and switches (SNMP)</b><small>Read-only. Learns which device is plugged into which port using LLDP and the switch's MAC table, so the Topology map works without UniFi.</small></div>
+      <label class="switch"><input type="checkbox" id="sn_on" ${sn.enabled ? "checked" : ""}><span></span></label></div>
+      <div class="chan-fields" style="padding:12px">
+        <label class="full">Router / switch addresses (private IPs, comma or space separated)<input id="sn_hosts" value="${esc((sn.hosts || []).join(", "))}" placeholder="192.168.1.2, 192.168.1.3"></label>
+        <label class="full">SNMP v2c community (read-only)<input id="sn_comm" type="password" value="${esc(sn.community)}" autocomplete="off" placeholder="public"></label>
+        <div class="full btns"><button class="btn" id="bSnTest"><i class="fa-solid fa-plug"></i>Save &amp; test</button><span class="test-res" id="snRes"></span></div>
+        <div class="full muted" style="font-size:12px">Turn on SNMP (v2c, read-only) and LLDP on the device first. SNMP v2c sends the community string in clear text, so use a read-only community and keep it on your LAN. Untested against real devices so far: please report what works.</div>
+      </div></div>
     <div class="modal-foot"><button class="btn primary" id="bSaveSet"><i class="fa-solid fa-floppy-disk"></i>Save</button></div>`;
+  $("bSnTest").onclick = async () => {
+    if (!(await saveSettings(true))) return;
+    const res = $("snRes");
+    res.className = "test-res"; res.textContent = "Asking…";
+    const r = await api("/api/snmp/test", "POST", null, true);
+    res.className = `test-res ${r && r.ok ? "ok" : "bad"}`;
+    res.textContent = !r ? "Failed: no response" : r.error ? `Failed: ${r.error}`
+      : r.hosts.map((h) => h.ok ? `${h.ip}: ${h.name || "ok"}, ${h.lldp} LLDP neighbours, ${h.fdb} MACs` : `${h.ip}: ${h.error}`).join(" | ");
+  };
   $("bUniTest").onclick = async () => {
     if (!(await saveSettings(true))) return;
     const res = $("uniRes");
@@ -880,6 +898,8 @@ function renderUnifiSettings(body) {
 }
 function collectUnifiSettings() {
   if (!$("u_host")) return;
+  settings.snmp = Object.assign(settings.snmp || {}, {enabled: $("sn_on").checked, community: $("sn_comm").value,
+    hosts: $("sn_hosts").value.split(/[\s,;]+/).filter(Boolean)});
   Object.assign(settings.unifi, {host: $("u_host").value, site: $("u_site").value, api_key: $("u_key").value,
     username: $("u_user").value, password: $("u_pass").value, group: $("u_group").value, verify_tls: $("u_verify").checked});
 }

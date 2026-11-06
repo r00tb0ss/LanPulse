@@ -53,6 +53,8 @@ class Topology:
         self.state = {"manual": {}, "zones": [], "log": [], "last_parent": {}}
         self.unifi: dict = {}
         self.unifi_status: dict = {"configured": False, "ok": False, "error": "", "t": 0}
+        self.snmp: dict = {}
+        self.snmp_status: dict = {"configured": False, "ok": False, "error": "", "t": 0, "hosts": 0, "links": 0}
         try:
             self.state.update(json.loads(self.path.read_text()))
         except Exception:
@@ -106,6 +108,54 @@ class Topology:
                 self.unifi = data
             self.unifi_status = {"configured": configured, "ok": data is not None and not error, "error": error, "t": time.time(),
                                  "devices": len((data or {}).get("devices", [])), "clients": len((data or {}).get("clients", []))}
+
+    def set_snmp(self, data: dict, status: dict):
+        with self.lock:
+            self.snmp = data or {}
+            self.snmp_status = dict(status)
+
+    def _snmp_parents(self, nodes: dict, by_mac: dict, gateway) -> dict:
+        """nid -> (parent nid, link) from SNMP: LLDP neighbours form a graph that is walked outward from the gateway,
+        and a MAC learned on a port that has no LLDP neighbour hangs off that switch."""
+        data = self.snmp or {}
+        if not data:
+            return {}
+        by_ip = {n["ip"]: nid for nid, n in nodes.items() if n.get("ip")}
+        edges: dict[str, dict[str, str]] = {}                    # a -> {b: port on a}
+        lldp_ports: set[tuple[str, str]] = set()
+        for ip, h in data.items():
+            a = by_ip.get(ip)
+            if not a:
+                continue
+            for r in h.get("lldp", []):
+                lldp_ports.add((a, r["local_port"]))
+                b = by_mac.get(norm_mac(r.get("chassis_mac")))
+                if b and b != a:
+                    edges.setdefault(a, {})[b] = r["local_port"]
+                    edges.setdefault(b, {}).setdefault(a, r.get("port_id", ""))
+        out: dict[str, tuple] = {}
+        if gateway in nodes:
+            seen, queue = {gateway}, [gateway]
+            while queue:
+                cur = queue.pop(0)
+                for nxt, _p in edges.get(cur, {}).items():
+                    if nxt in seen:
+                        continue
+                    seen.add(nxt)
+                    queue.append(nxt)
+                    out[nxt] = (cur, {"medium": "wired", "port": edges.get(nxt, {}).get(cur, "") or None})
+        for ip, h in data.items():
+            sw = by_ip.get(ip)
+            if not sw:
+                continue
+            for f in h.get("fdb", []):
+                nid = by_mac.get(norm_mac(f["mac"]))
+                if not nid or nid == sw or nid in out or (sw, f["port"]) in lldp_ports:
+                    continue
+                if nodes[nid]["kind"] in ("switch", "ap", "gateway") and nid in edges:
+                    continue
+                out[nid] = (sw, {"medium": "wired", "port": f["port"]})
+        return out
 
     # ------------------------------------------------------------------ build
     def build(self) -> dict:
@@ -202,6 +252,8 @@ class Topology:
             if gateway in nodes:
                 nodes[gateway]["kind"] = "gateway"
 
+        snmp_par = self._snmp_parents(nodes, by_mac, gateway)
+
         # ---- parents and links
         for nid, n in nodes.items():
             mac = norm_mac(n["mac"])
@@ -248,6 +300,9 @@ class Topology:
                     n["link"] = {"medium": "wifi" if wireless else "wired", "port": up.get("uplink_remote_port") or up.get("port_idx"),
                                  "speed": up.get("speed"), "mesh": wireless}
                     n["uplink_rate"] = _client_rate(up)
+            if parent is None and nid in snmp_par:
+                parent, n["link"] = snmp_par[nid][0], {**snmp_par[nid][1]}
+                n["source"] = "snmp"
             if man.get("medium") in ("wired", "wifi"):
                 n["link"] = {**n["link"], "medium": man["medium"]}
             if parent is None or parent == nid:
@@ -335,7 +390,7 @@ class Topology:
 
         rates = any((n.get("rate") or 0) > 0 or (n.get("uplink_rate") or 0) > 0 for n in nodes.values())
         return {"nodes": list(nodes.values()), "zones": zones, "changes": changes, "gateway": gateway,
-                "sources": {"unifi": self.unifi_status, "manual": len(manual), "rates": rates},
+                "sources": {"unifi": self.unifi_status, "snmp": self.snmp_status, "manual": len(manual), "rates": rates},
                 "custom_zones": self.state.get("zones", [])}
 
 

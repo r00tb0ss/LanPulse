@@ -57,8 +57,9 @@ from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
+import snmpdisc
 
-VERSION = "1.25.27"
+VERSION = "1.25.28"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -715,6 +716,7 @@ class LanPulse:
         self.honeypot = Honeypot(self)
         self.openvas = OpenVAS(self)
         self.topology = Topology(self, self.data_dir / "topology.json")
+        self.snmp = snmpdisc.SnmpDiscovery()
         if args.demo:
             self.honeypot.seed_demo()
         self.discovery = Discovery(self)
@@ -2020,7 +2022,22 @@ def build_app(nm: LanPulse) -> FastAPI:
         return await asyncio.to_thread(nm.local.for_device, d["ip"], d.get("mac", ""))
 
     # ---- network topology (who connects to what)
+    async def refresh_snmp():
+        if nm.args.demo:
+            return
+        if time.time() - nm.snmp.status["t"] < 110:
+            return                                    # SNMP tables change slowly; poll every ~2 minutes
+        try:
+            await asyncio.to_thread(nm.snmp.refresh, nm.settings.get("snmp") or {})
+        except Exception:
+            log.exception("snmp refresh failed")
+        nm.topology.set_snmp(nm.snmp.data, nm.snmp.status)
+
     async def refresh_topology():
+        await refresh_snmp()
+        await refresh_unifi()
+
+    async def refresh_unifi():
         if nm.args.demo:
             nm.topology.set_unifi(demo_unifi(nm.devices.values()))
             return
@@ -2105,6 +2122,22 @@ def build_app(nm: LanPulse) -> FastAPI:
             return {"configured": True, "blocked": await blocked_list()}
         except UniFiError as e:
             return {"configured": True, "blocked": [], "error": str(e)}
+
+    @app.post("/api/snmp/test")
+    async def snmp_test():
+        cfg = nm.settings.get("snmp") or {}
+        hosts = [h for h in (snmpdisc.valid_host(x) for x in cfg.get("hosts") or []) if h]
+        if not hosts:
+            return JSONResponse({"ok": False, "error": "Add at least one router or switch address (a private IP) first."}, 400)
+        t0 = time.time()
+        res = []
+        for h in hosts[:20]:
+            try:
+                r = await asyncio.to_thread(snmpdisc.poll_host, h, str(cfg.get("community") or "public"))
+                res.append({"ip": h, "ok": True, "name": r["name"], "lldp": len(r["lldp"]), "fdb": len(r["fdb"])})
+            except (snmpdisc.SnmpError, OSError) as e:
+                res.append({"ip": h, "ok": False, "error": str(e)[:160]})
+        return {"ok": any(x["ok"] for x in res), "ms": int((time.time() - t0) * 1000), "hosts": res}
 
     @app.post("/api/unifi/test")
     async def unifi_test():
