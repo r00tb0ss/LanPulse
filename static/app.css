@@ -1129,3 +1129,7 @@ html[data-pretheme="ocean"]{background:#041a1f}
 .tp-zrow{display:flex;gap:6px;margin-bottom:6px}.tp-zrow .zc{flex:1.2}.tp-zrow .zn{flex:1}
 .tp-zrow .zx{background:none;border:0;color:var(--muted);cursor:pointer}
 @media (max-width:700px){.topo{padding-top:56px}.topo-mini{display:none}.topo-info{width:auto;right:12px;top:auto;bottom:12px;max-height:55%}}
+@keyframes tpflow{to{stroke-dashoffset:16}}
+#topoSvg .tp-flow{animation:tpflow 1.2s linear infinite}
+#topoSvg .tp-chip{touch-action:none}
+@media (prefers-reduced-motion:reduce){#topoSvg .tp-flow{animation:none}}

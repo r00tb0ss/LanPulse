@@ -8,6 +8,9 @@
 const TOPO = {data: null, sel: null, view: {x: 0, y: 0, k: 1}, fit: true, color: "type", zone: "", traffic: false,
   talkers: new Map(), collapsed: new Set(), expanded: new Set(), pop: "", layout: null, timer: null, loading: false};
 try { TOPO.color = localStorage.getItem("nm_topo_color") || "type"; } catch (_) {}
+TOPO.spread = (() => { try { return localStorage.getItem("nm_topo_spread") !== "0"; } catch (_) { return true; } })();
+TOPO.pos = (() => { try { return JSON.parse(localStorage.getItem("nm_topo_pos") || "{}") || {}; } catch (_) { return {}; } })();
+const topoSavePos = () => { try { localStorage.setItem("nm_topo_pos", JSON.stringify(TOPO.pos)); } catch (_) {} };
 const TOPO_INFRA = new Set(["gateway", "switch", "ap"]);
 const TOPO_SIZE = {hw: 224, hh: 74, cw: 164, ch: 46, gap: 10, pad: 12, vgap: 54, hgap: 28, maxChips: 24};
 const TOPO_COLORS = [["type", "Device type"], ["status", "Status"], ["risk", "Security risk"], ["zone", "Zone / VLAN"],
@@ -45,7 +48,8 @@ function topoTraffic(data) {
   }
   const max = Math.max(1, ...data.nodes.filter((n) => n.kind === "client").map((n) => own.get(n.id) || 0));
   const maxSub = Math.max(1, ...data.nodes.filter((n) => n.kind !== "gateway").map((n) => sub.get(n.id) || 0));
-  return {own, sub, max, maxSub};
+  const lg = (c, m) => (c > 0 ? Math.max(0.08, Math.log1p(c) / Math.log1p(m)) : 0);   // log scale: a busy device doesn't flatten the rest
+  return {own, sub, max, maxSub, lg};
 }
 
 function startTopoTimer() {
@@ -93,8 +97,9 @@ function topoLayout(data) {
       const all = TOPO.expanded.has(X.id), shown = all ? cl : cl.slice(0, S.maxChips);
       const cols = Math.max(1, Math.min(shown.length <= 3 ? shown.length : 4, Math.ceil(Math.sqrt(shown.length * 1.5))));
       const rows = Math.ceil(shown.length / cols), more = cl.length - shown.length;
-      cb = {list: shown, cols, rows, more, total: cl.length, all,
-        w: cols * S.cw + (cols - 1) * S.gap + S.pad * 2, h: rows * S.ch + (rows - 1) * S.gap + S.pad * 2 + 22 + (more > 0 || all && cl.length > S.maxChips ? 24 : 0)};
+      const sp = TOPO.spread, gx = sp ? 40 : S.gap, gy = sp ? 52 : S.gap, pd = sp ? 0 : S.pad, extra = (more > 0 || all && cl.length > S.maxChips ? 24 : 0);
+      cb = {list: shown, cols, rows, more, total: cl.length, all, spread: sp, gx, gy, pd,
+        w: cols * S.cw + (cols - 1) * gx + pd * 2, h: rows * S.ch + (rows - 1) * gy + pd * 2 + (sp ? 0 : 22) + extra};
     }
     const parts = [cb, ...subs].filter(Boolean);
     const contentW = parts.reduce((s, p) => s + p.w, 0) + S.hgap * Math.max(0, parts.length - 1);
@@ -116,8 +121,9 @@ function topoLayout(data) {
         p.x = x; p.y = y; p.cx = x + p.w / 2; p.parent = t;
         pos.blocks.push(p);
         p.list.forEach((n, i) => {
-          const cx = x + S.pad + (i % p.cols) * (S.cw + S.gap), cy = y + S.pad + 22 + Math.floor(i / p.cols) * (S.ch + S.gap);
-          pos.chips.push({node: n, x: cx, y: cy, block: p, parent: t});
+          const top = p.spread ? 0 : S.pad + 22, o = p.spread ? TOPO.pos[n.id] || [0, 0] : [0, 0];
+          const bx = x + p.pd + (i % p.cols) * (S.cw + p.gx), by = y + top + Math.floor(i / p.cols) * (S.ch + p.gy);
+          pos.chips.push({node: n, x: bx + o[0], y: by + o[1], block: p, parent: t});
         });
       } else {
         place(p, x, y);
@@ -129,7 +135,9 @@ function topoLayout(data) {
   place(tree, 0, S.hh + 40 + S.vgap * 0.7);
   const inet = {x: tree.cx - 78, y: 0, w: 156, h: 44};
   const all = [...pos.headers.map((h) => ({x: h.x, y: h.y, w: S.hw, h: S.hh})), ...pos.blocks, inet];
-  const b = {x0: Math.min(...all.map((a) => a.x)), y0: 0, x1: Math.max(...all.map((a) => a.x + a.w)), y1: Math.max(...all.map((a) => a.y + a.h))};
+  const ex = pos.chips.map((c) => ({x: c.x, y: c.y, w: S.cw, h: S.ch}));      // dragged devices count too
+  const b = {x0: Math.min(...all.map((a) => a.x), ...ex.map((a) => a.x)), y0: 0, x1: Math.max(...all.map((a) => a.x + a.w), ...ex.map((a) => a.x + a.w)),
+    y1: Math.max(...all.map((a) => a.y + a.h), ...ex.map((a) => a.y + a.h))};
   return {tree, inet, ...pos, bounds: b};
 }
 
@@ -180,7 +188,7 @@ function topoSvg(L, T, opts = {}) {
     const a = l.from, b = l.to, n = b.node, my = (a.y + S.hh + b.y) / 2, wired = (n.link || {}).medium !== "wifi";
     const w = wired ? ((n.link || {}).speed >= 2500 ? 3.4 : (n.link || {}).speed >= 1000 ? 2.6 : 1.8) : 2.2;
     const hot = focus && focus.has(n.id) && focus.has(a.node.id);
-    const tf = TR ? (TR.sub.get(n.id) || 0) / TR.maxSub : 0;
+    const tf = TR ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0;
     out.push(`<g${dim(n.id)}><path d="M${a.cx},${a.y + S.hh} C${a.cx},${my} ${b.cx},${my} ${b.cx},${b.y}" fill="none" stroke="${hot || tf ? T.accent : wired ? T.border2 : "#f59e0b"}"
       stroke-width="${w + (hot ? 1 : 0) + tf * 7}" ${tf ? `stroke-opacity="${0.35 + tf * 0.65}"` : ""} ${wired ? "" : 'stroke-dasharray="7 5"'}/>
       ${topoLinkLabel(n) ? `<text x="${(a.cx + b.cx) / 2 + 8}" y="${my + 4}" font-size="10.5" fill="${T.muted}">${esc(topoLinkLabel(n))}</text>` : ""}</g>`);
@@ -190,19 +198,30 @@ function topoSvg(L, T, opts = {}) {
     const owner = b.parent.node, wifi = b.list.filter((n) => (n.link || {}).medium === "wifi").length;
     const label = `${b.total} device${b.total === 1 ? "" : "s"}${wifi ? ` · ${wifi} Wi-Fi` : ""}`;
     out.push(`<g${dim(owner.id)}>
-      <path d="M${b.parent.cx},${b.parent.y + S.hh} C${b.parent.cx},${b.y - 22} ${b.cx},${b.y - 30} ${b.cx},${b.y}" stroke="${T.border2}" stroke-width="1.8" fill="none"/>
+      ${b.spread ? "" : `<path d="M${b.parent.cx},${b.parent.y + S.hh} C${b.parent.cx},${b.y - 22} ${b.cx},${b.y - 30} ${b.cx},${b.y}" stroke="${T.border2}" stroke-width="1.8" fill="none"/>
       <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="12" fill="${T.panel2}" fill-opacity=".45" stroke="${T.border}"/>
-      <text x="${b.x + S.pad}" y="${b.y + 19}" font-size="11" font-weight="600" fill="${T.muted}" letter-spacing=".4">${esc(label.toUpperCase())}</text>
+      <text x="${b.x + S.pad}" y="${b.y + 19}" font-size="11" font-weight="600" fill="${T.muted}" letter-spacing=".4">${esc(label.toUpperCase())}</text>`}
       ${b.more > 0 ? `<g class="tp-more" data-more="${esc(owner.id)}" cursor="pointer"><rect x="${b.x + S.pad}" y="${b.y + b.h - 30}" width="${b.w - S.pad * 2}" height="22" rx="8" fill="${T.panel}" stroke="${T.border2}"/>
         <text x="${b.x + b.w / 2}" y="${b.y + b.h - 15}" font-size="11" text-anchor="middle" fill="${T.accent}">Show ${b.more} more</text></g>` : ""}
       ${b.all && b.total > S.maxChips ? `<g class="tp-more" data-less="${esc(owner.id)}" cursor="pointer"><rect x="${b.x + S.pad}" y="${b.y + b.h - 30}" width="${b.w - S.pad * 2}" height="22" rx="8" fill="${T.panel}" stroke="${T.border2}"/>
         <text x="${b.x + b.w / 2}" y="${b.y + b.h - 15}" font-size="11" text-anchor="middle" fill="${T.accent}">Show fewer</text></g>` : ""}</g>`);
   }
+  // one link per device (spread view): thickness and flow follow its traffic
+  if (TOPO.spread) {
+    for (const c of L.chips) {
+      const n = c.node, p = c.parent, x1 = p.cx, y1 = p.y + S.hh, x2 = c.x + S.cw / 2, y2 = c.y, my = y1 + (y2 - y1) * 0.55, wifi = (n.link || {}).medium === "wifi";
+      const cnt = TR ? TR.own.get(n.id) || 0 : 0, lv = cnt ? TR.lg(cnt, TR.max) : 0, hot = focus && focus.has(n.id);
+      const base = hot || lv ? T.accent : wifi ? "#f59e0b" : T.border2;
+      out.push(`<path class="tp-link${lv && !opts.export ? " tp-flow" : ""}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" fill="none" stroke="${base}" stroke-width="${(hot ? 2.6 : 1.4) + lv * 4.5}"
+        stroke-opacity="${lv ? 0.45 + lv * 0.55 : wifi ? 0.7 : 1}" ${lv && !opts.export ? `stroke-dasharray="7 9" style="animation-duration:${(2.4 - lv * 1.8).toFixed(2)}s"` : wifi ? 'stroke-dasharray="5 5"' : ""}
+        ${focus && !focus.has(n.id) ? 'opacity=".2"' : ""}/>`);
+    }
+  }
   // device chips
   for (const c of L.chips) {
     const n = c.node, col = topoNodeColor(n, T), t = TYPES[n.type] || TYPES.unknown, l = n.link || {};
     const d0 = devices.get(n.id), faded = d0 && typeof matches === "function" && !matches(d0);
-    const cnt = TR ? TR.own.get(n.id) || 0 : 0, act = cnt ? Math.max(0.08, cnt / TR.max) : 0;
+    const cnt = TR ? TR.own.get(n.id) || 0 : 0, act = cnt ? TR.lg(cnt, TR.max) : 0;
     out.push(`<g class="tp-chip${TOPO.sel === n.id ? " tp-sel" : ""}${!n.online ? " tp-off" : ""}${faded ? " tp-faded" : ""}" data-id="${esc(n.id)}" cursor="pointer"${focus && !focus.has(n.id) ? ' opacity=".22"' : ""}>
       <rect x="${c.x}" y="${c.y}" width="${S.cw}" height="${S.ch}" rx="9" fill="${T.panel}" stroke="${TOPO.sel === n.id ? T.accent : T.border}" stroke-width="${TOPO.sel === n.id ? 2 : 1}"/>
       <rect x="${c.x}" y="${c.y + 6}" width="4" height="${S.ch - 12}" rx="2" fill="${col}"/>
@@ -211,6 +230,7 @@ function topoSvg(L, T, opts = {}) {
       <text x="${c.x + 32}" y="${c.y + 36}" font-size="10.5" fill="${T.muted}">${esc(tx(n.ip, 16))}</text>
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${T.accent}"/>` : ""}` : ""}
+      ${TR && TOPO.spread ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? T.accent : T.dim}">${cnt ? cnt.toLocaleString() + " conn/h" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -218,7 +238,7 @@ function topoSvg(L, T, opts = {}) {
   // infrastructure cards (drawn last so links tuck underneath)
   for (const h of L.headers) {
     const n = h.node, col = n.kind === "gateway" ? "#f59e0b" : n.kind === "ap" ? "#fbbf24" : "#fb923c", t = TYPES[n.kind === "ap" ? "ap" : n.kind === "switch" ? "switch" : "router"];
-    const e = n.extra || {}, radios = (e.radios || []).slice(0, 3), act = TR && n.kind !== "gateway" ? Math.max(TR.sub.get(n.id) ? 0.06 : 0, (TR.sub.get(n.id) || 0) / TR.maxSub) : 0;
+    const e = n.extra || {}, radios = (e.radios || []).slice(0, 3), act = TR && n.kind !== "gateway" ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0;
     out.push(`<g class="tp-head${TOPO.sel === n.id ? " tp-sel" : ""}" data-id="${esc(n.id)}" cursor="pointer"${focus && !focus.has(n.id) ? ' opacity=".22"' : ""}>
       <rect x="${h.x}" y="${h.y}" width="${S.hw}" height="${S.hh}" rx="14" fill="${T.panel}" stroke="${TOPO.sel === n.id ? T.accent : col}" stroke-width="${TOPO.sel === n.id ? 2.4 : 1.6}"/>
       <rect x="${h.x}" y="${h.y}" width="${S.hw}" height="5" rx="2.5" fill="${col}" opacity=".9"/>
@@ -262,7 +282,11 @@ function topoPathSvg(L, T) {
   const pts = [];
   let cur = byId.get(TOPO.sel);
   if (!cur) return "";
-  if (chip.has(cur.id)) { const c = chip.get(cur.id); pts.push([c.x + S.cw / 2, c.y]); pts.push([c.block.cx, c.block.y]); cur = byId.get(cur.parent); }
+  if (chip.has(cur.id)) {
+    const c = chip.get(cur.id); pts.push([c.x + S.cw / 2, c.y]);
+    if (!c.block.spread) pts.push([c.block.cx, c.block.y]);
+    cur = byId.get(cur.parent);
+  }
   for (let i = 0; cur && i < 20; i++) {
     const h = hdr.get(cur.id);
     if (!h) break;
@@ -289,7 +313,14 @@ function topoShell() {
   let drag = null;
   const ptrs = new Map();
   let pinch = null;
+  let nd = null;      // a device being dragged (spread view)
   svg.addEventListener("pointerdown", (e) => {
+    const chip = e.target.closest(".tp-chip");
+    if (chip && TOPO.spread && !ptrs.size) {
+      const id = chip.dataset.id, c = TOPO.layout && TOPO.layout.chips.find((x) => x.node.id === id);
+      if (c) nd = {id, sx: e.clientX, sy: e.clientY, o: (TOPO.pos[id] || [0, 0]).slice(), moved: false, pid: e.pointerId};
+      return;
+    }
     if (e.target.closest(".tp-chip,.tp-head,.tp-fold,.tp-more")) return;
     ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
     svg.setPointerCapture(e.pointerId); svg.classList.add("grab");
@@ -297,6 +328,14 @@ function topoShell() {
     else drag = {x: e.clientX, y: e.clientY, vx: TOPO.view.x, vy: TOPO.view.y};
   });
   svg.addEventListener("pointermove", (e) => {
+    if (nd && e.pointerId === nd.pid) {
+      const dx = e.clientX - nd.sx, dy = e.clientY - nd.sy;
+      if (!nd.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      if (!nd.moved) { nd.moved = true; try { svg.setPointerCapture(e.pointerId); } catch (_) {} svg.classList.add("grab"); }
+      TOPO.pos[nd.id] = [Math.round(nd.o[0] + dx / TOPO.view.k), Math.round(nd.o[1] + dy / TOPO.view.k)];
+      if (!nd.raf) nd.raf = requestAnimationFrame(() => { nd.raf = 0; topoRedraw(); });
+      return;
+    }
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
     if (pinch && ptrs.size >= 2) {
@@ -305,6 +344,10 @@ function topoShell() {
     } else if (drag) { TOPO.view.x = drag.vx + (e.clientX - drag.x); TOPO.view.y = drag.vy + (e.clientY - drag.y); topoApplyView(); }
   });
   const endPtr = (e) => {
+    if (nd && e.pointerId === nd.pid) {
+      if (nd.moved) { topoSavePos(); TOPO.noClick = true; setTimeout(() => { TOPO.noClick = false; }, 350); topoRedraw(); svg.classList.remove("grab"); }
+      nd = null; return;
+    }
     const was = ptrs.size;
     ptrs.delete(e.pointerId);
     if (was === 1 && drag && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 4) { TOPO.sel = null; $("topoInfo").classList.add("hidden"); renderTopology(); }
@@ -320,7 +363,8 @@ function topoShell() {
   }, {passive: false});
   svg.addEventListener("click", (e) => {
     const more = e.target.closest("[data-more]"), less = e.target.closest("[data-less]"), fold = e.target.closest("[data-fold]");
-    e.stopPropagation();       // the map re-draws below; don't let older handlers see a detached target
+    e.stopPropagation();       // the map re-draws below
+    if (TOPO.noClick) return;      // that was the end of a drag, not a tap; don't let older handlers see a detached target
     if (more) { TOPO.expanded.add(more.dataset.more); renderTopology(); return; }
     if (less) { TOPO.expanded.delete(less.dataset.less); renderTopology(); return; }
     if (fold) { const id = fold.dataset.fold; TOPO.collapsed.has(id) ? TOPO.collapsed.delete(id) : TOPO.collapsed.add(id); renderTopology(); return; }
@@ -333,6 +377,16 @@ function topoShell() {
     const wx = (e.clientX - r.left) / s + b.x0 - 10, wy = (e.clientY - r.top) / s + b.y0 - 10, sr = svg.getBoundingClientRect();
     TOPO.view.x = sr.width / 2 - wx * TOPO.view.k; TOPO.view.y = sr.height / 2 - wy * TOPO.view.k; topoApplyView();
   });
+}
+
+function topoRedraw() {      // re-draw after a drag without refitting or closing the inspector
+  const d = TOPO.data;
+  if (!d || netLayout !== "topo") return;
+  const L = topoLayout(d);
+  if (!L) return;
+  TOPO.layout = L;
+  $("topoRoot").innerHTML = topoSvg(L, topoTheme());
+  topoMini();
 }
 
 function topoApplyView() {
@@ -409,6 +463,8 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpChanges"><i class="fa-solid fa-clock-rotate-left"></i>Changes${d.changes.length ? `<b class="tp-n">${d.changes.length}</b>` : ""}</button>
     <button class="btn sm" id="tpZones"><i class="fa-solid fa-layer-group"></i>Zones</button>
     <button class="btn sm" id="tpExport"><i class="fa-solid fa-file-export"></i>Export</button>
+    <button class="btn sm ${TOPO.spread ? "on" : ""}" id="tpSpread" title="Give every device its own line you can drag. Off groups them in boxes."><i class="fa-solid fa-diagram-successor"></i>Spread</button>
+    ${Object.keys(TOPO.pos).length ? '<button class="btn sm" id="tpResetPos" title="Put dragged devices back"><i class="fa-solid fa-rotate-left"></i>Reset</button>' : ""}
     <button class="btn sm" id="tpZoomOut" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
     <button class="btn sm" id="tpZoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
     <button class="btn sm" id="tpFit" title="Fit to screen"><i class="fa-solid fa-expand"></i></button>
@@ -421,6 +477,8 @@ function renderTopoBar(d) {
   if ($("tpZone")) $("tpZone").onchange = (e) => { TOPO.zone = e.target.value; TOPO.fit = true; renderTopology(); };
   $("tpTraffic").onclick = () => { TOPO.traffic = !TOPO.traffic; if (TOPO.traffic) loadTopoTraffic(); else renderTopology(); };
   $("tpFit").onclick = topoFitView;
+  $("tpSpread").onclick = () => { TOPO.spread = !TOPO.spread; try { localStorage.setItem("nm_topo_spread", TOPO.spread ? "1" : "0"); } catch (_) {} TOPO.fit = true; renderTopology(); };
+  if ($("tpResetPos")) $("tpResetPos").onclick = () => { TOPO.pos = {}; topoSavePos(); TOPO.fit = true; renderTopology(); };
   $("tpZoomIn").onclick = () => topoZoomBy(1.4);
   $("tpZoomOut").onclick = () => topoZoomBy(1 / 1.4);
   $("tpRefresh").onclick = async () => { toast("Refreshing…"); await loadTopology(true); };
