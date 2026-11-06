@@ -38,6 +38,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Daily summary** to any alert channel
 - **Device traffic on the attack map**: live arcs showing where each device connects (Google, Netflix, Amazon...), top destinations and busiest devices, and an alert when a device contacts an IP that attacked you
 - **Security warnings** for risky services: Telnet, VNC, FTP, exposed databases, Docker API, old SSH, HTTP-only admin pages
+- **Works with many routers**: UniFi, pfSense/OPNsense, OpenWrt/Linux, MikroTik, Fortinet-style firewalls or anything that can send syslog or JSON (see [Supported routers](#supported-routers))
 - **Alerts** by ntfy push, Telegram, webhook (Discord, Slack, Home Assistant), email or IRC
 - **Login** with a hashed password, plus optional HTTPS
 - **Works offline**: map and icon libraries are stored locally
