@@ -58,7 +58,7 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 
-VERSION = "1.25.9"
+VERSION = "1.25.10"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -1985,6 +1985,14 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.get("/api/honeypot")
     async def honeypot_summary(hours: int = 168):
         return await asyncio.to_thread(nm.honeypot.summary, max(1, min(hours, 2160)))
+
+    @app.get("/api/honeypot/ip")
+    async def honeypot_ip(ip: str, hours: int = 2160):
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            return JSONResponse({"error": "bad ip"}, 400)
+        return await asyncio.to_thread(nm.honeypot.detail, ip, max(1, min(hours, 2160)))
 
     @app.post("/api/honeypot/ingest")
     async def honeypot_ingest(request: Request):

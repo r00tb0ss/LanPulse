@@ -263,17 +263,23 @@
   <div class="v-head"><div><h2><i class="fa-solid fa-jar"></i>Honeypot</h2>
     <span class="muted">decoy services no real device should ever touch &mdash; every hit is a warning sign</span></div>
     <div class="v-tools">
+      <select id="potHours" title="Time range"><option value="24">24 hours</option><option value="168" selected>7 days</option><option value="720">30 days</option><option value="2160">90 days</option></select>
       <button class="btn sm ghost" id="potCfgBtn"><i class="fa-solid fa-gear"></i>Settings</button>
     </div></div>
   <div class="pot-setup hidden" id="potSetup"></div>
   <div class="v-note hidden" id="potStatus"></div>
   <div class="t-kpis four" id="potKpis"></div>
   <div class="pot-listeners" id="potListeners"></div>
+  <div class="t-card" id="potTimeline"></div>
+  <div class="t-card hidden" id="potDetail"></div>
   <div class="v-grid two">
     <div class="t-card wide"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4><div class="pot-hits" id="potHits"></div></div>
-    <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap an internal device for details</span></h4><div class="rank" id="potAttackers"></div></div>
+    <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap any address for details</span></h4><div class="rank" id="potAttackers"></div></div>
     <div class="t-card"><h4><span>Decoys hit</span><span class="muted">which services drew fire</span></h4><div id="potServices"></div></div>
     <div class="t-card"><h4><span>Credentials tried</span><span class="muted">logins attackers attempted</span></h4><div id="potCreds"></div></div>
+    <div class="t-card"><h4><span>Where they come from</span><span class="muted">by country</span></h4><div id="potCountries"></div></div>
+    <div class="t-card"><h4><span>Usernames</span><span class="muted">most guessed</span></h4><div id="potUsers"></div></div>
+    <div class="t-card"><h4><span>Passwords</span><span class="muted">most guessed</span></h4><div id="potPasswords"></div></div>
   </div>
   <p class="v-foot">This is a <b>low-interaction</b> honeypot: the decoys log connections and the logins attackers try, but never
     grant access or run anything. A hit from a device on your own network is a strong sign that device is compromised or scanning the LAN.
