@@ -474,7 +474,7 @@ class VulnScanner:
                         "pub": cve["pub"], "port": it["port"], "software": it["label"], "product": product,
                         "ver": it["ver"], "kev": bool(k), "kev_name": (k or {}).get("name", ""),
                         "ransomware": bool(k and k["ransomware"]), "distro": it["distro"],
-                        "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": it["unknown"],
+                        "msf": (x.get("m") or signatures.msf_for_cve(cve["id"]))[:5], "edb": x.get("e", [])[:5], "unverified": it["unknown"],
                         "os": it.get("os", False),
                         "confidence": "os-guess" if it.get("os") else "version"})
         # vulners.com lookups (thorough scans): CVEs for the detected service version. Version-based, so they rank
@@ -496,7 +496,7 @@ class VulnScanner:
                     "pub": "", "port": vf.get("port") or 0, "software": (p.get("product") or p.get("service") or "service"),
                     "product": "vulners", "ver": "", "kev": bool(k), "kev_name": (k or {}).get("name", ""),
                     "ransomware": bool(k and k.get("ransomware")), "distro": False,
-                    "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                    "msf": (x.get("m") or signatures.msf_for_cve(cve))[:5], "edb": x.get("e", [])[:5], "unverified": False,
                     "os": False, "confidence": "version"})
         # OpenVAS results: real vulnerability tests. QoD >= 80 means the test exercised the flaw or fingerprinted the
         # exact version, so those rank as Confirmed; weaker detections stay "version".
@@ -512,7 +512,7 @@ class VulnScanner:
                         "desc": ov.get("desc") or ov.get("name", ""), "pub": "", "port": ov.get("port") or 0,
                         "software": ov.get("name", "")[:80], "product": "openvas", "ver": "", "kev": bool(k),
                         "kev_name": (k or {}).get("name", ""), "ransomware": bool(k and k.get("ransomware")),
-                        "distro": False, "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                        "distro": False, "msf": (x.get("m") or signatures.msf_for_cve(cve))[:5], "edb": x.get("e", [])[:5], "unverified": False,
                         "os": False, "confidence": conf, "probe": "openvas"})
         # Curated signatures for classic exploitable services nmap can't give a product ID for (see signatures.py)
         for d in list(self.nm.devices.values()):
@@ -551,7 +551,7 @@ class VulnScanner:
                     "port": pr.get("port") or host_port, "software": pr.get("title") or pr.get("id", ""),
                     "product": pr.get("id", ""), "ver": "", "kev": bool(k), "kev_name": (k or {}).get("name", ""),
                     "ransomware": bool(k and k.get("ransomware")), "distro": False,
-                    "msf": x.get("m", [])[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                    "msf": (x.get("m") or signatures.msf_for_cve(cve))[:5], "edb": x.get("e", [])[:5], "unverified": False,
                     "os": False, "confidence": "confirmed", "probe": pr.get("id", "")})
         for dev_id, items in results.items():
             seen, uniq = set(), []
