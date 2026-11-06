@@ -423,15 +423,38 @@ class Honeypot:
             if h["internal"]:
                 internal_hits += 1
             a = by_ip.setdefault(h["ip"], {"ip": h["ip"], "hits": 0, "internal": h["internal"],
-                                           "services": set(), "last": h["t"]})
+                                           "services": set(), "last": h["t"], "first": h["t"]})
             a["hits"] += 1
             a["services"].add(h["service"])
             a["last"] = max(a["last"], h["t"])
+            a["first"] = min(a["first"], h["t"])
             if h["creds"]:
                 by_cred[h["creds"]] = by_cred.get(h["creds"], 0) + 1
         attackers = sorted(by_ip.values(), key=lambda a: -a["hits"])
         for a in attackers:
             a["services"] = sorted(a["services"])
+        users: dict[str, int] = {}
+        passwords: dict[str, int] = {}
+        for c, n in by_cred.items():
+            u, sep, pw = c.partition(" / ")
+            users[u or "(blank)"] = users.get(u or "(blank)", 0) + n
+            passwords[(pw if sep else "") or "(blank)"] = passwords.get((pw if sep else "") or "(blank)", 0) + n
+        top = lambda d: [{"v": k, "count": v} for k, v in sorted(d.items(), key=lambda kv: -kv[1])[:12]]
+        nb = 24                                       # activity chart: 24 equal slices of the window
+        span = hours * 3600 / nb
+        hist = [0] * nb
+        for h in hits:
+            hist[min(nb - 1, max(0, int((h["t"] - since) / span)))] += 1
+        countries: dict[str, dict] = {}
+        for a in attackers:
+            g = self._geo(a["ip"])
+            a.update(g)
+            if not a["internal"] and g["iso"]:
+                c = countries.setdefault(g["iso"], {"iso": g["iso"], "country": g["country"], "hits": 0, "ips": 0})
+                c["hits"] += a["hits"]
+                c["ips"] += 1
+        for h in hits[:60]:
+            h.update({k: v for k, v in self._geo(h["ip"]).items() if k in ("iso", "country", "city")})
         return {
             "type": "honeypot_summary",
             "enabled": self.cfg["enabled"],
@@ -449,7 +472,48 @@ class Honeypot:
             "creds": sorted(({"cred": k, "count": v} for k, v in by_cred.items()), key=lambda x: -x["count"])[:20],
             "recent": hits[:60],
             "hours": hours,
+            "hist": hist,
+            "countries": sorted(countries.values(), key=lambda c: -c["hits"])[:10],
+            "usernames": top(users),
+            "passwords": top(passwords),
         }
+
+    def _geo(self, ip: str) -> dict:
+        """Country / city / network owner for an IP, from the offline GeoIP databases (blank for LAN addresses)."""
+        out = {"iso": "", "country": "", "city": "", "org": "", "asn": None}
+        if self._internal(ip):
+            return out
+        geo = getattr(getattr(self.nm, "threats", None), "geo", None)
+        if not geo:
+            return out
+        try:
+            g, a = geo.lookup(ip), geo.asn(ip)
+            out.update(iso=g.get("iso", ""), country=g.get("country", ""), city=g.get("city", ""),
+                       org=a.get("org", ""), asn=a.get("asn"))
+        except Exception:
+            pass
+        return out
+
+    def detail(self, ip: str, hours: int = 2160) -> dict:
+        """Everything this one address did to the decoys: totals, every login tried, every request."""
+        since = time.time() - hours * 3600
+        with self.lock:
+            rows = self.db.execute("SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? AND t >= ? "
+                                   "ORDER BY t DESC LIMIT 500", (ip, since)).fetchall()
+        hits = [{"t": t, "service": svc, "port": port, "creds": c, "data": d, "sensor": sn}
+                for t, svc, port, c, d, sn in rows]
+        by_svc: dict[str, int] = {}
+        creds: dict[str, int] = {}
+        for h in hits:
+            by_svc[h["service"]] = by_svc.get(h["service"], 0) + 1
+            if h["creds"]:
+                creds[h["creds"]] = creds.get(h["creds"], 0) + 1
+        return {"ip": ip, "internal": self._internal(ip), "hits": hits, "total": len(hits),
+                "first": hits[-1]["t"] if hits else None, "last": hits[0]["t"] if hits else None,
+                "services": sorted(({"service": k, "label": SERVICES.get(k, (0, k))[1], "count": v}
+                                    for k, v in by_svc.items()), key=lambda x: -x["count"]),
+                "creds": sorted(({"cred": k, "count": v} for k, v in creds.items()), key=lambda x: -x["count"])[:30],
+                **self._geo(ip)}
 
     def for_device(self, ip: str, hours: int = 720) -> list:
         since = time.time() - hours * 3600
