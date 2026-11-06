@@ -237,7 +237,7 @@ body.mode-threats .net-only,body.mode-threats #btnSidebar{display:none!important
 
 .t-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px}
 .t-mapcard{position:relative;border:1px solid var(--border);border-radius:14px;overflow:hidden;min-height:440px;
-  background:radial-gradient(ellipse at 50% 55%,#10203f 0%,#0a1122 75%)}
+  background:radial-gradient(ellipse at 50% 55%,var(--map-glow,#10203f) 0%,var(--map-deep,#0a1122) 75%)}
 #worldMap{position:absolute;inset:0}
 .map-top{position:absolute;left:12px;right:12px;top:12px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
 .map-top>*{pointer-events:auto}
@@ -924,35 +924,27 @@ body[data-theme="synthwave"]{
 }
 body[data-theme="synthwave"] .brand i,body[data-theme="synthwave"] .brand b{color:var(--accent);text-shadow:0 0 8px rgba(255,79,216,.6)}
 
-/* Graphite — neutral charcoal with a soft indigo accent; calm and professional */
-body[data-theme="graphite"]{
-  --bg:#0e0f12; --bg2:#131519; --panel:#181b20; --panel2:#1f2329; --border:#2a2f37; --border2:#3a414c;
-  --text:#e8eaee; --muted:#9aa3b0; --dim:#697282; --accent:#8b9dff; --accent2:#6d7ff0;
-  --green:#3ecf8e; --red:#f0616d; --amber:#f2b44a;
-  --topbar:linear-gradient(180deg,#1b1e24,#121418); --map-area:#1d2128; --map-border:#383f4b;
-  --ctrl:#1f2329; --ctrl-solid:#1f2329; --glow:#1a1d25;
+/* Ember — near-black with warm copper accents, like a control-room console */
+body[data-theme="ember"]{
+  --bg:#0c0a09; --bg2:#120f0d; --panel:#1a1512; --panel2:#241c17; --border:#33281f; --border2:#4a3a2c;
+  --text:#f3e9df; --muted:#b39d88; --dim:#7d6b5b; --accent:#ff8a4c; --accent2:#e8702f;
+  --green:#5fd38d; --red:#ff5d6c; --amber:#f5c542;
+  --topbar:linear-gradient(180deg,#1f1813,#100c0a); --map-area:#221913; --map-border:#4d3828;
+  --ctrl:#241c17; --ctrl-solid:#241c17; --glow:#2a1b12; --map-glow:#2a1d14; --map-deep:#100b08;
   color-scheme:dark;
 }
-body[data-theme="graphite"] .topbar{box-shadow:0 1px 0 rgba(255,255,255,.04)}
+body[data-theme="ember"] .brand i,body[data-theme="ember"] .brand b{color:var(--accent);text-shadow:0 0 10px rgba(255,138,76,.35)}
 
-/* Sandstone — warm off-white with a deep teal accent; easy on the eyes in a bright room */
-body[data-theme="sandstone"]{
-  --bg:#f6f3ee; --bg2:#fffdf9; --panel:#fffdf9; --panel2:#f1ece4; --border:#e2dacd; --border2:#cfc4b2;
-  --text:#2a2622; --muted:#6b6358; --dim:#9a9082; --accent:#0f766e; --accent2:#115e59;
-  --green:#15803d; --red:#b91c1c; --amber:#b45309;
-  --topbar:linear-gradient(180deg,#fffdf9,#f3eee6); --map-area:#2b3a3a; --map-border:#44605b;
-  --ctrl:#fffdf9; --ctrl-solid:#fffdf9; --glow:#ece5d9;
-  color-scheme:light;
+/* Deep Ocean — deep teal and sea-green surfaces with an aqua accent */
+body[data-theme="ocean"]{
+  --bg:#041a1f; --bg2:#06232a; --panel:#0a2d34; --panel2:#0e3a43; --border:#14515a; --border2:#1d6b76;
+  --text:#e3f6f5; --muted:#8dc4c6; --dim:#5d9498; --accent:#22d3c5; --accent2:#0ea5a0;
+  --green:#4ade80; --red:#fb7185; --amber:#fbbf24;
+  --topbar:linear-gradient(180deg,#0b343c,#05222a); --map-area:#0b3d46; --map-border:#21808c;
+  --ctrl:#0e3a43; --ctrl-solid:#0e3a43; --glow:#0b4650; --map-glow:#0d4650; --map-deep:#041c22;
+  color-scheme:dark;
 }
-body[data-theme="sandstone"] .topbar{box-shadow:0 1px 3px rgba(60,45,25,.08)}
-body[data-theme="sandstone"] .brand i,body[data-theme="sandstone"] .brand b{color:var(--accent)}
-
-/* light themes: the world map stays dark, so the labels laid over it stay light, and alert tiles use soft red */
-body[data-theme="light"] .map-title,body[data-theme="sandstone"] .map-title{color:#e2e8f0}
-body[data-theme="light"] .map-legend,body[data-theme="light"] .map-src,
-body[data-theme="sandstone"] .map-legend,body[data-theme="sandstone"] .map-src{color:#b4c0d4}
-body[data-theme="light"] .kpi.danger,body[data-theme="sandstone"] .kpi.danger{border-color:#f3b7bf;background:linear-gradient(180deg,#fdecee,var(--panel))}
-body[data-theme="light"] .kpi.danger .k-num,body[data-theme="sandstone"] .kpi.danger .k-num{color:#b91c1c}
+body[data-theme="ocean"] .brand i,body[data-theme="ocean"] .brand b{color:var(--accent)}
 
 /* theme picker in settings */
 .theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
@@ -966,8 +958,8 @@ body[data-theme="light"] .kpi.danger .k-num,body[data-theme="sandstone"] .kpi.da
 html[data-pretheme="light"]{background:#f1f5f9}
 html[data-pretheme="hacker"]{background:#000700}
 html[data-pretheme="synthwave"]{background:#140a2e}
-html[data-pretheme="graphite"]{background:#0e0f12}
-html[data-pretheme="sandstone"]{background:#f6f3ee}
+html[data-pretheme="ember"]{background:#0c0a09}
+html[data-pretheme="ocean"]{background:#041a1f}
 
 /* ---- Network Security Score bar ---- */
 .posture-bar{display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--border);

@@ -326,7 +326,7 @@ auto-refreshing. Press **Esc** to exit.
 ## Themes
 
 **Settings → Appearance** offers six looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
-**Graphite** (neutral charcoal, soft indigo), **Sandstone** (warm off-white, deep teal), **80s Hacker** (green phosphor on black)
+**Ember** (warm black, copper glow), **Deep Ocean** (sea-green depths, aqua), **80s Hacker** (green phosphor on black)
 and **Midnight Synthwave** (neon magenta and cyan). The choice is saved in your
 browser.
 
