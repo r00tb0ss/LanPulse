@@ -106,10 +106,14 @@ class Gmp:
         raise GmpError(f"OpenVAS doesn't have \"{name}\" yet. It is probably still loading its vulnerability feed.")
 
 
-def parse_results(root: ET.Element) -> list[dict]:
+def parse_results(root: ET.Element, only_host: str = "") -> list[dict]:
     """GMP <get_results_response> -> [{name, cve, port, severity, qod, desc, oid}] (worst first, capped)."""
-    out, seen = [], set()
+    out, seen, foreign = [], set(), set()
     for r in root.iter("result"):
+        host = (r.findtext("host") or "").strip()[:45]
+        if only_host and host and host != only_host:
+            foreign.add(host)                # another machine's finding, not what we scanned
+            continue
         try:
             sev = float(r.findtext("severity") or 0)
             qod = int(float(r.findtext("qod/value") or 0))
@@ -138,7 +142,9 @@ def parse_results(root: ET.Element) -> list[dict]:
         seen.add(key)
         desc = re.sub(r"\s+", " ", (r.findtext("description") or "")).strip()[:300]
         out.append({"oid": oid[:80], "name": name, "cve": cves[:12], "port": port, "severity": round(sev, 1),
-                    "qod": qod, "desc": desc, "host": (r.findtext("host") or "").strip()[:45]})
+                    "qod": qod, "desc": desc, "host": host})
+    if foreign:
+        log.warning("OpenVAS scan of %s also returned results for %s; ignored", only_host, ", ".join(sorted(foreign)))
     out.sort(key=lambda x: (-x["severity"], -x["qod"]))
     return out[:MAX_RESULTS]
 
@@ -313,15 +319,9 @@ class OpenVAS:
                     except ValueError:
                         pass
                     if s["status"] == "Done":
-                        res = g.cmd(f"<get_results task_id=\"{s['task']}\" filter=\"min_qod={MIN_QOD} rows={MAX_RESULTS} "
+                        res = g.cmd(f"<get_results task_id=\"{s['task']}\" filter=\"min_qod={MIN_QOD} rows=1000 "
                                     f"sort-reverse=severity\" details=\"1\"/>")
-                        items = parse_results(res)
-                        # Each result names the host OpenVAS found it on. Anything that isn't the address we asked
-                        # it to scan belongs to another machine and is dropped.
-                        foreign = {i["host"] for i in items if i.get("host") and i["host"] != ip}
-                        if foreign:
-                            items = [i for i in items if not i.get("host") or i["host"] == ip]
-                            log.warning("OpenVAS scan of %s also returned results for %s; ignored", ip, ", ".join(sorted(foreign)))
+                        items = parse_results(res, ip)
                         s["finished"], s["count"], s["progress"] = int(time.time()), len(items), 100
                         clash = self.nm.local.conflict_for(ip, since=s.get("started", 0))
                         if clash:
