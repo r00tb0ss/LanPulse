@@ -575,7 +575,7 @@ function renderIpPanel(d) {
   const score = ab && ab.score != null ? ab.score : null;
   const level = score != null ? (score >= 75 ? "high" : score >= 25 ? "med" : "low") : (d.count >= 100 ? "high" : d.count >= 10 ? "med" : "low");
   const levelTxt = {high: "High risk", med: "Suspicious", low: "Low activity"}[level];
-  const reached = d.count - d.blocked;
+  const reached = d.reached != null ? d.reached : d.count - d.blocked;
   const hmax = Math.max(1, ...d.hourly);
   const flags = [it.hosting && "Hosting / data center", it.proxy && "Proxy or VPN", it.mobile && "Mobile network", ab && ab.tor && "Tor exit node"].filter(Boolean);
   const rules = blockRules(d.ip);
@@ -613,6 +613,11 @@ function renderIpPanel(d) {
         `<tr><td style="font-family:var(--mono)">${esc(c.text)}</td><td class="muted" style="text-align:right">×${c.count}</td></tr>`).join("")}</table>` : ""}
     </div>
 
+    ${d.honeypot ? `<div class="p-sec"><h4>Hit your honeypot <span class="muted">${fmtN(d.honeypot.total)}×</span></h4>
+      <div class="chips-wrap">${d.honeypot.services.map((x) => `<span class="pchip">${esc(x.label)}<b>×${fmtN(x.count)}</b></span>`).join("")}</div>
+      <table class="ev-table" style="margin-top:10px">${d.honeypot.hits.slice(0, 15).map((h) => `<tr><td class="muted">${esc(ago(h.t))}</td>
+        <td>${esc(h.service)} :${h.port}</td><td style="font-family:var(--mono)">${esc(h.creds || h.data || "connected, sent nothing")}</td></tr>`).join("")}</table>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">These only touched a decoy, nothing real. The Honeypot tab has the full list.</p></div>` : ""}
     ${(d.signatures || []).length ? `<div class="p-sec"><h4>IPS detections</h4>${d.signatures.map((g) =>
       `<div class="finding"><span class="sev high">IPS</span><span>${esc(g.name)}</span><span class="port">×${fmtN(g.count)}</span></div>`).join("")}</div>` : ""}
     <div class="p-sec"><h4>Targets in your network</h4>
