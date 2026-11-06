@@ -93,6 +93,22 @@ Switch the attack map to **Device traffic** or **Both** to see where your device
 
 From then on, **Block on UDM** in an attacker's panel takes effect immediately. **Unblock** removes the address again.
 
+### Supported routers
+
+LanPulse reads firewall logs over syslog (UDP, default port 514), so it is not tied to one brand. The setup guide shows
+the steps for your router.
+
+| Router / firewall | Log format | Notes |
+|---|---|---|
+| UniFi (UDM, UCG) | netfilter, CEF (IPS) | Also supports one-click blocking and the IPS view |
+| pfSense / OPNsense | filterlog | Tick **Log** on the rules you want to see |
+| OpenWrt, DD-WRT, Linux (iptables / nftables / UFW) | netfilter | Add LOG rules, forward with rsyslog |
+| MikroTik RouterOS | firewall log | Log rule with a prefix containing `drop` or `accept` |
+| Fortinet, SonicWall, Sophos, WatchGuard | key=value | Needs `srcip`, `dstip`, `dstport` and `action` |
+| Anything else | JSON | POST events to `/api/threats/ingest` |
+
+Everything except one-click blocking works with any of these; blocking currently needs a UniFi gateway.
+
 ## Threats inside your network
 
 LanPulse watches ARP traffic (which every device broadcasts) and connections to its own server. It flags a device that looks up many addresses quickly (a network scan), claims to be your router (ARP spoofing), shares an IP with another device, or port-scans the LanPulse server. Honeypot hits and UDM IPS events from LAN addresses also appear here. Devices that legitimately scan, such as a phone running Fing, can be allowed from their device panel. Thresholds are in Settings > Threats.
