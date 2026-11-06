@@ -79,7 +79,7 @@ function topoNodeColor(n, T) {
 
 /* ------------------------------------------------------------ layout */
 function topoLayout(data) {
-  const S = TOPO_SIZE, nodes = data.nodes;
+  const S = {...TOPO_SIZE, vgap: TOPO.spread ? 115 : TOPO_SIZE.vgap, hgap: TOPO.spread ? 100 : TOPO_SIZE.hgap}, nodes = data.nodes;   // Spread gives the cables room to fan out
   const ch = new Map();
   for (const n of nodes) { const p = n.parent || "__internet"; if (!ch.has(p)) ch.set(p, []); ch.get(p).push(n); }
   const byName = (a, b) => (a.zone || "").localeCompare(b.zone || "") || (a.name || "").localeCompare(b.name || "");
@@ -97,7 +97,7 @@ function topoLayout(data) {
       const all = TOPO.expanded.has(X.id), shown = all ? cl : cl.slice(0, S.maxChips);
       const cols = Math.max(1, Math.min(shown.length <= 3 ? shown.length : 4, Math.ceil(Math.sqrt(shown.length * 1.5))));
       const rows = Math.ceil(shown.length / cols), more = cl.length - shown.length;
-      const sp = TOPO.spread, gx = sp ? 40 : S.gap, gy = sp ? 52 : S.gap, pd = sp ? 0 : S.pad, extra = (more > 0 || all && cl.length > S.maxChips ? 24 : 0);
+      const sp = TOPO.spread, gx = sp ? 64 : S.gap, gy = sp ? 84 : S.gap, pd = sp ? 0 : S.pad, extra = (more > 0 || all && cl.length > S.maxChips ? 24 : 0);
       cb = {list: shown, cols, rows, more, total: cl.length, all, spread: sp, gx, gy, pd,
         w: cols * S.cw + (cols - 1) * gx + pd * 2, h: rows * S.ch + (rows - 1) * gy + pd * 2 + (sp ? 0 : 22) + extra};
     }
