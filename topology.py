@@ -229,6 +229,10 @@ class Topology:
                         if p.get("port_idx") == port:
                             speed = p.get("speed")
                     n["link"] = {"medium": "wired", "port": port, "speed": speed or uclient.get("wired_rate_mbps")}
+                    if not n.get("rate"):
+                        for p in sw.get("port_table", []) or []:
+                            if p.get("port_idx") == port:
+                                n["rate"] = _client_rate(p) or n.get("rate")
                 else:
                     sig = uclient.get("signal") if uclient.get("signal") is not None else uclient.get("rssi")
                     n["link"] = {"medium": "wifi", "ssid": uclient.get("essid", ""), "band": RADIO_BAND.get(uclient.get("radio", ""), ""),
@@ -243,6 +247,7 @@ class Topology:
                     wireless = up.get("type") == "wireless"
                     n["link"] = {"medium": "wifi" if wireless else "wired", "port": up.get("uplink_remote_port") or up.get("port_idx"),
                                  "speed": up.get("speed"), "mesh": wireless}
+                    n["uplink_rate"] = _client_rate(up)
             if man.get("medium") in ("wired", "wifi"):
                 n["link"] = {**n["link"], "medium": man["medium"]}
             if parent is None or parent == nid:
@@ -328,7 +333,7 @@ class Topology:
             [e for e in log_out if e["t"] > now - 7 * 86400],
             key=lambda e: -e["t"])[:80]
 
-        rates = any((n.get("rate") or 0) > 0 for n in nodes.values())
+        rates = any((n.get("rate") or 0) > 0 or (n.get("uplink_rate") or 0) > 0 for n in nodes.values())
         return {"nodes": list(nodes.values()), "zones": zones, "changes": changes, "gateway": gateway,
                 "sources": {"unifi": self.unifi_status, "manual": len(manual), "rates": rates},
                 "custom_zones": self.state.get("zones", [])}
@@ -353,12 +358,12 @@ def demo_unifi(devices) -> dict:
     ap = next((d for d in devs if "u6" in (d.get("hostname", "") or "").lower() or d.get("type") == "ap"), None)
     sw_mac = "24:5A:4C:AA:BB:01"
     out_d = [{"mac": sw_mac, "type": "usw", "name": "Switch 8 PoE", "model": "USW-8-POE", "ip": "192.168.1.3", "version": "7.1.26",
-              "uptime": 1209600, "uplink": {"uplink_mac": next((d["mac"] for d in devs if d.get("is_gateway")), ""), "uplink_remote_port": 5, "speed": 2500},
+              "uptime": 1209600, "uplink": {"uplink_mac": next((d["mac"] for d in devs if d.get("is_gateway")), ""), "uplink_remote_port": 5, "speed": 2500, "rx_bytes-r": 9_500_000, "tx_bytes-r": 4_000_000},
               "port_table": [{"port_idx": i, "up": i in (1, 2, 3, 4, 6, 7), "speed": 1000 if i != 8 else 2500,
                               "poe_power": "6.5" if i in (1, 2) else "0"} for i in range(1, 9)]}]
     if ap:
         out_d.append({"mac": ap["mac"], "type": "uap", "model": "U6-Lite", "version": "6.6.77", "uptime": 864000, "satisfaction": 96,
-                      "uplink": {"uplink_mac": sw_mac, "uplink_remote_port": 1, "speed": 1000, "type": "wire"},
+                      "uplink": {"uplink_mac": sw_mac, "uplink_remote_port": 1, "speed": 1000, "type": "wire", "rx_bytes-r": 1_200_000, "tx_bytes-r": 300_000},
                       "radio_table_stats": [{"radio": "ng", "channel": 6, "num_sta": 5, "tx_power": 17, "satisfaction": 91},
                                             {"radio": "na", "channel": 44, "num_sta": 7, "tx_power": 20, "satisfaction": 97}],
                       "vap_table": [{"essid": "Home"}, {"essid": "Home-IoT"}]})
