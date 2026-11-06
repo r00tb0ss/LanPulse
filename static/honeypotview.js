@@ -13,6 +13,7 @@ async function loadHoneypot() {
   renderHoneypot();
 }
 
+const devByIp = (ip) => [...devices.values()].find((d) => d.ip === ip);
 function potServiceChip(svc) {                       // small label for a decoy service
   const cat = (potData && potData.catalog && potData.catalog[svc]) || null;
   return cat ? cat.label : svc;
@@ -53,7 +54,7 @@ function renderHoneypot() {
 
   // recent hits
   $("potHits").innerHTML = s.recent.length ? s.recent.map((h) => `
-    <div class="pot-hit ${h.internal ? "internal" : ""}">
+    <div class="pot-hit ${h.internal ? "internal" : ""} ${h.internal && !devByIp(h.ip) ? "" : "click"}" data-ip="${esc(h.ip)}" data-ext="${h.internal ? "" : "1"}" title="${h.internal ? "Open this device" : "Look up this IP"}">
       <span class="pot-when" title="${esc(full(h.t))}">${ago(h.t)}</span>
       <span class="pot-svc">${esc(potServiceChip(h.service))}<span class="pot-port">:${h.port}</span></span>
       <span class="pot-ip mono">${esc(h.ip)}</span>
@@ -66,7 +67,7 @@ function renderHoneypot() {
   // attackers (internal ones tappable if we know the device)
   $("potAttackers").innerHTML = s.attackers.length ? s.attackers.map((a) => {
     const dev = [...devices.values()].find((d) => d.ip === a.ip);
-    return `<div class="pot-att ${a.internal ? "internal" : ""}" ${dev ? `data-dev-ip="${esc(a.ip)}"` : ""}>
+    return `<div class="pot-att ${a.internal ? "internal" : ""}" ${dev ? `data-dev-ip="${esc(a.ip)}"` : (!a.internal ? `data-ext-ip="${esc(a.ip)}"` : "")}>
       <div class="pot-att-ip"><span class="mono">${esc(a.ip)}</span>
         ${a.internal ? `<span class="tagchip bad">internal</span>` : ""}
         ${dev ? `<span class="muted">${esc(nmLabel(dev))}</span>` : ""}</div>
@@ -155,8 +156,13 @@ async function showPotSetup(force) {
   viewHooks.honeypot = loadHoneypot;
   const cfg = $("potCfgBtn");
   if (cfg) cfg.onclick = () => showPotSetup();
+  const hits = $("potHits");
+  const goIp = (ip, ext) => { const d = devByIp(ip); if (d) openPanel(d.id); else if (ext && typeof openIp === "function") openIp(ip); };
+  if (hits) hits.addEventListener("click", (e) => { const r = e.target.closest("[data-ip]"); if (r) goIp(r.dataset.ip, !!r.dataset.ext); });
   const att = $("potAttackers");
   if (att) att.addEventListener("click", (e) => {
+    const x = e.target.closest("[data-ext-ip]");
+    if (x) return goIp(x.dataset.extIp, true);
     const r = e.target.closest("[data-dev-ip]");
     if (!r) return;
     const d = [...devices.values()].find((x) => x.ip === r.dataset.devIp);

@@ -23,6 +23,7 @@ import json
 import logging
 import sqlite3
 import threading
+import subprocess
 import time
 
 log = logging.getLogger("lanpulse.honeypot")
@@ -71,6 +72,11 @@ class Honeypot:
         self._sig = None                              # last applied config signature
         self._flood: dict[str, list[float]] = {}
         self._prune()
+        self._local = (0.0, set(), [])
+        try:
+            self._purge_self()
+        except Exception:
+            log.debug("honeypot self-purge skipped", exc_info=True)
 
     # ------------------------------------------------------------------ config
     @property
@@ -87,6 +93,50 @@ class Honeypot:
         return (c["enabled"], c["bind"], tuple(sorted(k for k, v in c["services"].items() if v)))
 
     # ------------------------------------------------------------------ helpers
+    def _local_nets(self):
+        """This server's own addresses plus the networks of its Docker/bridge interfaces. Connections from these are
+        LanPulse's own scans (nmap, OpenVAS) touching the decoys, not attackers, so they are never logged."""
+        now = time.time()
+        if now - self._local[0] < 60:
+            return self._local[1], self._local[2]
+        ips, nets = set(), []
+        my = (getattr(self.nm, "net", None) or {}).get("my_ip")
+        if my:
+            ips.add(my)
+        try:
+            out = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True, timeout=3).stdout
+            for itf in json.loads(out or "[]"):
+                name = itf.get("ifname", "")
+                for a in itf.get("addr_info", []):
+                    if a.get("family") != "inet":
+                        continue
+                    ips.add(a["local"])
+                    if name.startswith(("docker", "br-", "veth", "virbr", "lxc", "cni", "flannel")):
+                        nets.append(ipaddress.ip_network(f"{a['local']}/{a['prefixlen']}", strict=False))
+        except Exception:
+            pass
+        self._local = (now, ips, nets)
+        return ips, nets
+
+    def _is_self(self, ip: str) -> bool:
+        ips, nets = self._local_nets()
+        if ip in ips or ip.startswith("127."):
+            return True
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return any(addr in n for n in nets)
+
+    def _purge_self(self):
+        with self.lock:
+            rows = self.db.execute("SELECT DISTINCT ip FROM hits").fetchall()
+            bad = [r[0] for r in rows if self._is_self(r[0])]
+            for ip in bad:
+                self.db.execute("DELETE FROM hits WHERE ip=? AND sensor=''", (ip,))
+            if bad:
+                self.db.commit()
+
     def _internal(self, ip: str) -> bool:
         try:
             addr = ipaddress.ip_address(ip)
@@ -117,6 +167,8 @@ class Honeypot:
 
     # ------------------------------------------------------------------ recording
     def record(self, ip: str, service: str, port: int, creds: str = "", data: str = "", sensor: str = ""):
+        if not sensor and self._is_self(ip):
+            return                                    # LanPulse scanning itself (nmap/OpenVAS), not an attacker
         internal = self._internal(ip)
         with self.lock:
             self.db.execute("INSERT INTO hits (t, ip, service, port, internal, creds, data, sensor) "
