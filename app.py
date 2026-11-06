@@ -57,7 +57,7 @@ from honeypot import Honeypot
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 
-VERSION = "1.23.0"
+VERSION = "1.24.0"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -1580,6 +1580,37 @@ def build_app(nm: LanPulse) -> FastAPI:
         (upd_dir / "status.json").unlink(missing_ok=True)
         cmp = (version_tuple(info["version"]) > version_tuple(VERSION)) - (version_tuple(info["version"]) < version_tuple(VERSION))
         return {**info, "current": VERSION, "kind": {1: "newer", 0: "same", -1: "older"}[cmp]}
+
+    @app.get("/api/update/check")
+    async def update_check(force: bool = False):
+        import releases
+        return await asyncio.to_thread(releases.latest, VERSION, force)
+
+    @app.post("/api/update/fetch")
+    async def update_fetch():
+        """Download the newest GitHub release into the same staging slot an upload uses; installing still needs a click."""
+        import releases
+        if (r := update_refusal()):
+            return r
+        rel = await asyncio.to_thread(releases.latest, VERSION, True)
+        if rel.get("error"):
+            return JSONResponse({"error": rel["error"]}, 502)
+        if not rel.get("asset_url"):
+            return JSONResponse({"error": "The latest release has no lanpulse.zip attached."}, 404)
+        upd_dir.mkdir(parents=True, exist_ok=True)
+        tmp = upd_dir / "upload.part"
+        try:
+            await asyncio.to_thread(releases.download, rel["asset_url"], tmp, UPDATE_MAX_BYTES)
+            info = await asyncio.to_thread(check_update_zip, tmp)
+        except ValueError as e:
+            tmp.unlink(missing_ok=True)
+            return JSONResponse({"error": str(e)}, 400)
+        except Exception as e:
+            tmp.unlink(missing_ok=True)
+            return JSONResponse({"error": f"Couldn't download the release ({e.__class__.__name__})."}, 502)
+        tmp.replace(upd_dir / "incoming.zip")
+        (upd_dir / "status.json").unlink(missing_ok=True)
+        return update_state()
 
     @app.post("/api/update/apply")
     async def update_apply():

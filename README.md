@@ -381,7 +381,9 @@ found (Plex, Pi-hole, your router, Proxmox, Home Assistant and more).
 
 ## Updating
 
-**From the dashboard:** download `lanpulse.zip` from the [latest release](https://github.com/r00tb0ss/LanPulse/releases/latest), then Settings > Update, choose it, check the version shown, and click Install.
+**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse looks at the [latest release](https://github.com/r00tb0ss/LanPulse/releases/latest) on GitHub, shows what's new, downloads it, and you click Install. Only the app's own files are replaced; your data and OpenVAS are untouched.
+
+**From the dashboard, manual:** download `lanpulse.zip` from the latest release, then Settings > Update, choose it, check the version shown, and click Install.
 LanPulse backs up the current version, installs the update, restarts, and reloads the page. If the install fails,
 the previous version is restored automatically and the log is shown. Updates need a dashboard login, because they
 run with administrator rights. The web app itself can't change its own files: a separate root-only helper
