@@ -1133,3 +1133,19 @@ html[data-pretheme="ocean"]{background:#041a1f}
 #topoSvg .tp-pulse{animation:tpflow 1s linear infinite}
 #topoSvg .tp-chip{touch-action:none}
 @media (prefers-reduced-motion:reduce){#topoSvg .tp-pulse{animation:none}}
+
+/* honeypot details */
+.pot-geo{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.pot-att-geo{font-size:11px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.pot-bar-w{min-width:120px;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pot-d-title{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pot-d-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:8px 0 12px}
+.pot-d-facts>div{display:grid;gap:2px;font-size:13px}
+.pot-d-creds{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.pot-cred-chip{background:var(--bg2);border:1px solid var(--border2);border-radius:999px;padding:3px 10px;font-size:12px;color:#fbbf24}
+.pot-cred-chip i{color:var(--muted);font-style:normal}
+.pot-d-hits{max-height:340px}
+.pot-data-full{max-width:60%;white-space:normal;word-break:break-all}
+.pot-d-actions{margin-top:12px;display:flex;gap:8px}
+#potDetail h5{margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+#potTimeline{margin-bottom:14px}
