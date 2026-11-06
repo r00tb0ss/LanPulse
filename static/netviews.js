@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 The LanPulse authors
 "use strict";
-/* Network map view modes (topology, groups, tree, rings, tiles, table) and local-threat display. Loaded after app.js. */
+/* Network map view modes (topology, rings, tiles, table) and local-threat display. Loaded after app.js. */
 
 const NET_LAYOUTS = [
-  ["topo", "fa-diagram-project", "Topology"], ["groups", "fa-object-group", "Groups"], ["tree", "fa-sitemap", "Tree"],
+  ["topo", "fa-diagram-project", "Topology"],
   ["rings", "fa-bullseye", "Rings"], ["tiles", "fa-grip", "Tiles"], ["table", "fa-table-list", "Table"],
 ];
 let netLayout = (() => { try { return localStorage.getItem("nm_layout") || "topo"; } catch (_) { return "topo"; } })();
-if (!NET_LAYOUTS.some(([k]) => k === netLayout)) netLayout = "topo";   // includes anyone who had the removed Star view saved
+if (!NET_LAYOUTS.some(([k]) => k === netLayout)) netLayout = "topo";   // includes anyone who had a removed view (Star, Groups, Tree) saved
 let tableSort = {key: "ip", dir: 1};
 let ringGuides = [];
 const localAttackers = new Map();        // device id -> {t, kind, targetId}
