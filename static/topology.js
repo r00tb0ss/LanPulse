@@ -502,6 +502,9 @@ function renderTopoBar(d) {
   const src = u.configured ? (u.ok ? `<span class="tp-src ok"><i class="fa-solid fa-circle-check"></i>UniFi · ${u.devices} devices · ${u.clients} clients</span>`
       : `<span class="tp-src bad" title="${esc(u.error)}"><i class="fa-solid fa-triangle-exclamation"></i>UniFi: ${esc(tx(u.error, 60))}</span>`)
     : `<span class="tp-src" title="Connect UniFi in Settings for automatic connections, or choose where a device connects by clicking it."><i class="fa-solid fa-circle-info"></i>Connections inferred. Click a device to set them${d.sources.manual ? ` (${d.sources.manual} set)` : ""}</span>`;
+  const sn = d.sources.snmp || {};
+  const snmpChip = sn.configured ? (sn.ok ? `<span class="tp-src ok" title="${esc(sn.error)}"><i class="fa-solid fa-circle-check"></i>SNMP · ${sn.hosts} devices · ${sn.links} LLDP links</span>`
+    : `<span class="tp-src bad" title="${esc(sn.error)}"><i class="fa-solid fa-triangle-exclamation"></i>SNMP: ${esc(tx(sn.error, 60))}</span>`) : "";
   const zones = d.zones.length > 1 || TOPO.zone ? `<select id="tpZone" title="Show one zone"><option value="">All zones</option>${d.zones.map((z) => `<option ${TOPO.zone === z.name ? "selected" : ""} value="${esc(z.name)}">${esc(z.name)}${z.vlan ? ` (VLAN ${z.vlan})` : ""} · ${z.count}</option>`).join("")}</select>` : "";
   $("topoBar").innerHTML = `
     <label class="tp-lbl">Color by <select id="tpColor">${TOPO_COLORS.map(([k, n]) => `<option value="${k}" ${TOPO.color === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
@@ -520,7 +523,7 @@ function renderTopoBar(d) {
     ${TOPO.traffic && !topoTraffic(d).rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
     <span class="tp-spacer"></span>
     ${wifi ? `<span class="tp-chipinfo"><i class="fa-solid fa-wifi"></i>${wifi} on Wi-Fi${weak.length ? ` · <b class="warn">${weak.length} weak</b>` : ""}</span>` : ""}
-    ${src}`;
+    ${src}${snmpChip}`;
   $("tpColor").onchange = (e) => { TOPO.color = e.target.value; try { localStorage.setItem("nm_topo_color", TOPO.color); } catch (_) {} renderTopology(); };
   if ($("tpZone")) $("tpZone").onchange = (e) => { TOPO.zone = e.target.value; TOPO.fit = true; renderTopology(); };
   $("tpTraffic").onclick = () => { TOPO.traffic = !TOPO.traffic; if (TOPO.traffic) loadTopoTraffic(); else renderTopology(); };
@@ -551,7 +554,7 @@ function renderTopoInfo() {
   rows.push(["Address", [n.ip, n.mac].filter(Boolean).join(" · ")]);
   if (n.model) rows.push(["Model", n.model + (e.version ? ` · v${e.version}` : "")]);
   if (n.zone) { const z = d.zones.find((x) => x.name === n.zone); rows.push(["Zone", `${n.zone}${z && z.vlan ? ` (VLAN ${z.vlan})` : ""}`]); }
-  if (par && n.kind !== "gateway") rows.push(["Connected to", `${par.name}${n.source === "manual" ? " (set by you)" : n.source === "unifi" ? "" : " (assumed)"}`]);
+  if (par && n.kind !== "gateway") rows.push(["Connected to", `${par.name}${n.source === "manual" ? " (set by you)" : n.source === "unifi" ? "" : n.source === "snmp" ? " (via SNMP)" : " (assumed)"}`]);
   if (l.medium === "wired") rows.push(["Link", ["Wired", l.port ? `port ${l.port}` : "", l.speed ? `${l.speed} Mbps` : ""].filter(Boolean).join(" · ")]);
   if (l.medium === "wifi") {
     const wf = [l.ssid, l.band, l.channel ? `ch ${l.channel}` : ""].filter(Boolean).join(" · ") || (l.mesh ? "Wireless uplink" : "");

@@ -51,6 +51,7 @@ DEFAULT_SETTINGS = {
     "summary": {"enabled": False, "time": "08:00", "last_sent": ""},
     "unifi": {"host": "", "api_key": "", "username": "", "password": "", "site": "default",
               "group": "LanPulse Blocklist", "verify_tls": False},
+    "snmp": {"enabled": False, "community": "", "hosts": []},
     "layout": {},
     "dns": {"enabled": False, "url": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
     "vulns": {"enabled": True, "nvd_key": ""},
@@ -167,6 +168,8 @@ def masked(s: dict) -> dict:
     for f in ("api_key", "password"):
         if out["unifi"].get(f):
             out["unifi"][f] = MASK
+    if out.get("snmp", {}).get("community"):
+        out["snmp"]["community"] = MASK
     return out
 
 
@@ -281,6 +284,17 @@ def apply_update(current: dict, incoming: dict) -> dict:
             cur["site"] = "default"              # goes into a URL path
         cur["site"] = cur["site"] or "default"
         cur["group"] = cur["group"] or "LanPulse Blocklist"
+    sn = incoming.get("snmp")
+    if isinstance(sn, dict):
+        cur = new["snmp"]
+        if "enabled" in sn:
+            cur["enabled"] = bool(sn["enabled"])
+        if "community" in sn and sn["community"] != MASK:
+            cur["community"] = re.sub(r"[^\x21-\x7e]", "", str(sn["community"]))[:64]
+        if "hosts" in sn:
+            raw = sn["hosts"] if isinstance(sn["hosts"], list) else re.split(r"[\s,;]+", str(sn["hosts"]))
+            from snmpdisc import valid_host
+            cur["hosts"] = list(dict.fromkeys(h for h in (valid_host(x) for x in raw) if h))[:20]
     dn = incoming.get("dns")
     if isinstance(dn, dict):
         cur = new["dns"]
