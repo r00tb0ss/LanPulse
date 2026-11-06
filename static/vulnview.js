@@ -3,10 +3,18 @@
 "use strict";
 /* Vulnerabilities tab: known flaws (CVEs) in the software your devices run, worst first. */
 
-let vulnData = null, vulnOpen = new Set();
+let vulnData = null, vulnOpen = new Set(), vulnDevOpen = new Set(), vulnDevSeen = new Set();
 
 const SEV_COLOR = {critical: "#f43f5e", high: "#fb923c", medium: "#fbbf24", low: "#7dd3fc", unknown: "#8b9bb6"};
 const sevOf = (s) => (s == null ? "unknown" : s >= 9 ? "critical" : s >= 7 ? "high" : s >= 4 ? "medium" : "low");
+const isCve = (id) => /^CVE-\d{4}-\d+$/i.test(id || "");
+// "3 CVEs", "2 findings" (scanner tests with no CVE id), or a mix
+function countLabel(total, cves) {
+  const f = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (cves == null || cves === total) return f(total, "CVE");
+  if (cves === 0) return f(total, "finding");
+  return `${f(cves, "CVE")} + ${total - cves} other`;
+}
 const scoreChip = (s) => `<span class="score-chip ${sevOf(s)}">${s == null ? "?" : s.toFixed(1)}</span>`;
 const nvdLink = (id) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(id)}`;
 
@@ -47,7 +55,7 @@ function renderVulns() {
   if (st.no_cpe) parts.push(`<span class="muted">Tip: for lab machines, open the device and turn on <b>Thorough scan</b> to find more software.</span>`);
   $("vulnStatus").innerHTML = `<div>${parts.join("<br>")}</div>`;
 
-  $("vulnFix").innerHTML = s.fix.length ? s.fix.map((g) => {
+  const rowHtml = (g) => {
     const key = `${g.id}|${g.port}`;
     return `<div class="fix ${g.confidence === "confirmed" ? "confirmed-fix" : g.kev ? "kev" : ""}">
       <button class="fix-row" data-key="${esc(key)}" aria-expanded="${vulnOpen.has(key)}">
@@ -58,9 +66,29 @@ function renderVulns() {
           ${g.kev ? `<span class="tagchip bad">${g.kev} exploited</span>` : ""}
           ${g.msf ? `<span class="tagchip msf">${g.msf} Metasploit</span>` : ""}${g.edb ? `<span class="tagchip edb">${g.edb} Exploit-DB</span>` : ""}
           ${g.os ? '<span class="tagchip" title="Windows was identified, but a scan can\'t see which updates are installed. If this machine has every update for its version, some of these are already fixed.">patch level unknown</span>' : g.unverified ? '<span class="tagchip">version unknown</span>' : ""}
-          <span class="tagchip">${g.count} CVE${g.count === 1 ? "" : "s"}</span>${g.distro ? '<span class="tagchip">may be patched</span>' : ""}</span>
+          <span class="tagchip">${countLabel(g.count, g.cves)}</span>${g.distro ? '<span class="tagchip">may be patched</span>' : ""}</span>
         <i class="fa-solid fa-chevron-down chev"></i></button>
       <div class="fix-detail ${vulnOpen.has(key) ? "" : "hidden"}" data-detail="${esc(key)}"></div></div>`;
+  };
+  const byDev = new Map();
+  for (const g of s.fix) { if (!byDev.has(g.id)) byDev.set(g.id, []); byDev.get(g.id).push(g); }
+  if (byDev.size === 1 && !vulnDevSeen.size) vulnDevOpen.add([...byDev.keys()][0]);   // a lone device opens by itself
+  for (const id of byDev.keys()) vulnDevSeen.add(id);
+  $("vulnFix").innerHTML = s.fix.length ? [...byDev.entries()].map(([id, gs]) => {
+    const top = gs.reduce((m, g) => Math.max(m, g.max || 0), 0) || null;
+    const cves = gs.reduce((n, g) => n + g.count, 0), cveIds = gs.reduce((n, g) => n + (g.cves || 0), 0), conf = gs.filter((g) => g.confidence === "confirmed").length;
+    const kev = gs.reduce((n, g) => n + (g.kev || 0), 0), msf = gs.reduce((n, g) => n + (g.msf || 0), 0);
+    const open = vulnDevOpen.has(id);
+    return `<div class="fixdev ${open ? "open" : ""}" data-devgrp="${esc(id)}">
+      <button class="fixdev-head" data-devtoggle="${esc(id)}" aria-expanded="${open}">
+        ${top == null && conf ? '<span class="score-chip confirmed-chip">!</span>' : scoreChip(top)}
+        <span class="fix-main"><b>${esc(gs[0].name)}</b> <span class="muted mono">${esc(gs[0].ip)}</span><br>
+          <span class="fix-dev">${gs.length} service${gs.length === 1 ? "" : "s"} with flaws</span></span>
+        <span class="fix-tags">${conf ? `<span class="tagchip confirmed"><i class="fa-solid fa-circle-check"></i>${conf} confirmed</span>` : ""}
+          ${kev ? `<span class="tagchip bad">${kev} exploited</span>` : ""}${msf ? `<span class="tagchip msf">${msf} Metasploit</span>` : ""}
+          <span class="tagchip">${countLabel(cves, cveIds)}</span></span>
+        <i class="fa-solid fa-chevron-down chev"></i></button>
+      <div class="fixdev-body ${open ? "" : "hidden"}">${open ? gs.map(rowHtml).join("") : ""}</div></div>`;
   }).join("") : `<div class="all-clear" style="margin:0"><i class="fa-solid fa-circle-check"></i><div><b>No known flaws found</b>
       <span>${t.scanned ? "in the software versions LanPulse could identify." : "yet. Devices are checked after their first port scan."}</span></div></div>`;
   for (const key of vulnOpen) fillFixDetail(key);
@@ -109,7 +137,7 @@ async function fillFixDetail(key) {
 function cveRow(f) {
   const msf = f.msf || [], edb = f.edb || [];
   return `<div class="cve ${f.confidence === "confirmed" ? "confirmed" : f.kev ? "kev" : msf.length ? "msf" : ""}">${scoreChip(f.score)}
-    <div><a href="${esc(nvdLink(f.cve))}" target="_blank" rel="noopener"><b>${esc(f.cve)}</b></a>
+    <div>${isCve(f.cve) ? `<a href="${esc(nvdLink(f.cve))}" target="_blank" rel="noopener"><b>${esc(f.cve)}</b></a>` : `<b title="A scanner test with no CVE id">${esc(f.software || f.cve)}</b>`}
       ${f.confidence === "confirmed" ? '<span class="tagchip confirmed" title="An active check confirmed this flaw on the device — not inferred from a version number."><i class="fa-solid fa-circle-check"></i>confirmed</span>' : ""}
       ${f.kev ? `<span class="tagchip bad">exploited${f.ransomware ? " · ransomware" : ""}</span>` : ""}
       ${msf.length ? '<span class="tagchip msf">Metasploit</span>' : ""}${edb.length ? '<span class="tagchip edb">Exploit-DB</span>' : ""}
@@ -181,6 +209,8 @@ async function loadDeviceVulns(id) {
   $("vulnFix").addEventListener("click", (e) => {
     const xj = e.target.closest("[data-xjump]");
     if (xj) { xJump(xj.dataset.xjump, xj.dataset.xdev); return; }
+    const tg = e.target.closest("[data-devtoggle]");
+    if (tg) { const id = tg.dataset.devtoggle; if (vulnDevOpen.has(id)) vulnDevOpen.delete(id); else vulnDevOpen.add(id); renderVulns(); return; }
     const dev = e.target.closest("[data-dev-id]");
     if (dev) { goDevice(dev.dataset.devId); return; }
     const b = e.target.closest(".fix-row"); if (!b) return;
