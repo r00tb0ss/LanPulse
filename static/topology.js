@@ -43,13 +43,28 @@ function topoTraffic(data) {
   // Real throughput from UniFi when it supplies it; otherwise connection counts from the router logs
   // ...but only when several devices report a speed; a lone reading would leave the rest of the map still
   const live = data.nodes.filter((n) => n.kind === "client" && n.rate > 0).length;
-  const rates = !!(data.sources && data.sources.rates) && (live >= 3 || !TOPO.talkers.size);
+  const infraLive = data.nodes.some((n) => n.kind !== "client" && n.uplink_rate > 0);
+  const rates = !!(data.sources && data.sources.rates) && (live >= 3 || infraLive || !TOPO.talkers.size);
   const own = rates ? new Map(data.nodes.filter((n) => n.rate > 0).map((n) => [n.id, n.rate])) : TOPO.talkers;
   const sub = new Map(), byId = new Map(data.nodes.map((n) => [n.id, n]));
   for (const n of data.nodes) {
     const c = own.get(n.id) || 0;
     if (!c) continue;
     for (let cur = n, i = 0; cur && i < 20; i++) { sub.set(cur.id, (sub.get(cur.id) || 0) + c); cur = byId.get(cur.parent); }
+  }
+  if (rates) {
+    // A switch or AP reports the speed of its own uplink, which includes devices UniFi doesn't list individually,
+    // so a link is at least that busy, and the link above it at least as busy as the busiest link below.
+    const kids = new Map();
+    for (const n of data.nodes) if (n.parent) (kids.get(n.parent) || kids.set(n.parent, []).get(n.parent)).push(n);
+    const walk = (n, depth) => {
+      let v = sub.get(n.id) || 0;
+      if (depth < 20) for (const k of kids.get(n.id) || []) v = Math.max(v, walk(k, depth + 1));
+      if (n.kind !== "client" && n.uplink_rate > 0) v = Math.max(v, n.uplink_rate);
+      if (v > 0) sub.set(n.id, v);
+      return v;
+    };
+    for (const n of data.nodes) if (n.parent === "__internet" || !byId.has(n.parent)) walk(n, 0);
   }
   const max = Math.max(1, ...data.nodes.filter((n) => n.kind === "client").map((n) => own.get(n.id) || 0));
   const maxSub = Math.max(1, ...data.nodes.filter((n) => n.kind !== "gateway").map((n) => sub.get(n.id) || 0));
