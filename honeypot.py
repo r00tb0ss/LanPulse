@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import secrets
 import logging
 import sqlite3
 import threading
@@ -29,6 +30,8 @@ import time
 log = logging.getLogger("lanpulse.honeypot")
 
 MAX_READ = 2048          # never read more than this from a client (a decoy, not a file server)
+MAX_CONNS = 300          # open decoy connections at once, all services together
+MAX_PER_IP = 8           # ...and from any one address
 IO_TIMEOUT = 20.0        # seconds to wait on a slow/idle client before dropping it
 HIT_RETENTION_DAYS = 90
 FLOOD_WINDOW = 600       # one scanner shouldn't be able to flood the log or the alerts
@@ -71,6 +74,9 @@ class Honeypot:
         self.listeners: dict[str, dict] = {}          # service key -> {port, state, error}
         self._sig = None                              # last applied config signature
         self._flood: dict[str, list[float]] = {}
+        self._open_conns = 0
+        self._cap: dict[str, list[float]] = {}
+        self._per_ip: dict[str, int] = {}
         self._prune()
         self._local = (0.0, set(), [])
         try:
@@ -190,12 +196,29 @@ class Honeypot:
                 return d
         return None
 
+    def _over_cap(self, ip: str) -> bool:
+        """Hard limit on stored hits per address per window: far above the alert threshold, so real detail is kept."""
+        now = time.time()
+        window = int(self.cfg["flood_minutes"]) * 60
+        cap = max(200, int(self.cfg["flood_max"]) * 20)
+        q = [t for t in self._cap.get(ip, []) if now - t < window]
+        if len(q) >= cap:
+            self._cap[ip] = q
+            return True
+        q.append(now)
+        self._cap[ip] = q
+        if len(self._cap) > 5000:
+            self._cap.clear()
+        return False
+
     def _flooding(self, ip: str) -> bool:
         now = time.time()
         window = int(self.cfg["flood_minutes"]) * 60
         q = [t for t in self._flood.get(ip, []) if now - t < window]
         q.append(now)
         self._flood[ip] = q
+        if len(self._flood) > 5000:
+            self._flood.clear()                       # bounded: unique scanners are many, memory isn't
         return len(q) > int(self.cfg["flood_max"])
 
     # ------------------------------------------------------------------ recording
@@ -205,6 +228,8 @@ class Honeypot:
         if self._ignored(ip):
             return                                    # on the owner's ignore list
         internal = self._internal(ip)
+        if self._over_cap(ip):
+            return                                    # a scanner hammering the decoys can't fill the disk
         with self.lock:
             self.db.execute("INSERT INTO hits (t, ip, service, port, internal, creds, data, sensor) "
                             "VALUES (?,?,?,?,?,?,?,?)",
@@ -254,7 +279,7 @@ class Honeypot:
     def ingest(self, payload: dict, key: str) -> tuple[bool, str]:
         """Accept a hit from an external sensor (POST /api/honeypot/ingest). Requires the configured key."""
         want = self.cfg.get("ingest_key")
-        if not want or key != want:
+        if not want or not secrets.compare_digest(str(key).encode(), str(want).encode()):
             return False, "bad key"
         ip = str(payload.get("ip") or "").strip()[:45]
         try:
@@ -374,6 +399,11 @@ class Honeypot:
         async def handle(reader, writer):
             peer = writer.get_extra_info("peername")
             ip = peer[0] if peer else "?"
+            if self._open_conns >= MAX_CONNS or self._per_ip.get(ip, 0) >= MAX_PER_IP:
+                writer.close()                         # one scanner can't use up every socket
+                return
+            self._open_conns += 1
+            self._per_ip[ip] = self._per_ip.get(ip, 0) + 1
             try:
                 name = self.HANDLERS.get(service)
                 if name:
@@ -383,6 +413,12 @@ class Honeypot:
             except Exception:
                 log.debug("honeypot %s handler error", service, exc_info=True)
             finally:
+                self._open_conns -= 1
+                n = self._per_ip.get(ip, 1) - 1
+                if n > 0:
+                    self._per_ip[ip] = n
+                else:
+                    self._per_ip.pop(ip, None)
                 try:
                     writer.close()
                 except Exception:

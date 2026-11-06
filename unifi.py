@@ -24,6 +24,12 @@ class UniFiError(Exception):
     pass
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """The API key travels in a header; never let a redirect carry it somewhere else."""
+    def redirect_request(self, *a, **k):
+        return None
+
+
 class UniFi:
     def __init__(self, cfg: dict, gateway: str | None):
         self.cfg = cfg
@@ -34,7 +40,7 @@ class UniFi:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
         self.jar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx),
+        self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx), _NoRedirect(),
                                                   urllib.request.HTTPCookieProcessor(self.jar))
         self.csrf = ""
         self.logged_in = False

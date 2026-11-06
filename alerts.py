@@ -275,6 +275,10 @@ def apply_update(current: dict, incoming: dict) -> dict:
                 cur[f] = str(uf[f]).strip()[:200]
         if "verify_tls" in uf:
             cur["verify_tls"] = bool(uf["verify_tls"])
+        if not re.fullmatch(r"[A-Za-z0-9._-]+(:\d{1,5})?|\[[0-9A-Fa-f:]+\](:\d{1,5})?", cur["host"] or "x"):
+            cur["host"] = ""                     # a bare host or IP (optionally :port); no paths, no user@, no spaces
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", cur["site"] or "default"):
+            cur["site"] = "default"              # goes into a URL path
         cur["site"] = cur["site"] or "default"
         cur["group"] = cur["group"] or "LanPulse Blocklist"
     dn = incoming.get("dns")

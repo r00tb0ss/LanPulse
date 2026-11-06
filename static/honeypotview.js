@@ -200,7 +200,7 @@ async function showPotSetup(force) {
         <label>Web page title<input id="potBnTitle" maxlength="80" value="${esc(bn.http_title || "")}" placeholder="Router Admin"></label>
         <label>Slow scanners down (ms per reply)<input id="potDelay" type="number" min="0" max="5000" value="${c.delay_ms ?? 0}"></label>
         <label>Keep hits for (days)<input id="potKeep" type="number" min="1" max="365" value="${c.retention_days ?? 90}"></label>
-        <label>Log at most (hits per address)<input id="potFloodMax" type="number" min="1" max="500" value="${c.flood_max ?? 12}"></label>
+        <label>Alert and map at most (hits per address)<input id="potFloodMax" type="number" min="1" max="500" value="${c.flood_max ?? 12}"></label>
         <label>...within (minutes)<input id="potFloodMin" type="number" min="1" max="120" value="${c.flood_minutes ?? 10}"></label>
       </div>
       <label class="chk-line"><input type="checkbox" id="potAlertExt" ${c.alert_external === false ? "" : "checked"}> Send an alert when something from the internet hits a decoy (hits from your own network always alert)</label>
