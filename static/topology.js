@@ -637,7 +637,7 @@ function topoExport(kind) {
       c.toBlob((bl) => topoDownload(`lanpulse-topology-${stamp}.png`, bl)); };
     img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   } else if (kind === "csv") {
-    const byId = new Map(d.nodes.map((n) => [n.id, n])), q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const byId = new Map(d.nodes.map((n) => [n.id, n])), q = (v) => { let t = String(v ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
     const head = ["name", "ip", "mac", "role", "vendor", "model", "zone", "connected_to", "connection", "port", "ssid", "band", "channel", "signal_dbm", "status"];
     const rows = d.nodes.map((n) => { const l = n.link || {}, p = byId.get(n.parent);
       return [n.name, n.ip, n.mac, n.kind, n.vendor, n.model, n.zone, p ? p.name : "Internet", l.medium || "", l.port || "", l.ssid || "", l.band || "", l.channel || "", l.signal ?? "", n.online ? "online" : "offline"].map(q).join(","); });
