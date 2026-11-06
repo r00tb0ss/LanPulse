@@ -32,6 +32,8 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **IPS view**: what your UDM's intrusion prevention recognized (Mirai, router exploits, SSH scans...)
 - **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
+- **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
+- **Guided setup** wizard on first run, and lateral-movement detection
 - **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data
 - **Daily summary** to any alert channel
 - **Device traffic on the attack map**: live arcs showing where each device connects (Google, Netflix, Amazon...), top destinations and busiest devices, and an alert when a device contacts an IP that attacked you
@@ -227,6 +229,22 @@ Confirmed. Only the service's version identifier (CPE) is sent to vulners.com, n
 LanPulse box has no internet access, the lookup is simply skipped.
 
 ![Vulnerabilities view](docs/images/vulns.png)
+
+### OpenVAS (accurate scanning)
+
+For the most accurate results, LanPulse can install and use **OpenVAS** (Greenbone Community Edition), which runs tens
+of thousands of real vulnerability tests instead of guessing from banners. Open **Settings > Scanner** and press
+**Install OpenVAS**; progress shows live. It runs in Docker on the LanPulse box and needs about **4 GB RAM and 15 GB
+free disk** (8 GB RAM and 40 GB free recommended). The first vulnerability-feed load takes **30-90 minutes**, after
+which the panel shows *ready*. Then scan one device or all online devices, or enable a weekly rescan. Findings appear
+in the Vulnerabilities tab; detections with quality of detection 80 or higher are marked **Confirmed**. Only scan devices
+you own: scans send many probes and can slow fragile or old devices. Existing installs need `sudo ./install.sh --upgrade`
+once so the install helper is set up.
+
+LanPulse also ships curated signatures for classic lab flaws (vsftpd 2.3.4 backdoor, UnrealIRCd 3.2.8.1 backdoor, distccd,
+Samba usermap script, ProFTPD 1.3.3c, Java RMI, bindshell, DRb and r-services).
+
+![OpenVAS scanner settings](docs/images/scanner.png)
 
 ## Honeypot
 
