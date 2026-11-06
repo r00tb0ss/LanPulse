@@ -215,7 +215,7 @@ class FlowStore:
             self.db.commit()
 
     # ---- reporting
-    def summary(self, hours: int = 24, device_ip: str = "") -> dict:
+    def summary(self, hours: int = 24, device_ip: str = "", talkers: int = 12) -> dict:
         self.flush(force=True)
         since = int(time.time() // 60) - hours * 60
         where, args = "m >= ?", [since]
@@ -227,7 +227,7 @@ class FlowStore:
                                     f"GROUP_CONCAT(DISTINCT dport) FROM flows WHERE {where} GROUP BY dst "
                                     f"ORDER BY SUM(n) DESC LIMIT 400", args).fetchall()
             talkers = self.db.execute(f"SELECT src, SUM(n), COUNT(DISTINCT dst) FROM flows WHERE {where} "
-                                      f"GROUP BY src ORDER BY SUM(n) DESC LIMIT 12", args).fetchall()
+                                      f"GROUP BY src ORDER BY SUM(n) DESC LIMIT {max(1, min(int(talkers), 1000))}", args).fetchall()
             total, uniq = self.db.execute(f"SELECT SUM(n), COUNT(DISTINCT dst) FROM flows WHERE {where}", args).fetchone()
         self.is_bad("")
         by_ip = {d["ip"]: d for d in self.nm.devices.values()}
