@@ -96,7 +96,7 @@ function renderVulns() {
   const dmax = Math.max(1, ...s.devices.map((d) => d.count));
   $("vulnDevs").innerHTML = s.devices.map((d) => { const ty = TYPES[d.type] || TYPES.unknown; return `<div class="rk click" data-dev-id="${esc(d.id)}">
       <span class="ico"><i class="${faClass(ty)}" style="color:${ty.color}"></i></span><span class="nm">${esc(d.name)}</span>
-      <span class="ct">${xBtn("redteam", d.id)}${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
+      <span class="ct">${ovBtn(devices.get(d.id)?.ip)}${xBtn("redteam", d.id)}${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
       <div class="bar"><i style="width:${(100 * d.count / dmax).toFixed(1)}%;background:${SEV_COLOR[sevOf(d.max)]}"></i></div></div>`; }).join("")
     || `<div class="muted">No affected devices.</div>`;
 
@@ -202,8 +202,46 @@ async function loadDeviceVulns(id) {
   }
 }
 
+/* ---- OpenVAS scan buttons: device panel and the Vulnerabilities device list (the full list stays in Settings) */
+let ovInfo = null;
+async function ovRefresh() { const r = await api("/api/openvas", "GET", null, true); ovInfo = r && !r.error ? r : null; return ovInfo; }
+const ovScanOf = (ip) => ((ovInfo && ovInfo.scans) || []).find((x) => x.ip === ip);
+const ovRunning = (x) => x && ["Requested", "Queued", "Running", "New"].includes(x.status);
+const ovBtn = (ip) => ovInfo && ovInfo.installed && ovInfo.ready && ovInfo.enabled && ip && !ovRunning(ovScanOf(ip))
+  ? `<button class="btn sm" data-ovscan="${esc(ip)}" title="Run an OpenVAS scan on this device"><i class="fa-solid fa-shield-halved"></i>OpenVAS scan</button>` : "";
+async function ovStart(ip) {
+  const r = await api("/api/openvas/scan", "POST", {ip});
+  if (r) { toast("OpenVAS scan started"); await ovRefresh(); if (selected && devices.get(selected)?.ip === ip) loadDeviceOv(selected); if (view === "vulns") renderVulns(); }
+}
+let ovTimer = null;
+async function loadDeviceOv(id) {
+  clearTimeout(ovTimer);
+  const box = $("ovBox"), dev = devices.get(id);
+  if (!box || !dev || !dev.ip || selected !== id) return;
+  const s = await ovRefresh();
+  if (selected !== id || !$("ovBox")) return;
+  if (!s || !s.installed) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  const x = ovScanOf(dev.ip), run = ovRunning(x);
+  const state = run ? `Scanning… ${esc(x.status)} ${x.progress || 0}%`
+    : x && x.error ? esc(x.error) : x && x.finished ? `${x.count} finding${x.count === 1 ? "" : "s"} · ${esc(ago(x.finished))}` : "Not scanned yet";
+  const why = !s.enabled ? "Turn on OpenVAS in Settings > Scanner first." : !s.ready ? "OpenVAS isn't ready yet. See Settings > Scanner." : "";
+  box.classList.remove("hidden");
+  box.innerHTML = `<h4>OpenVAS scan</h4>
+    <div class="ov-row" style="grid-template-columns:1fr auto"><span class="muted">${state}</span>
+      <button class="btn sm primary" data-ovscan="${esc(dev.ip)}" ${run || why ? "disabled" : ""} title="${esc(why || "Run an OpenVAS scan on this device")}"><i class="fa-solid fa-shield-halved"></i>${run ? "Scanning" : "Scan now"}</button></div>
+    ${why ? `<p class="hint" style="margin:6px 0 0">${esc(why)}</p>` : ""}`;
+  if (run) ovTimer = setTimeout(() => loadDeviceOv(id), 5000);
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ovscan]");
+  if (!b) return;
+  e.stopPropagation();
+  b.disabled = true;
+  ovStart(b.dataset.ovscan).finally(() => { b.disabled = false; });
+}, true);
+
 (function initVulns() {
-  viewHooks.vulns = loadVulns;
+  viewHooks.vulns = () => { ovRefresh().then(() => { if (vulnData) renderVulns(); }); loadVulns(); };
   $("vulnCheck").onclick = async () => { if (await api("/api/vulns/refresh", "POST")) { toast("Checking now"); setTimeout(loadVulns, 2500); } };
   $("vulnCfgBtn").onclick = showVulnSetup;
   $("vulnFix").addEventListener("click", (e) => {

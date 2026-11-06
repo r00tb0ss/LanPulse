@@ -309,6 +309,7 @@ function openPanel(id) {
   if (typeof loadDeviceFlows === "function") loadDeviceFlows(id);
   if (typeof loadDeviceDns === "function") loadDeviceDns(id);
   if (typeof loadDeviceVulns === "function") loadDeviceVulns(id);
+  if (typeof loadDeviceOv === "function") loadDeviceOv(id);
   if (typeof loadDeviceTimeline === "function") loadDeviceTimeline(id);
   clearInterval(historyTimer);
   historyTimer = setInterval(() => {
@@ -337,6 +338,7 @@ function renderPanel(force) {
   const flowHtml = !force && $("flowBox") ? $("flowBox").innerHTML : "";
   const dnsHtml = !force && $("dnsBox") ? $("dnsBox").innerHTML : "";
   const vulnHtml = !force && $("vulnBox") ? $("vulnBox").innerHTML : "";
+  const ovHtml = !force && $("ovBox") ? $("ovBox").innerHTML : "";
   const tlHtml = !force && $("tlBox") ? $("tlBox").innerHTML : `<div class="muted">Loading timeline…</div>`;
   const t = typeOf(d);
   const st = d.scanning ? `<span class="badge scan"><i class="fa-solid fa-spinner fa-spin"></i>Scanning</span>`
@@ -383,6 +385,7 @@ function renderPanel(force) {
     <div class="p-sec ${flowHtml ? "" : "hidden"}" id="flowBox">${flowHtml}</div>
     <div class="p-sec ${dnsHtml ? "" : "hidden"}" id="dnsBox">${dnsHtml}</div>
     <div class="p-sec ${vulnHtml ? "" : "hidden"}" id="vulnBox">${vulnHtml}</div>
+    <div class="p-sec ${ovHtml ? "" : "hidden"}" id="ovBox">${ovHtml}</div>
     <div class="p-sec"><h4>Security</h4>${findHtml}</div>
     <div class="p-sec"><h4>Timeline</h4><div id="tlBox">${tlHtml}</div></div>
     ${d.model || d.friendly || (d.evidence || []).length || (d.services || []).length ? `<div class="p-sec"><h4>Identification</h4><dl class="kv">
