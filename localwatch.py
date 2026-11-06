@@ -88,6 +88,7 @@ class LocalWatch:
         self.arp_req: dict[str, collections.deque] = collections.defaultdict(collections.deque)
         self.syn: dict[str, collections.deque] = collections.defaultdict(collections.deque)
         self.ip_mac: dict[str, tuple[str, float]] = {}
+        self.conflicts: dict[str, dict] = {}       # ip -> {"macs": [...], "t": last seen}
         self.last_flag: dict[tuple, float] = {}
         self.kind_times: dict[str, collections.deque] = {}
         self.fw_seen: dict[tuple, list] = {}            # (src, dst, port) -> [last shown, repeats hidden]
@@ -210,6 +211,31 @@ class LocalWatch:
         return (f"{name} claims to be your router {gw}. The router's real hardware address is {self.gw_pinned}. "
                 f"Devices that believe it send their traffic through it (man-in-the-middle).")
 
+    def check_conflicts(self, pairs: list[tuple[str, str]], now: float):
+        """Every ARP sweep: more than one MAC answering for the same (non-router) IP is an address conflict. Remember
+        it so scans can refuse to trust an address that two machines share."""
+        gw = self.nm.net.get("gateway")
+        by_ip: dict[str, set] = {}
+        for mac, ip in pairs:
+            if mac and ip and ip != gw:
+                by_ip.setdefault(ip, set()).add(mac.upper())
+        for ip, macs in by_ip.items():
+            if len(macs) > 1:
+                self.conflicts[ip] = {"macs": sorted(macs), "t": now}
+                if self.cfg.get("enabled", True):
+                    self.flag("ip_conflict", ip, ",".join(sorted(macs)), ip, None,
+                              f"{len(macs)} devices answer for {ip}: {', '.join(sorted(macs))}. Scans of this address can't be "
+                              "told apart, so give one of them another address.")
+        for ip in [i for i, c in self.conflicts.items() if now - c["t"] > 6 * 3600]:
+            self.conflicts.pop(ip, None)
+
+    def conflict_for(self, ip: str, since: float = 0, now: float | None = None) -> list:
+        """MACs sharing this IP if a conflict was seen in the last 30 minutes (or since `since`), else []."""
+        c = self.conflicts.get(ip)
+        if not c:
+            return []
+        return c["macs"] if c["t"] >= max(since, (now or time.time()) - 1800) else []
+
     def check_sweep(self, pairs: list[tuple[str, str]], now: float) -> set[str]:
         """Called after every ARP sweep (event loop) with every (MAC, IP) answer. Learns the router's MAC the first
         time, then flags any other MAC answering for the router's IP. Returns MACs that must not be taken as the
@@ -282,6 +308,7 @@ class LocalWatch:
                 prev = self.ip_mac.get(ip)
                 if prev and prev[0] != mac and now - prev[1] < 120:
                     self.flag("ip_conflict", ip, mac, ip, None, f"Two devices are using {ip}: {prev[0]} and {mac}.")
+                    self.conflicts[ip] = {"macs": sorted({prev[0], mac}), "t": now}
                 self.ip_mac[ip] = (mac, now)
         if a.op == 1 and a.pdst and ip != gw and not self.ignored(ip, mac):
             q = self.arp_req[mac]
