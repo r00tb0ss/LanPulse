@@ -306,13 +306,20 @@ class Honeypot:
         return True, "ok"
 
     # ------------------------------------------------------------------ protocol handlers
-    async def _recv_line(self, reader, limit=MAX_READ) -> str:
+    async def _recv_raw(self, reader, limit=MAX_READ) -> bytes:
         try:
             raw = await asyncio.wait_for(reader.readline(), IO_TIMEOUT)
         except (asyncio.TimeoutError, OSError):
-            return ""
+            return b""
+        return raw[:limit + 64]
+
+    @staticmethod
+    def _text(raw: bytes, limit: int) -> str:
         raw = _IAC.sub(b"", raw)                      # telnet option negotiation is not part of the username
         return raw[:limit].decode("latin-1", "replace").replace("\x00", "").strip()
+
+    async def _recv_line(self, reader, limit=MAX_READ) -> str:
+        return self._text(await self._recv_raw(reader, limit), limit)
 
     async def _h_ssh(self, r, w, ip):
         await self._pause()
@@ -325,12 +332,21 @@ class Honeypot:
     async def _h_telnet(self, r, w, ip):
         await self._pause()
         ban = self.cfg["banners"].get("telnet") or "Ubuntu 22.04.3 LTS"
-        w.write(b"\r\n" + ban.encode("ascii", "ignore") + b"\r\n\r\nlogin: ")
+        # Real telnet daemons open with option negotiation (DO NAWS, DO TERMINAL-TYPE, WILL SUPPRESS-GO-AHEAD). Many
+        # bots wait for it before they start sending logins, so a silent decoy never gets a username out of them.
+        w.write(b"\xff\xfd\x1f\xff\xfd\x18\xff\xfb\x03" + b"\r\n" + ban.encode("ascii", "ignore") + b"\r\n\r\nlogin: ")
         await w.drain()
-        tried = 0
+        tried, port = 0, self._port("telnet")
         for _ in range(3):                            # bots usually try a few logins per connection
-            user = await self._recv_line(r, 64)
-            if not user and tried:
+            raw = await self._recv_raw(r, 64)
+            user = self._text(raw, 64)
+            if not user:
+                if not tried:
+                    # Connected but never sent a username: say what it did instead of leaving the hit blank
+                    note = ("only answered the telnet option negotiation" if b"\xff" in raw
+                            else "connected and sent nothing before the timeout")
+                    self.record(ip, "telnet", port, "", note)
+                    return
                 break
             await self._pause()
             w.write(b"Password: ")
@@ -339,16 +355,12 @@ class Honeypot:
             await self._pause()
             w.write(b"\r\nLogin incorrect\r\n")
             tried += 1
-            self.record(ip, "telnet", self._port("telnet"), f"{user} / {pw}" if (user or pw) else "")
-            if not user and not pw:
-                break
+            self.record(ip, "telnet", port, f"{user} / {pw}")
             w.write(b"login: ")
             try:
                 await w.drain()
             except OSError:
                 break
-        if not tried:
-            self.record(ip, "telnet", self._port("telnet"), "")
 
     async def _h_ftp(self, r, w, ip):
         await self._pause()
