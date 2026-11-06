@@ -202,13 +202,13 @@ function topoSvg(L, T, opts = {}) {
   if (focus) out.push(topoPathSvg(L, T));   // behind the cards, so the highlight runs between them
   // infrastructure cards (drawn last so links tuck underneath)
   for (const h of L.headers) {
-    const n = h.node, col = n.kind === "gateway" ? "#f59e0b" : n.kind === "ap" ? "#fbbf24" : "#fb923c", t = TYPES[n.type] || TYPES[n.kind === "ap" ? "ap" : n.kind === "switch" ? "switch" : "router"];
+    const n = h.node, col = n.kind === "gateway" ? "#f59e0b" : n.kind === "ap" ? "#fbbf24" : "#fb923c", t = TYPES[n.kind === "ap" ? "ap" : n.kind === "switch" ? "switch" : "router"];
     const e = n.extra || {}, radios = (e.radios || []).slice(0, 3), act = TOPO.traffic ? Math.min(1, (TOPO.talkers.get(n.id) || 0) / maxT) : 0;
     out.push(`<g class="tp-head${TOPO.sel === n.id ? " tp-sel" : ""}" data-id="${esc(n.id)}" cursor="pointer"${focus && !focus.has(n.id) ? ' opacity=".22"' : ""}>
       <rect x="${h.x}" y="${h.y}" width="${S.hw}" height="${S.hh}" rx="14" fill="${T.panel}" stroke="${TOPO.sel === n.id ? T.accent : col}" stroke-width="${TOPO.sel === n.id ? 2.4 : 1.6}"/>
       <rect x="${h.x}" y="${h.y}" width="${S.hw}" height="5" rx="2.5" fill="${col}" opacity=".9"/>
       ${glyph ? `<text x="${h.x + 26}" y="${h.y + 36}" ${FA} font-size="20" fill="${col}" text-anchor="middle">${t.icon}</text>` : `<circle cx="${h.x + 26}" cy="${h.y + 32}" r="9" fill="${col}"/>`}
-      <text x="${h.x + 48}" y="${h.y + 28}" font-size="13.5" font-weight="700" fill="${T.text}">${esc(tx(n.name, 20))}</text>
+      <text x="${h.x + 48}" y="${h.y + 28}" font-size="13.5" font-weight="700" fill="${T.text}">${esc(tx(n.name, radios.length ? 14 : 22))}</text>
       <text x="${h.x + 48}" y="${h.y + 44}" font-size="11" fill="${T.muted}">${esc(tx([n.model, n.ip].filter(Boolean).join(" · "), 28))}</text>
       <text x="${h.x + 48}" y="${h.y + 60}" font-size="11" fill="${T.accent}">${esc(infraSummary(n))}</text>
       ${radios.map((r, i) => `<g><rect x="${h.x + S.hw - 10 - (radios.length - i) * 38}" y="${h.y + 12}" width="34" height="15" rx="7" fill="${T.panel2}" stroke="${T.border2}"/>
@@ -422,7 +422,8 @@ function topoSelect(id) {
 function renderTopoInfo() {
   const d = TOPO.data, n = d && d.nodes.find((x) => x.id === TOPO.sel), box = $("topoInfo");
   if (!n) { box.classList.add("hidden"); return; }
-  const l = n.link || {}, e = n.extra || {}, par = d.nodes.find((x) => x.id === n.parent), t = TYPES[n.type] || TYPES.unknown;
+  const l = n.link || {}, e = n.extra || {}, par = d.nodes.find((x) => x.id === n.parent),
+    t = n.kind === "ap" ? TYPES.ap : n.kind === "switch" ? TYPES.switch : n.kind === "gateway" ? TYPES.router : TYPES[n.type] || TYPES.unknown;
   const rows = [];
   rows.push(["Address", [n.ip, n.mac].filter(Boolean).join(" · ")]);
   if (n.model) rows.push(["Model", n.model + (e.version ? ` · v${e.version}` : "")]);
