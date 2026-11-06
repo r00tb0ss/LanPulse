@@ -7,6 +7,7 @@ Inputs (any combination):
   * Firewall logs sent by your router over syslog (UDP, default port 514):
       - Linux netfilter / iptables / nftables / UFW / OpenWrt / UniFi  ("SRC=... DST=... DPT=...")
       - pfSense / OPNsense filterlog (CSV)
+      - MikroTik RouterOS firewall log; Fortinet / SonicWall / Sophos style key=value logs
   * JSON events POSTed to /api/threats/ingest (honeypots, scripts, IDS), header X-API-Key: <key>
       {"src": "1.2.3.4", "dst_port": 23, "proto": "tcp", "service": "telnet",
        "detail": "login admin/admin", "sensor": "esp32-honeypot", "lan_ip": "192.168.1.121"}
@@ -249,6 +250,47 @@ def lan_noise_reason(raw: dict) -> str:
     return ""
 
 
+MIKROTIK = re.compile(r"(?:(?P<chain>[\w.-]+):\s*)?in:(?P<in>\S+).*?proto (?P<proto>[A-Za-z0-9_]+)(?: \((?P<flags>[^)]*)\))?,\s*"
+                      r"(?P<src>\d{1,3}(?:\.\d{1,3}){3})(?::(?P<sport>\d+))?->(?P<dst>\d{1,3}(?:\.\d{1,3}){3})(?::(?P<dport>\d+))?")
+KV_GENERIC = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
+
+
+def parse_mikrotik(line: str) -> dict | None:
+    """MikroTik RouterOS firewall log action=log, e.g.
+    'forward: in:ether1 out:bridge, proto TCP (SYN), 1.2.3.4:5555->192.168.88.10:22, len 60'.
+    Add a log prefix containing 'drop' or 'block' on drop rules, or 'accept' on accept rules (RouterOS does not log the action)."""
+    m = MIKROTIK.search(line)
+    if not m:
+        return None
+    proto = m.group("proto").lower()
+    low = line.lower()
+    allowed = bool(re.search(r"accept|allow|permit", low)) and not re.search(r"drop|block|reject|deny", low)
+    out = {"src": m.group("src"), "dst": m.group("dst"), "sport": _int(m.group("sport")), "dport": _int(m.group("dport")),
+           "proto": proto, "action": "allowed" if allowed else "blocked"}
+    if proto == "tcp" and m.group("flags"):
+        out["flags"] = sorted(set(TCP_FLAGS.findall(m.group("flags").replace(",", " "))))
+    return out
+
+
+def parse_keyvalue(line: str) -> dict | None:
+    """Fortinet, SonicWall, Sophos, WatchGuard and similar key=value firewall logs
+    (srcip/dstip/dstport/action or src/dst/dpt)."""
+    kv = {k.lower(): (a or b) for k, a, b in KV_GENERIC.findall(line)}
+    src = kv.get("srcip") or kv.get("src") or kv.get("src_ip")
+    dst = kv.get("dstip") or kv.get("dst") or kv.get("dst_ip")
+    if not src or not dst or not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", src):
+        return None
+    if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", dst):
+        return None
+    act = (kv.get("action") or kv.get("status") or kv.get("fw_action") or "").lower()
+    proto = (kv.get("proto") or kv.get("protocol") or "tcp").lower()
+    proto = {"6": "tcp", "17": "udp", "1": "icmp"}.get(proto, proto)
+    allowed = act in ("accept", "allow", "allowed", "pass", "permit", "close", "start")
+    return {"src": src, "dst": dst, "sport": _int(kv.get("srcport") or kv.get("spt") or kv.get("src_port")),
+            "dport": _int(kv.get("dstport") or kv.get("dpt") or kv.get("dst_port")),
+            "proto": proto, "action": "allowed" if allowed else "blocked"}
+
+
 def parse_line(line: str) -> dict | None:
     line = line.strip()
     j = line.find("{")
@@ -257,7 +299,8 @@ def parse_line(line: str) -> dict | None:
             return parse_json(json.loads(line[j:]), default_action=None)
         except ValueError:
             pass
-    return parse_cef(line) or parse_filterlog(line) or parse_netfilter(line)
+    return (parse_cef(line) or parse_filterlog(line) or parse_netfilter(line)
+            or parse_mikrotik(line) or parse_keyvalue(line))
 
 
 # --------------------------------------------------------------------------- GeoIP
