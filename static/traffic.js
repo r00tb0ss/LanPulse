@@ -29,8 +29,8 @@ function applyLayer() {
   });
   document.body.classList.toggle("traffic-on", showTraffic());
   $("tDevice").classList.toggle("hidden", !showTraffic());
-  if (!showAttacks()) { arcs = []; drawArcs(); }
-  if (!showTraffic()) { flowArcs = []; drawFlowArcs(); }
+  if (!showAttacks()) { arcs = []; drawArcs(true); }
+  if (!showTraffic()) { flowArcs = []; drawFlowArcs(true); }
   updateWorld();
 }
 
@@ -50,7 +50,7 @@ function onFlows(msg) {
   if (!items.length) return;
   items.filter((e) => e.bad && e.src_id).forEach((e) => underAttack.set(e.src_id, Date.now()));
   if (view !== "threats" || !showTraffic()) return;
-  items.slice(0, 12).forEach(pushFlowArc);
+  items.slice(0, showAttacks() ? 4 : 8).forEach(pushFlowArc);
   const list = $("tFlowLive");
   if (list) {
     if (!list.querySelector(".fl")) list.innerHTML = "";
@@ -75,8 +75,15 @@ function pushFlowArc(e) {
   if (flowArcs.length > 30) flowArcs = flowArcs.slice(-30);
   drawFlowArcs();
 }
-function drawFlowArcs() {
-  if (tChart) tChart.setOption({series: [{id: "flowArcs", data: flowArcs.map(({coords, lineStyle}) => ({coords, lineStyle}))}]});
+// Replacing an arc series restarts every travelling dot from the start. Flows arrive many times a second, so redraw
+// at most about 3 times a second and let all the new arcs in a burst share one redraw. Otherwise the dots stall near home.
+let flowDrawTimer = 0;
+function drawFlowArcs(now) {
+  if (!tChart) return;
+  if (now) { clearTimeout(flowDrawTimer); flowDrawTimer = 0; }
+  else if (flowDrawTimer) return;
+  else { flowDrawTimer = setTimeout(() => drawFlowArcs(true), 350); return; }
+  tChart.setOption({series: [{id: "flowArcs", data: flowArcs.map(({coords, lineStyle}) => ({coords, lineStyle}))}]});
 }
 setInterval(() => {
   const n = flowArcs.length;
@@ -93,7 +100,7 @@ function updateTrafficLayer() {
     name: d.ip, d, value: [d.lon, d.lat, d.count], size: 4 + 12 * Math.sqrt(d.count / max),
     itemStyle: {color: d.bad ? "#f43f5e" : "#2dd4bf", opacity: d.bad ? 1 : 0.85, borderColor: "#0a1122", borderWidth: 1,
       shadowBlur: d.bad ? 12 : 6, shadowColor: d.bad ? "#f43f5e" : "#2dd4bf"}}))}]});
-  if (!showTraffic()) { flowArcs = []; drawFlowArcs(); }
+  if (!showTraffic()) { flowArcs = []; drawFlowArcs(true); }
   if (typeof updateCountryLabels === "function") updateCountryLabels();
 }
 
@@ -220,7 +227,7 @@ function showDeviceOnMap(ip) {
 (function initTraffic() {
   $("tLayer").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setLayer(b.dataset.layer); });
   $("panel").addEventListener("click", (e) => { const b = e.target.closest("#bShowFlows"); if (b) showDeviceOnMap(b.dataset.ip); });
-  $("tDevice").onchange = (e) => { flowDevice = e.target.value; flowArcs = []; drawFlowArcs(); $("tFlowLive").innerHTML = ""; loadFlows(); };
+  $("tDevice").onchange = (e) => { flowDevice = e.target.value; flowArcs = []; drawFlowArcs(true); $("tFlowLive").innerHTML = ""; loadFlows(); };
   $("tOrgs").addEventListener("click", (e) => {
     const r = e.target.closest("[data-dst],[data-org]");
     if (!r || !flowSummary) return;
@@ -232,7 +239,7 @@ function showDeviceOnMap(ip) {
     const r = e.target.closest("[data-dev-ip]");
     if (!r) return;
     flowDevice = flowDevice === r.dataset.devIp ? "" : r.dataset.devIp;
-    $("tDevice").value = flowDevice; flowArcs = []; drawFlowArcs(); $("tFlowLive").innerHTML = ""; loadFlows();
+    $("tDevice").value = flowDevice; flowArcs = []; drawFlowArcs(true); $("tFlowLive").innerHTML = ""; loadFlows();
   });
   $("tFlowLive").addEventListener("click", (e) => {
     const r = e.target.closest("[data-dst]");
