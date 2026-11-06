@@ -175,6 +175,25 @@ class Topology:
                           "extra": {}, "source": "unifi", "first_seen": 0, "last_seen": 0, "ghost": True}
             by_mac[mac] = gid
 
+        # No gateway flagged by LanPulse's scan? Find it another way so the map always has a root.
+        if gateway is None or gateway not in nodes:
+            gw_ip = ""
+            try:
+                gw_ip = str((getattr(self.nm, "net", None) or {}).get("gateway") or "")
+            except Exception:
+                pass
+            pick = (next((i for i, n in nodes.items() if gw_ip and n["ip"] == gw_ip), None)
+                    or next((i for i, n in nodes.items() if n["kind"] == "gateway"), None)
+                    or next((i for i, n in nodes.items() if n["type"] == "router"), None))
+            if pick is None and nodes:
+                pick = "u:gateway"
+                nodes[pick] = {"id": pick, "kind": "gateway", "name": "Gateway", "ip": gw_ip, "mac": "", "vendor": "", "type": "router",
+                               "online": True, "model": "", "zone": "", "parent": None, "link": {}, "extra": {}, "source": "inferred",
+                               "first_seen": 0, "last_seen": 0, "ghost": True}
+            gateway = pick
+            if gateway in nodes:
+                nodes[gateway]["kind"] = "gateway"
+
         # ---- parents and links
         for nid, n in nodes.items():
             mac = norm_mac(n["mac"])
