@@ -255,6 +255,11 @@ def compact_nvd(vendor: str, product: str, items: list, part: str = "a") -> list
 
 
 # --------------------------------------------------------------------------- scanner
+
+def _msf_pairs(sig: dict) -> list:
+    """A signature's Metasploit module in the same [module, title, rank] shape the exploit index uses."""
+    return [[m, sig.get("title", "")[:160], 0] for m in (sig.get("msf") or []) if isinstance(m, str)]
+
 class VulnScanner:
     def __init__(self, nm):
         self.nm = nm
@@ -498,7 +503,7 @@ class VulnScanner:
         for d in list(self.nm.devices.values()):
             for ov in d.get("openvas", []):
                 conf = "confirmed" if ov.get("qod", 0) >= 80 else "version"
-                for cve in (ov.get("cve") or [""]):
+                for cve in [str(c).strip().upper() for c in (ov.get("cve") or [])] or [""]:
                     cid = cve or ("OPENVAS-" + (ov.get("oid", "").split(".")[-1] or "result"))
                     k = self.kev.get(cve) if cve else None
                     x = (self.exploits.get(cve) or {}) if cve else {}
@@ -514,6 +519,11 @@ class VulnScanner:
             have = {(f["cve"], f["port"]) for f in results.get(d["id"], [])}
             for port, sig in signatures.match_device(d):
                 if (sig["cve"], port) in have:
+                    # Another source (OpenVAS, vulners) already reported it: keep that entry but borrow the
+                    # signature's Metasploit module if the exploit index had none for this CVE.
+                    for f in results.get(d["id"], []):
+                        if f["cve"] == sig["cve"] and f["port"] == port and not f.get("msf") and sig["msf"]:
+                            f["msf"] = _msf_pairs(sig)
                     continue
                 have.add((sig["cve"], port))
                 real = sig["cve"] if sig["cve"].startswith("CVE-") else ""
@@ -523,7 +533,7 @@ class VulnScanner:
                     "cve": sig["cve"], "score": sig["score"], "sev": severity(sig["score"]), "desc": sig["desc"],
                     "pub": "", "port": port, "software": sig["title"], "product": "signature", "ver": "",
                     "kev": bool(k), "kev_name": (k or {}).get("name", ""), "ransomware": bool(k and k.get("ransomware")),
-                    "distro": False, "msf": (x.get("m") or sig["msf"])[:5], "edb": x.get("e", [])[:5],
+                    "distro": False, "msf": (x.get("m") or _msf_pairs(sig))[:5], "edb": x.get("e", [])[:5],
                     "unverified": False, "os": False, "confidence": "version"})
         # Confirmed findings: NSE checks that actively TESTED a flaw and reported VULNERABLE (thorough scans).
         # These don't depend on a version string, so they catch patch-level holes banner-matching misses.
