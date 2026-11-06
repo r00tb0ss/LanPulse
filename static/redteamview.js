@@ -46,7 +46,8 @@ function renderRedteam() {
         ${d.modules ? `<span class="tagchip msf">${d.modules} module${d.modules === 1 ? "" : "s"}</span>` : ""}
         ${d.cleartext ? `<span class="tagchip">${d.cleartext} cleartext</span>` : ""}
         ${d.default_creds ? `<span class="tagchip">${d.default_creds} default-cred</span>` : ""}
-        <span class="tagchip">${d.techniques.length} technique${d.techniques.length === 1 ? "" : "s"}</span></div>
+        <span class="tagchip">${d.techniques.length} technique${d.techniques.length === 1 ? "" : "s"}</span>
+        ${xBtn("vulns", d.id)}</div>
     </div>`).join("") : `<div class="muted">No targets yet.</div>`;
 }
 
@@ -99,7 +100,7 @@ function msfPanelSection(ip, items) {
   viewHooks.redteam = loadRedteam;
   const devs = $("rtDevs");
   // open the device panel without leaving the Red Team tab
-  if (devs) devs.addEventListener("click", (e) => { const r = e.target.closest("[data-dev-id]"); if (r && devices.has(r.dataset.devId)) openPanel(r.dataset.devId); else if (r) toast("That device isn't on the network map"); });
+  if (devs) devs.addEventListener("click", (e) => { const xj = e.target.closest("[data-xjump]"); if (xj) { xJump(xj.dataset.xjump, xj.dataset.xdev); return; } const r = e.target.closest("[data-dev-id]"); if (r && devices.has(r.dataset.devId)) openPanel(r.dataset.devId); else if (r) toast("That device isn't on the network map"); });
   const tac = $("rtTactics");
   if (tac) tac.addEventListener("click", (e) => { const b = e.target.closest("[data-tech]"); if (b) showTechnique(b.dataset.tech); });
   // copy buttons for the per-device Metasploit blocks live in the panel
