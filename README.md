@@ -25,7 +25,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Trusted devices**: anything new shows a red dashed ring until you trust it
 - **Watched devices**: get an alert when an important device goes offline or comes back
 - **Threats view**: live world attack map of who is hitting your public IP, which LAN device they target, and an investigation panel for each attacker (location, ISP/ASN, abuse score, Shodan data, what they tried, block rules)
-- **Seven map views**: star, grouped by type, tree, rings, tiles, a sortable table and a **Topology** view (internet, gateway, switches, access points, then the devices on each, with Wi-Fi signal, SSIDs, ports and VLAN zones; UniFi is read automatically, any other router works by choosing where a device connects; exports to SVG, PNG, draw.io and CSV)
+- **Six map views**, opening on **Topology** (internet, gateway, switches, access points, then the devices on each, with Wi-Fi signal, SSIDs, ports and VLAN zones; UniFi is read automatically, any other router works by choosing where a device connects; exports to SVG, PNG, draw.io and CSV), plus grouped by type, tree, rings, tiles and a sortable table
 - **Inside-the-LAN detection**: network sweeps (nmap/Fing), router impersonation (ARP spoofing), IP conflicts, port scans against the LanPulse server, and any LAN device touching a honeypot
 - **One-click blocking** of attackers on your UniFi gateway (UDM, UDM Pro, UCG) through an IP group
 - **Research-scanner tagging**: Shodan, Censys, Shadowserver and others are verified by forward-confirmed reverse DNS (plus GreyNoise) and shown in grey
@@ -199,7 +199,7 @@ python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
 - **Vendors**: nmap's MAC prefix database.
 - **Storage**: `/opt/lanpulse/data` holds devices, settings, history (SQLite) and the login.
 
-Notes: it runs as root for ARP and OS detection. The map draws a star around your gateway, which shows what is on the network rather than physical cabling. Wake-on-LAN needs it enabled in the target PC's BIOS and network settings.
+Notes: it runs as root for ARP and OS detection. The Topology view draws your real connections when UniFi is connected; for other routers it assumes devices connect to the gateway until you choose otherwise. Wake-on-LAN needs it enabled in the target PC's BIOS and network settings.
 
 Only scan networks you own or are allowed to scan.
 
