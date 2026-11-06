@@ -166,6 +166,24 @@ function infraSummary(n) {
   return `${e.clients || 0} connected`;
 }
 
+/* traffic colour: green when quiet through orange to red when busy (not the theme accent, so it stands out from the map) */
+const topoHeat = (lv) => `hsl(${Math.round(140 - 125 * Math.max(0, Math.min(1, lv)))} 92% 56%)`;
+
+/* A link drawn like a cable: dark jacket, lighter core, and packets travelling toward the parent when there is traffic. */
+function topoCable(d, o) {
+  const {T, wired, w, lv, hot, exp} = o, heatc = topoHeat(lv);
+  let g = "";
+  if (wired) {
+    g += `<path d="${d}" fill="none" stroke="${T.bg}" stroke-width="${w + 4}" stroke-linecap="round" opacity=".95"/>`;
+    g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : T.muted}" stroke-width="${w}" stroke-linecap="round" opacity="${hot ? 1 : 0.45}"/>`;
+    if (lv) g += `<path d="${d}" fill="none" stroke="${heatc}" stroke-width="${w}" stroke-linecap="round" opacity="${0.18 + lv * 0.3}"/>`;
+  } else {
+    g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : "#f59e0b"}" stroke-width="${hot ? 2.2 : 1.5}" stroke-dasharray="5 5" opacity=".75"/>`;
+  }
+  if (lv && !exp) g += `<path class="tp-pulse" d="${d}" fill="none" stroke="${heatc}" stroke-width="${(w + 1.5 + lv * 2.5).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(1.7 - lv * 1.2).toFixed(2)}s"/>`;
+  return g;
+}
+
 function weakClients(data) {
   return data.nodes.filter((n) => n.link && n.link.quality === "poor" && n.online);
 }
@@ -189,8 +207,7 @@ function topoSvg(L, T, opts = {}) {
     const w = wired ? ((n.link || {}).speed >= 2500 ? 3.4 : (n.link || {}).speed >= 1000 ? 2.6 : 1.8) : 2.2;
     const hot = focus && focus.has(n.id) && focus.has(a.node.id);
     const tf = TR ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0;
-    out.push(`<g${dim(n.id)}><path d="M${a.cx},${a.y + S.hh} C${a.cx},${my} ${b.cx},${my} ${b.cx},${b.y}" fill="none" stroke="${hot || tf ? T.accent : wired ? T.border2 : "#f59e0b"}"
-      stroke-width="${w + (hot ? 1 : 0) + tf * 7}" ${tf ? `stroke-opacity="${0.35 + tf * 0.65}"` : ""} ${wired ? "" : 'stroke-dasharray="7 5"'}/>
+    out.push(`<g${dim(n.id)}>${topoCable(`M${a.cx},${a.y + S.hh} C${a.cx},${my} ${b.cx},${my} ${b.cx},${b.y}`, {T, wired, w, lv: tf, hot, exp: opts.export})}
       ${topoLinkLabel(n) ? `<text x="${(a.cx + b.cx) / 2 + 8}" y="${my + 4}" font-size="10.5" fill="${T.muted}">${esc(topoLinkLabel(n))}</text>` : ""}</g>`);
   }
   // blocks of devices
@@ -211,10 +228,8 @@ function topoSvg(L, T, opts = {}) {
     for (const c of L.chips) {
       const n = c.node, p = c.parent, x1 = p.cx, y1 = p.y + S.hh, x2 = c.x + S.cw / 2, y2 = c.y, my = y1 + (y2 - y1) * 0.55, wifi = (n.link || {}).medium === "wifi";
       const cnt = TR ? TR.own.get(n.id) || 0 : 0, lv = cnt ? TR.lg(cnt, TR.max) : 0, hot = focus && focus.has(n.id);
-      const base = hot || lv ? T.accent : wifi ? "#f59e0b" : T.border2;
-      out.push(`<path class="tp-link${lv && !opts.export ? " tp-flow" : ""}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" fill="none" stroke="${base}" stroke-width="${(hot ? 2.6 : 1.4) + lv * 4.5}"
-        stroke-opacity="${lv ? 0.45 + lv * 0.55 : wifi ? 0.7 : 1}" ${lv && !opts.export ? `stroke-dasharray="7 9" style="animation-duration:${(2.4 - lv * 1.8).toFixed(2)}s"` : wifi ? 'stroke-dasharray="5 5"' : ""}
-        ${focus && !focus.has(n.id) ? 'opacity=".2"' : ""}/>`);
+      out.push(`<g${focus && !focus.has(n.id) ? ' opacity=".2"' : ""}>${topoCable(`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`,
+        {T, wired: !wifi, w: (n.link || {}).speed >= 2500 ? 3 : (n.link || {}).speed >= 1000 ? 2.4 : 1.8, lv, hot, exp: opts.export})}</g>`);
     }
   }
   // device chips
@@ -229,8 +244,8 @@ function topoSvg(L, T, opts = {}) {
       <text x="${c.x + 32}" y="${c.y + 20}" font-size="12" font-weight="600" fill="${T.text}">${esc(tx(n.name, 15))}</text>
       <text x="${c.x + 32}" y="${c.y + 36}" font-size="10.5" fill="${T.muted}">${esc(tx(n.ip, 16))}</text>
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
-      ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${T.accent}"/>` : ""}` : ""}
-      ${TR && TOPO.spread ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? T.accent : T.dim}">${cnt ? cnt.toLocaleString() + " conn/h" : "no traffic"}</text>` : ""}
+      ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
+      ${TR && TOPO.spread ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? cnt.toLocaleString() + " conn/h" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -249,7 +264,7 @@ function topoSvg(L, T, opts = {}) {
       ${radios.map((r, i) => `<g><rect x="${h.x + S.hw - 10 - (radios.length - i) * 38}" y="${h.y + 12}" width="34" height="15" rx="7" fill="${T.panel2}" stroke="${T.border2}"/>
         <text x="${h.x + S.hw - 10 - (radios.length - i) * 38 + 17}" y="${h.y + 23}" font-size="9" text-anchor="middle" fill="${T.muted}">${esc(r.band.replace(" GHz", "G"))}</text></g>`).join("")}
       ${n.online ? "" : `<text x="${h.x + S.hw - 12}" y="${h.y + 24}" font-size="10" text-anchor="end" fill="${T.red}">offline</text>`}
-      ${act ? `<rect x="${h.x + 14}" y="${h.y + S.hh - 7}" width="${S.hw - 28}" height="4" rx="2" fill="${T.border}"/><rect x="${h.x + 14}" y="${h.y + S.hh - 7}" width="${(S.hw - 28) * act}" height="4" rx="2" fill="${T.accent}"/>` : ""}
+      ${act ? `<rect x="${h.x + 14}" y="${h.y + S.hh - 7}" width="${S.hw - 28}" height="4" rx="2" fill="${T.border}"/><rect x="${h.x + 14}" y="${h.y + S.hh - 7}" width="${(S.hw - 28) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}
       ${(ch2(L, n.id)) ? `<g class="tp-fold" data-fold="${esc(n.id)}" cursor="pointer"><circle cx="${h.x + S.hw / 2}" cy="${h.y + S.hh}" r="9" fill="${T.panel}" stroke="${T.border2}"/>
         <text x="${h.x + S.hw / 2}" y="${h.y + S.hh + 4}" font-size="12" text-anchor="middle" fill="${T.muted}">${h.folded ? "+" : "−"}</text></g>` : ""}
     </g>`);
