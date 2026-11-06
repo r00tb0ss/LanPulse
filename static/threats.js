@@ -14,6 +14,7 @@ let lastRangeFetch = 0;
 const reachedIps = new Set();
 let hideScanners = (() => { try { return localStorage.getItem("nm_hide_scanners") === "1"; } catch (_) { return false; } })();
 let blockedIps = new Set();
+const leakIps = new Set();      // on the blocklist, yet still reaching a device (seen live): the UDM isn't enforcing the list
 let unifiReady = false;
 let localSummary = null;
 const isScanner = (x) => !!(x && x.tag);
@@ -460,7 +461,7 @@ function renderThreats(s, full) {
 
   $("tAttackers").innerHTML = s.attackers.length ? `<table><tr><th>Source</th><th>IP address</th><th>Attempts</th><th>Tried</th><th>Last seen</th></tr>
     ${s.attackers.filter((a) => !(hideScanners && isScanner(a))).slice(0, 15).map((a) => `<tr class="row ${isScanner(a) ? "scanner" : ""}" data-ip="${esc(a.ip)}">
-      <td>${flagHtml(a.iso)} ${esc(placeOf(a))}</td><td class="mono">${esc(a.ip)}${reachedIps.has(a.ip) ? ' <i class="fa-solid fa-bullseye" style="color:#f43f5e" title="Reached a LAN device"></i>' : ""}${isScanner(a) ? ` <span class="tagchip">${esc(a.tag.label)}</span>` : ""}${blockedIps.has(a.ip) ? ' <span class="tagchip blk">blocked</span>' : ""}</td>
+      <td>${flagHtml(a.iso)} ${esc(placeOf(a))}</td><td class="mono">${esc(a.ip)}${reachedIps.has(a.ip) ? ' <i class="fa-solid fa-bullseye" style="color:#f43f5e" title="Reached a LAN device"></i>' : ""}${isScanner(a) ? ` <span class="tagchip">${esc(a.tag.label)}</span>` : ""}${blockChip(a.ip)}</td>
       <td class="mono">${fmtN(a.count)}</td><td>${a.services.map((x) => `<span class="svc">${esc(x)}</span>`).join("")}</td>
       <td class="muted">${ago(a.last)}</td></tr>`).join("")}</table>` : `<div class="muted">No attackers seen in this period.</div>`;
 
@@ -497,22 +498,35 @@ function renderSetup(s) {
     ${src.geoip ? "" : `<p style="color:#fcd34d">The GeoIP database is missing, so attacks can't be placed on the map. Re-run install.sh.</p>`}`;
 }
 
+function blockChip(ip) {
+  if (!blockedIps.has(ip)) return "";
+  return leakIps.has(ip)
+    ? ' <span class="tagchip leak" title="This IP is on your blocklist but is still reaching your network, so your UniFi firewall has no working rule for the blocklist. See Settings > UniFi.">blocked, still connecting</span>'
+    : ' <span class="tagchip blk">blocked</span>';
+}
+function leakNote() {
+  const el = $("tFeedCount");
+  if (!el) return;
+  el.innerHTML = leakIps.size ? `<span class="leak-note" title="Settings > UniFi has the one-time setup steps"><i class="fa-solid fa-triangle-exclamation"></i> ${leakIps.size} blocked IP${leakIps.size === 1 ? " is" : "s are"} still connecting. Check your UniFi block policy.</span>` : "";
+}
+
 function feedItem(e) {
   const reached = isReached(e);
   const target = e.lan_name ? esc(e.lan_name) : e.lan ? esc(e.lan) : e.action === "blocked" ? "blocked at router" : "your router";
   return `<button class="fi ${reached ? "reached" : ""} ${isScanner(e) ? "scanner" : ""}" data-ip="${esc(e.src)}">
-    <span class="flag">${flagHtml(e.iso)}</span><span class="ip">${esc(e.src)}${isScanner(e) ? ` <span class="tagchip">${esc(e.tag.label)}</span>` : ""}${blockedIps.has(e.src) ? ' <span class="tagchip blk">blocked</span>' : ""}</span><span class="when">${clock(e.t)}</span>
+    <span class="flag">${flagHtml(e.iso)}</span><span class="ip">${esc(e.src)}${isScanner(e) ? ` <span class="tagchip">${esc(e.tag.label)}</span>` : ""}${blockChip(e.src)}</span><span class="when">${clock(e.t)}</span>
     <span class="what"><b>${esc(e.service)}</b>${e.dport ? ` :${e.dport}` : ""} → <span class="tgt">${target}</span>${e.detail ? ` · ${esc(e.detail)}` : ""}</span></button>`;
 }
 function renderFeed(list, full) {
   feedKeys.clear();
   list.forEach((e) => feedKeys.add(`${e.t}|${e.src}|${e.dport}`));
   $("tFeed").innerHTML = list.filter((e) => !(hideScanners && isScanner(e))).map(feedItem).join("") || `<div class="muted" style="padding:6px">Waiting for attacks…</div>`;
-  $("tFeedCount").textContent = "";
+  leakNote();
 }
 
 function addThreatEvent(ev) {
   if (isReached(ev)) reachedIps.add(ev.src);
+  if (isReached(ev) && blockedIps.has(ev.src) && !feedKeys.has(`${ev.t}|${ev.src}|${ev.dport}`) && !leakIps.has(ev.src)) { leakIps.add(ev.src); leakNote(); }
   if (ev.lan_id && isReached(ev)) underAttack.set(ev.lan_id, Date.now());   // blocked probes don't make a device pulse
   const key = `${ev.t}|${ev.src}|${ev.dport}`;
   if (feedKeys.has(key)) return;
@@ -539,6 +553,8 @@ async function loadBlocked() {
   if (!r) return;
   unifiReady = !!r.configured && !r.error;
   blockedIps = new Set(r.blocked || []);
+  for (const ip of [...leakIps]) if (!blockedIps.has(ip)) leakIps.delete(ip);
+  leakNote();
 }
 
 /* ------------------------------------------------------------ inside-the-LAN threats */
@@ -625,7 +641,7 @@ function renderIpPanel(d) {
         <span class="badge">${flag(g.iso)} ${esc(placeOf(g))}</span>
         ${flags.map((f) => `<span class="badge">${esc(f)}</span>`).join("")}
         ${d.tag ? `<span class="badge scanner-b" title="${esc(d.tag.host || "")}"><i class="fa-solid fa-satellite"></i>Research scanner: ${esc(d.tag.label)}</span>` : ""}
-        ${blockedIps.has(d.ip) ? '<span class="badge risk-low"><i class="fa-solid fa-ban"></i>Blocked on UDM</span>' : ""}</div></div>
+        ${blockedIps.has(d.ip) ? (leakIps.has(d.ip) ? '<span class="badge risk-high"><i class="fa-solid fa-triangle-exclamation"></i>On blocklist, but still connecting</span>' : '<span class="badge risk-low"><i class="fa-solid fa-ban"></i>Blocked on UDM</span>') : ""}</div></div>
     </div>
     <div class="p-sec"><div class="minis">
       <div class="mini"><b>${fmtN(d.count)}</b><small>attempts</small></div>
@@ -864,7 +880,8 @@ function renderUnifiSettings(body) {
       <li><b>API key:</b> in UniFi go to Settings &gt; Control Plane &gt; Integrations (or Network &gt; Integrations), create an API key and paste it above.</li>
       <li><b>Block an IP</b> once from an attacker's panel. That creates the <b>${esc(u.group || "LanPulse Blocklist")}</b> IP group on the UDM.</li>
       <li><b>Create one block policy</b> in Settings &gt; Policy Engine: Source zone External with the IP group <b>${esc(u.group || "LanPulse Blocklist")}</b>,
-        Destination any zone, Action Block. Every IP LanPulse adds is then blocked immediately.</li>
+        Destination zone <b>Internal</b> (that is where port-forwarded traffic, like the honeypot's, arrives), Action Block, Protocol All.
+        Every IP LanPulse adds is then blocked. Until this policy exists the badge only means "in the group". LanPulse warns if a blocked IP keeps connecting.</li>
     </ol></div>
     <div class="chan"><div class="chan-head"><i class="fa-solid fa-sitemap ci"></i>
       <div class="txt"><b>Other routers and switches (SNMP)</b><small>Read-only. Learns which device is plugged into which port using LLDP and the switch's MAC table, so the Topology map works without UniFi.</small></div>
