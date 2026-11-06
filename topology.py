@@ -156,8 +156,10 @@ class Topology:
                 kind = "gateway" if not gateway else "client"
             else:
                 kind = "client"
+            if uinfra and uinfra.get("name") and not d.get("name"):
+                d = {**d, "name": uinfra["name"]}      # the alias set in UniFi beats a vendor name
             nodes[d["id"]] = {"id": d["id"], "kind": kind, "name": self.nm.label(d), "ip": d.get("ip", ""), "mac": d.get("mac", ""),
-                              "vendor": d.get("vendor", ""), "type": d.get("type", "unknown"), "online": bool(d.get("online")),
+                              "vendor": d.get("vendor", ""), "type": d.get("type", "unknown"), "online": (uinfra.get("state", 1) == 1) if uinfra else bool(d.get("online")),
                               "model": (uinfra or {}).get("model", "") or d.get("model", ""), "zone": zone_of(d, uclient),
                               "parent": None, "link": {}, "extra": {}, "source": "inferred", "first_seen": d.get("first_seen", 0),
                               "last_seen": d.get("last_seen", 0)}
