@@ -58,7 +58,7 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 
-VERSION = "1.25.4"
+VERSION = "1.25.5"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -1914,8 +1914,8 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     # ---- outbound traffic
     @app.get("/api/flows")
-    async def flow_summary(hours: int = 24, device: str = ""):
-        return await asyncio.to_thread(nm.flows.summary, max(1, min(hours, 168)), device)
+    async def flow_summary(hours: int = 24, device: str = "", talkers: int = 12):
+        return await asyncio.to_thread(nm.flows.summary, max(1, min(hours, 168)), device, max(1, min(talkers, 1000)))
 
     @app.get("/api/devices/{key}/flows")
     async def device_flows(key: str, hours: int = 24):
