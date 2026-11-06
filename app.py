@@ -58,7 +58,7 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 
-VERSION = "1.25.12"
+VERSION = "1.25.13"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -2058,7 +2058,12 @@ def build_app(nm: LanPulse) -> FastAPI:
         d = get_dev(key)
         if not d:
             return JSONResponse({"error": "Device not found"}, 404)
-        b = await request.json()
+        try:
+            b = await request.json()
+        except ValueError:
+            b = None
+        if not isinstance(b, dict):
+            return JSONResponse({"error": "Expected a JSON object"}, 400)
         try:
             nm.topology.set_manual(d["id"], str(b.get("parent", "")), str(b.get("role", "auto")), str(b.get("medium", "auto")),
                                    str(b.get("zone", ""))[:40])
@@ -2068,8 +2073,12 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.post("/api/topology/zones")
     async def topology_zones(request: Request):
-        b = await request.json()
-        nm.topology.set_zones(b.get("zones", []) if isinstance(b, dict) else [])
+        try:
+            b = await request.json()
+        except ValueError:
+            b = None
+        zs = b.get("zones", []) if isinstance(b, dict) else []
+        nm.topology.set_zones(zs if isinstance(zs, list) else [])
         return nm.topology.build()
 
     # ---- blocking on the UniFi gateway
