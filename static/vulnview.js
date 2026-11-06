@@ -7,6 +7,14 @@ let vulnData = null, vulnOpen = new Set(), vulnDevOpen = new Set(), vulnDevSeen 
 
 const SEV_COLOR = {critical: "#f43f5e", high: "#fb923c", medium: "#fbbf24", low: "#7dd3fc", unknown: "#8b9bb6"};
 const sevOf = (s) => (s == null ? "unknown" : s >= 9 ? "critical" : s >= 7 ? "high" : s >= 4 ? "medium" : "low");
+const isCve = (id) => /^CVE-\d{4}-\d+$/i.test(id || "");
+// "3 CVEs", "2 findings" (scanner tests with no CVE id), or a mix
+function countLabel(total, cves) {
+  const f = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (cves == null || cves === total) return f(total, "CVE");
+  if (cves === 0) return f(total, "finding");
+  return `${f(cves, "CVE")} + ${total - cves} other`;
+}
 const scoreChip = (s) => `<span class="score-chip ${sevOf(s)}">${s == null ? "?" : s.toFixed(1)}</span>`;
 const nvdLink = (id) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(id)}`;
 
@@ -58,7 +66,7 @@ function renderVulns() {
           ${g.kev ? `<span class="tagchip bad">${g.kev} exploited</span>` : ""}
           ${g.msf ? `<span class="tagchip msf">${g.msf} Metasploit</span>` : ""}${g.edb ? `<span class="tagchip edb">${g.edb} Exploit-DB</span>` : ""}
           ${g.os ? '<span class="tagchip" title="Windows was identified, but a scan can\'t see which updates are installed. If this machine has every update for its version, some of these are already fixed.">patch level unknown</span>' : g.unverified ? '<span class="tagchip">version unknown</span>' : ""}
-          <span class="tagchip">${g.count} CVE${g.count === 1 ? "" : "s"}</span>${g.distro ? '<span class="tagchip">may be patched</span>' : ""}</span>
+          <span class="tagchip">${countLabel(g.count, g.cves)}</span>${g.distro ? '<span class="tagchip">may be patched</span>' : ""}</span>
         <i class="fa-solid fa-chevron-down chev"></i></button>
       <div class="fix-detail ${vulnOpen.has(key) ? "" : "hidden"}" data-detail="${esc(key)}"></div></div>`;
   };
@@ -68,7 +76,7 @@ function renderVulns() {
   for (const id of byDev.keys()) vulnDevSeen.add(id);
   $("vulnFix").innerHTML = s.fix.length ? [...byDev.entries()].map(([id, gs]) => {
     const top = gs.reduce((m, g) => Math.max(m, g.max || 0), 0) || null;
-    const cves = gs.reduce((n, g) => n + g.count, 0), conf = gs.filter((g) => g.confidence === "confirmed").length;
+    const cves = gs.reduce((n, g) => n + g.count, 0), cveIds = gs.reduce((n, g) => n + (g.cves || 0), 0), conf = gs.filter((g) => g.confidence === "confirmed").length;
     const kev = gs.reduce((n, g) => n + (g.kev || 0), 0), msf = gs.reduce((n, g) => n + (g.msf || 0), 0);
     const open = vulnDevOpen.has(id);
     return `<div class="fixdev ${open ? "open" : ""}" data-devgrp="${esc(id)}">
@@ -78,7 +86,7 @@ function renderVulns() {
           <span class="fix-dev">${gs.length} service${gs.length === 1 ? "" : "s"} with flaws</span></span>
         <span class="fix-tags">${conf ? `<span class="tagchip confirmed"><i class="fa-solid fa-circle-check"></i>${conf} confirmed</span>` : ""}
           ${kev ? `<span class="tagchip bad">${kev} exploited</span>` : ""}${msf ? `<span class="tagchip msf">${msf} Metasploit</span>` : ""}
-          <span class="tagchip">${cves} CVE${cves === 1 ? "" : "s"}</span></span>
+          <span class="tagchip">${countLabel(cves, cveIds)}</span></span>
         <i class="fa-solid fa-chevron-down chev"></i></button>
       <div class="fixdev-body ${open ? "" : "hidden"}">${open ? gs.map(rowHtml).join("") : ""}</div></div>`;
   }).join("") : `<div class="all-clear" style="margin:0"><i class="fa-solid fa-circle-check"></i><div><b>No known flaws found</b>
@@ -129,7 +137,7 @@ async function fillFixDetail(key) {
 function cveRow(f) {
   const msf = f.msf || [], edb = f.edb || [];
   return `<div class="cve ${f.confidence === "confirmed" ? "confirmed" : f.kev ? "kev" : msf.length ? "msf" : ""}">${scoreChip(f.score)}
-    <div><a href="${esc(nvdLink(f.cve))}" target="_blank" rel="noopener"><b>${esc(f.cve)}</b></a>
+    <div>${isCve(f.cve) ? `<a href="${esc(nvdLink(f.cve))}" target="_blank" rel="noopener"><b>${esc(f.cve)}</b></a>` : `<b title="A scanner test with no CVE id">${esc(f.software || f.cve)}</b>`}
       ${f.confidence === "confirmed" ? '<span class="tagchip confirmed" title="An active check confirmed this flaw on the device — not inferred from a version number."><i class="fa-solid fa-circle-check"></i>confirmed</span>' : ""}
       ${f.kev ? `<span class="tagchip bad">exploited${f.ransomware ? " · ransomware" : ""}</span>` : ""}
       ${msf.length ? '<span class="tagchip msf">Metasploit</span>' : ""}${edb.length ? '<span class="tagchip edb">Exploit-DB</span>' : ""}
