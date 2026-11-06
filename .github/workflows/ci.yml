@@ -1,0 +1,37 @@
+name: CI
+# Fast checks on every pull request and push to main: syntax, a few unit tests, and that the pages load every script
+# they reference. Nothing here deploys anything.
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install requirements
+        run: pip install -r requirements.txt
+      - name: Python syntax
+        run: python -m compileall -q *.py tests
+      - name: JavaScript syntax
+        run: for f in static/*.js; do node --check "$f" || exit 1; done
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Pages reference files that exist (vendor libraries are downloaded by the installer)
+        run: |
+          for f in $(grep -oP '(src|href)="/static/\K[^"?]+' static/index.html | grep -v '^vendor/'); do
+            [ -e "static/$f" ] || { echo "static/index.html references missing static/$f"; exit 1; }
+          done
+      - name: Release notes exist for this version
+        run: |
+          VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
+          [ -f "docs/releases/$VER.md" ] || { echo "Missing docs/releases/$VER.md for version $VER"; exit 1; }
