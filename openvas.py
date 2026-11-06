@@ -138,7 +138,7 @@ def parse_results(root: ET.Element) -> list[dict]:
         seen.add(key)
         desc = re.sub(r"\s+", " ", (r.findtext("description") or "")).strip()[:300]
         out.append({"oid": oid[:80], "name": name, "cve": cves[:12], "port": port, "severity": round(sev, 1),
-                    "qod": qod, "desc": desc})
+                    "qod": qod, "desc": desc, "host": (r.findtext("host") or "").strip()[:45]})
     out.sort(key=lambda x: (-x["severity"], -x["qod"]))
     return out[:MAX_RESULTS]
 
@@ -316,6 +316,12 @@ class OpenVAS:
                         res = g.cmd(f"<get_results task_id=\"{s['task']}\" filter=\"min_qod={MIN_QOD} rows={MAX_RESULTS} "
                                     f"sort-reverse=severity\" details=\"1\"/>")
                         items = parse_results(res)
+                        # Each result names the host OpenVAS found it on. Anything that isn't the address we asked
+                        # it to scan belongs to another machine and is dropped.
+                        foreign = {i["host"] for i in items if i.get("host") and i["host"] != ip}
+                        if foreign:
+                            items = [i for i in items if not i.get("host") or i["host"] == ip]
+                            log.warning("OpenVAS scan of %s also returned results for %s; ignored", ip, ", ".join(sorted(foreign)))
                         s["finished"], s["count"], s["progress"] = int(time.time()), len(items), 100
                         clash = self.nm.local.conflict_for(ip, since=s.get("started", 0))
                         if clash:
