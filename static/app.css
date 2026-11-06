@@ -1087,3 +1087,45 @@ html[data-pretheme="ocean"]{background:#041a1f}
 .fixdev-body{padding:4px 10px 10px;border-top:1px solid var(--border)}
 .fixdev-body .fix{margin-top:8px}
 .fixdev-body .fix-dev{display:none}
+
+/* ---- Topology layout ---- */
+.alt-view:has(.topo){padding:0;overflow:hidden}
+.topo{position:absolute;inset:0;display:flex;flex-direction:column;padding-top:60px}
+.topo-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--panel);font-size:12.5px;z-index:3}
+.topo-bar select{background:var(--panel2);color:var(--text);border:1px solid var(--border2);border-radius:7px;padding:4px 8px;font-size:12px}
+.tp-lbl{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.tp-spacer{flex:1}
+.tp-n{background:var(--accent);color:var(--bg);border-radius:9px;padding:0 6px;font-size:10.5px;margin-left:4px}
+.tp-src{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.tp-src.ok{color:var(--green)}.tp-src.bad{color:var(--amber)}
+.tp-chipinfo{color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.tp-chipinfo .warn{color:var(--amber)}
+.btn.sm.on{border-color:var(--accent);color:var(--accent)}
+.topo-stage{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,var(--map-glow,transparent),transparent 60%)}
+#topoSvg{width:100%;height:100%;display:block;cursor:grab;touch-action:none;font-family:Inter,system-ui,sans-serif}
+#topoSvg.grab{cursor:grabbing}
+#topoSvg .tp-dim{opacity:.2}
+#topoSvg .tp-chip:hover rect:first-child,#topoSvg .tp-head:hover rect:first-child{stroke:var(--accent)}
+#topoSvg .tp-off{opacity:.55}
+#topoSvg .tp-faded{opacity:.25}
+.topo-mini{position:absolute;right:12px;bottom:12px;width:170px;height:110px;background:var(--panel);border:1px solid var(--border2);border-radius:10px;opacity:.92;cursor:pointer}
+.topo-mini svg{width:100%;height:100%}
+.topo-info{position:absolute;left:12px;top:12px;width:300px;max-height:calc(100% - 24px);overflow:auto;background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:12.5px;z-index:4}
+.ti-head{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.ti-head .ic{font-size:20px;width:26px;text-align:center}
+.ti-head b{display:block;font-size:14px}.ti-head .muted{font-size:11.5px}
+.ti-head .x{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer}
+.ti-rows>div{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border)}
+.ti-rows>div>span:first-child{color:var(--muted)}
+.ti-rows>div>span:last-child{text-align:right;overflow-wrap:anywhere}
+.ti-edit{margin-top:8px}.ti-edit summary{cursor:pointer;color:var(--accent)}
+.ti-edit label{display:flex;flex-direction:column;gap:3px;margin-top:8px;color:var(--muted);font-size:11.5px}
+.ti-edit select,.tp-zrow input{background:var(--panel2);color:var(--text);border:1px solid var(--border2);border-radius:7px;padding:5px 8px;font-size:12px}
+.ti-edit .btns,.topo-info .btns,.topo-pop .btns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.topo-pop{position:absolute;right:12px;top:12px;width:340px;max-height:70%;overflow:auto;background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:5;font-size:12.5px}
+.topo-pop h4{margin:0 0 8px;font-size:13px}.topo-pop h4 .muted{font-weight:400;font-size:11px;margin-left:6px}
+.tp-ch{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--border);color:var(--text);padding:7px 2px;cursor:pointer;font-size:12.5px}
+.tp-ch:hover{background:var(--panel2)}.tp-ch span:nth-child(2){flex:1}.tp-ch .muted{font-size:11px}
+.tp-zrow{display:flex;gap:6px;margin-bottom:6px}.tp-zrow .zc{flex:1.2}.tp-zrow .zn{flex:1}
+.tp-zrow .zx{background:none;border:0;color:var(--muted);cursor:pointer}
+@media (max-width:700px){.topo{padding-top:56px}.topo-mini{display:none}.topo-info{width:auto;right:12px;top:auto;bottom:12px;max-height:55%}}

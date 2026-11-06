@@ -6,6 +6,7 @@
 const NET_LAYOUTS = [
   ["star", "fa-circle-nodes", "Star"], ["groups", "fa-object-group", "Groups"], ["tree", "fa-sitemap", "Tree"],
   ["rings", "fa-bullseye", "Rings"], ["tiles", "fa-grip", "Tiles"], ["table", "fa-table-list", "Table"],
+  ["topo", "fa-diagram-project", "Topology"],
 ];
 let netLayout = (() => { try { return localStorage.getItem("nm_layout") || "star"; } catch (_) { return "star"; } })();
 if (!NET_LAYOUTS.some(([k]) => k === netLayout)) netLayout = "star";
@@ -130,7 +131,8 @@ function setLayout(mode) {
 }
 
 function applyLayoutMode() {
-  const graph = !["tiles", "table"].includes(netLayout);
+  const graph = !["tiles", "table", "topo"].includes(netLayout);
+  if (netLayout === "topo" && typeof TOPO !== "undefined") TOPO.fit = true;
   $("map").classList.toggle("hidden", !graph);
   $("altView").classList.toggle("hidden", graph);
   $("legend").classList.add("hidden");
@@ -170,6 +172,7 @@ function flagsHtml(d) {
 function renderAltViews() {
   if (netLayout === "tiles") renderTiles();
   else if (netLayout === "table") renderTable();
+  else if (netLayout === "topo" && typeof renderTopology === "function") renderTopology();
 }
 
 function renderTiles() {

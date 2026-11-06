@@ -74,6 +74,21 @@ class UniFi:
             raise UniFiError(f"UniFi error: {meta.get('msg', 'unknown')}")
         return data.get("data", data)
 
+    def topology_data(self) -> dict:
+        """Everything the Network tab needs to draw real connections: infrastructure, clients and networks (read-only)."""
+        base = f"/proxy/network/api/s/{self.site}"
+        out, err = {}, ""
+        for key, path in (("devices", "/stat/device"), ("clients", "/stat/sta"), ("networks", "/rest/networkconf")):
+            try:
+                rows = self._call("GET", base + path)
+                out[key] = rows if isinstance(rows, list) else []
+            except UniFiError as e:
+                out[key] = []
+                err = err or str(e)
+        if err and not any(out.values()):
+            raise UniFiError(err)
+        return out
+
     def _login(self):
         body = json.dumps({"username": self.cfg.get("username"), "password": self.cfg.get("password"),
                            "remember": False}).encode()
