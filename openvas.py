@@ -262,6 +262,10 @@ class OpenVAS:
         cur = self.scans.get(ip)
         if cur and cur.get("status") in ("Requested", "Queued", "Running", "New"):
             return "A scan of this device is already running."
+        clash = self.nm.local.conflict_for(ip)
+        if clash:
+            return (f"{ip} is being answered by more than one device ({', '.join(clash)}), so a scan could land on either "
+                    "one. Give one of them another address, then scan again.")
         try:
             with self._open() as g:
                 cfg = g.find_id("get_configs", "config", CONFIG_NAME)
@@ -313,7 +317,14 @@ class OpenVAS:
                                     f"sort-reverse=severity\" details=\"1\"/>")
                         items = parse_results(res)
                         s["finished"], s["count"], s["progress"] = int(time.time()), len(items), 100
-                        self._import(ip, items)
+                        clash = self.nm.local.conflict_for(ip, since=s.get("started", 0))
+                        if clash:
+                            # Don't attach findings that may belong to the other machine
+                            s["error"] = (f"{ip} was answered by more than one device ({', '.join(clash)}) during the scan, "
+                                          "so the results can't be trusted and were not saved. Fix the address conflict and scan again.")
+                            s["count"] = 0
+                        else:
+                            self._import(ip, items)
                     elif s["status"] in ("Stopped", "Interrupted", "Failed"):
                         s["error"] = f"The scan {s['status'].lower()}."
                 except GmpError as e:
