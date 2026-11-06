@@ -155,7 +155,7 @@
     <div class="ftext">
       <span class="tag">VULNERABILITIES</span>
       <h3>Know which devices can actually be broken into</h3>
-      <p>Version matching can't see missing Windows patches, so LanPulse also runs safe active checks on thorough scans
+      <p>Version matching can't see missing Windows patches, so LanPulse also runs safe active checks and, optionally, OpenVAS, on thorough scans
         and marks what it <b>proved</b> separately from what it only suspects. Flaws that are being actively exploited
         or have a working exploit rank first — including old Windows.</p>
       <ul>
@@ -165,6 +165,22 @@
       </ul>
     </div>
     <figure class="shot"><img src="images/vulns.png" alt="Vulnerabilities view with a confirmed EternalBlue finding ranked first, then actively exploited CVEs"></figure>
+  </div>
+
+  <div class="feature">
+    <div class="ftext">
+      <span class="tag">OPENVAS INTEGRATION</span>
+      <h3>Real vulnerability tests, installed from Settings</h3>
+      <p>nmap can only guess from banners. LanPulse can now install and drive <b>OpenVAS</b> (Greenbone Community Edition),
+        which runs tens of thousands of real vulnerability tests — so exploitable services on old and lab machines
+        stop slipping through.</p>
+      <ul>
+        <li><b>One-click install</b> from Settings &rarr; Scanner, with live progress. Needs about 4&nbsp;GB RAM and 15&nbsp;GB free disk (8&nbsp;GB / 40&nbsp;GB recommended); the first feed load takes 30&ndash;90 minutes.</li>
+        <li>Scan one device or all online devices, or rescan weekly. Results land in the Vulnerabilities tab; high-quality detections are marked <b>Confirmed</b>.</li>
+        <li>Curated signatures for classic lab flaws (vsftpd 2.3.4 backdoor, UnrealIRCd, distccd, Samba usermap, Java RMI and more) plus nmap <b>vulners</b> CVE lookups.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="images/scanner.png" alt="Settings Scanner tab showing OpenVAS ready with a running scan and finished scans per device"></figure>
   </div>
 
   <div class="feature">
@@ -239,6 +255,9 @@
     <div class="card"><div class="ic">🍯</div><h4>Honeypot</h4><p>Decoy services that log every probe and the credentials tried; a hit from inside your LAN flags a likely-compromised device.</p></div>
     <div class="card"><div class="ic">✅</div><h4>Confirmed vulnerabilities</h4><p>Safe active checks prove flaws that version matching misses, like missing SMB patches on old Windows.</p></div>
     <div class="card"><div class="ic">🤖</div><h4>AI analyst (bring your own)</h4><p>Ask questions in plain language with Ollama, an OpenAI-compatible server or Anthropic. Read-only, grounded in your data.</p></div>
+    <div class="card"><div class="ic">🔬</div><h4>OpenVAS scanning</h4><p>Install and run Greenbone's vulnerability scanner from Settings; findings merge into the Vulnerabilities tab.</p></div>
+    <div class="card"><div class="ic">↔</div><h4>Lateral-movement detection</h4><p>Flags a device probing 5+ machines on admin ports within 10 minutes, including across VLANs.</p></div>
+    <div class="card"><div class="ic">🧭</div><h4>Guided setup</h4><p>A first-run wizard walks through the router, alerts, scanning, honeypot and AI analyst.</p></div>
     <div class="card"><div class="ic">🕑</div><h4>Per-device timeline</h4><p>Every change on a device — ports opened, software updated, vulnerabilities found, threats seen — in one history.</p></div>
     <div class="card"><div class="ic">🔔</div><h4>Alerts anywhere</h4><p>ntfy, Telegram, email, Discord/webhook and IRC — with a daily summary.</p></div>
     <div class="card"><div class="ic">🔄</div><h4>One-click updates</h4><p>Update from the dashboard; the previous version is backed up and restored automatically if anything fails.</p></div>
