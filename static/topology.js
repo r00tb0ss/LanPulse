@@ -272,14 +272,36 @@ function topoShell() {
     </div></div>`;
   const svg = $("topoSvg");
   let drag = null;
-  svg.addEventListener("pointerdown", (e) => { if (e.target.closest(".tp-chip,.tp-head,.tp-fold,.tp-more")) return; drag = {x: e.clientX, y: e.clientY, vx: TOPO.view.x, vy: TOPO.view.y}; svg.setPointerCapture(e.pointerId); svg.classList.add("grab"); });
-  svg.addEventListener("pointermove", (e) => { if (!drag) return; TOPO.view.x = drag.vx + (e.clientX - drag.x); TOPO.view.y = drag.vy + (e.clientY - drag.y); topoApplyView(); });
-  svg.addEventListener("pointerup", (e) => { if (drag && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 4) { TOPO.sel = null; $("topoInfo").classList.add("hidden"); renderTopology(); } drag = null; svg.classList.remove("grab"); });
+  const ptrs = new Map();
+  let pinch = null;
+  svg.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".tp-chip,.tp-head,.tp-fold,.tp-more")) return;
+    ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    svg.setPointerCapture(e.pointerId); svg.classList.add("grab");
+    if (ptrs.size === 2) { const [p1, p2] = [...ptrs.values()]; pinch = {d: Math.hypot(p1.x - p2.x, p1.y - p2.y), k: TOPO.view.k}; drag = null; }
+    else drag = {x: e.clientX, y: e.clientY, vx: TOPO.view.x, vy: TOPO.view.y};
+  });
+  svg.addEventListener("pointermove", (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if (pinch && ptrs.size >= 2) {
+      const [p1, p2] = [...ptrs.values()], r = svg.getBoundingClientRect();
+      topoZoomAt(pinch.k * Math.hypot(p1.x - p2.x, p1.y - p2.y) / pinch.d, (p1.x + p2.x) / 2 - r.left, (p1.y + p2.y) / 2 - r.top);
+    } else if (drag) { TOPO.view.x = drag.vx + (e.clientX - drag.x); TOPO.view.y = drag.vy + (e.clientY - drag.y); topoApplyView(); }
+  });
+  const endPtr = (e) => {
+    const was = ptrs.size;
+    ptrs.delete(e.pointerId);
+    if (was === 1 && drag && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 4) { TOPO.sel = null; $("topoInfo").classList.add("hidden"); renderTopology(); }
+    if (ptrs.size < 2) pinch = null;
+    if (!ptrs.size) { drag = null; svg.classList.remove("grab"); }
+  };
+  svg.addEventListener("pointerup", endPtr); svg.addEventListener("pointercancel", endPtr);
+  svg.addEventListener("dblclick", (e) => { if (e.target.closest(".tp-chip,.tp-head")) return; const r = svg.getBoundingClientRect(); topoZoomAt(TOPO.view.k * 1.6, e.clientX - r.left, e.clientY - r.top); });
   svg.addEventListener("wheel", (e) => {
     e.preventDefault();
-    const r = svg.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, v = TOPO.view;
-    const k = Math.max(0.2, Math.min(2.5, v.k * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
-    v.x = mx - (mx - v.x) * (k / v.k); v.y = my - (my - v.y) * (k / v.k); v.k = k; topoApplyView();
+    const r = svg.getBoundingClientRect();
+    topoZoomAt(TOPO.view.k * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e.clientX - r.left, e.clientY - r.top);
   }, {passive: false});
   svg.addEventListener("click", (e) => {
     const more = e.target.closest("[data-more]"), less = e.target.closest("[data-less]"), fold = e.target.closest("[data-fold]");
@@ -303,12 +325,24 @@ function topoApplyView() {
   topoMini();
 }
 
+function topoZoomAt(k, mx, my) {
+  const v = TOPO.view;
+  k = Math.max(0.1, Math.min(3, k));
+  v.x = mx - (mx - v.x) * (k / v.k); v.y = my - (my - v.y) * (k / v.k); v.k = k;
+  topoApplyView();
+}
+function topoZoomBy(f) { const r = $("topoSvg").getBoundingClientRect(); topoZoomAt(TOPO.view.k * f, r.width / 2, r.height / 2); }
+
 function topoFitView() {
   const L = TOPO.layout, svg = $("topoSvg");
   if (!L || !svg) return;
-  const r = svg.getBoundingClientRect(), b = L.bounds, pad = 40;
-  const k = Math.max(0.25, Math.min(1.2, Math.min((r.width - pad * 2) / (b.x1 - b.x0), (r.height - pad * 2) / (b.y1 - b.y0))));
-  TOPO.view = {k, x: (r.width - (b.x1 - b.x0) * k) / 2 - b.x0 * k, y: pad / 2};
+  const r = svg.getBoundingClientRect(), b = L.bounds, pad = 24;
+  if (r.width < 50) return;
+  const fit = Math.min((r.width - pad * 2) / (b.x1 - b.x0), (r.height - pad * 2) / (b.y1 - b.y0));
+  // Keep text readable: never shrink below 0.45 (pan and pinch to explore); a very wide map opens centred on the gateway.
+  const k = Math.max(Math.min(fit, 1.2), Math.min(0.45, fit > 0.45 ? fit : 0.45));
+  const w = (b.x1 - b.x0) * k;
+  TOPO.view = {k, x: w <= r.width - pad * 2 ? (r.width - w) / 2 - b.x0 * k : r.width / 2 - L.tree.cx * k, y: pad};
   topoApplyView();
 }
 
@@ -359,6 +393,8 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpChanges"><i class="fa-solid fa-clock-rotate-left"></i>Changes${d.changes.length ? `<b class="tp-n">${d.changes.length}</b>` : ""}</button>
     <button class="btn sm" id="tpZones"><i class="fa-solid fa-layer-group"></i>Zones</button>
     <button class="btn sm" id="tpExport"><i class="fa-solid fa-file-export"></i>Export</button>
+    <button class="btn sm" id="tpZoomOut" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+    <button class="btn sm" id="tpZoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
     <button class="btn sm" id="tpFit" title="Fit to screen"><i class="fa-solid fa-expand"></i></button>
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
     <span class="tp-spacer"></span>
@@ -368,6 +404,8 @@ function renderTopoBar(d) {
   if ($("tpZone")) $("tpZone").onchange = (e) => { TOPO.zone = e.target.value; TOPO.fit = true; renderTopology(); };
   $("tpTraffic").onclick = () => { TOPO.traffic = !TOPO.traffic; if (TOPO.traffic) loadTopoTraffic(); else renderTopology(); };
   $("tpFit").onclick = topoFitView;
+  $("tpZoomIn").onclick = () => topoZoomBy(1.4);
+  $("tpZoomOut").onclick = () => topoZoomBy(1 / 1.4);
   $("tpRefresh").onclick = async () => { toast("Refreshing…"); await loadTopology(true); };
   $("tpChanges").onclick = () => topoPop("changes");
   $("tpZones").onclick = () => topoPop("zones");
