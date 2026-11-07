@@ -39,6 +39,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .layout{display:flex;height:100%;position:relative}
 .sidebar{width:320px;min-width:320px;display:flex;flex-direction:column;background:var(--bg2);
   border-right:1px solid var(--border);overflow:hidden}
+/* Desktop: the top-bar menu button hides the left menu to give the map more room (choice kept in localStorage).
+   Phones keep the slide-over menu below. The button hides itself on the other tabs (body.mode-threats). */
+#btnSidebar{display:grid}
+@media (min-width:901px){.layout.sb-collapsed .sidebar{display:none}}
 .mapwrap{flex:1;position:relative;
   background:radial-gradient(circle at 50% 45%,#13203d 0%,#0a0f1c 70%)}
 #map{position:absolute;inset:0}

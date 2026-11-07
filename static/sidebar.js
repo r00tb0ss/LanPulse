@@ -173,6 +173,39 @@ function renderFindResults() {
     + (hits.length ? "" : `<div class="fr-more">No devices match.</div>`);
 }
 
+/* ------------------------------------------------------------ hide / show the left menu (desktop) */
+const SB_KEY = "lp_sb_collapsed";
+const sbIsMobile = () => window.matchMedia("(max-width: 900px)").matches;
+
+function sbRefit() {      // the map just got more (or less) room: let the layout settle, then tell it
+  setTimeout(() => {
+    try { window.dispatchEvent(new Event("resize")); } catch (_) {}
+    try { if (typeof network !== "undefined" && network) network.redraw(); } catch (_) {}
+    try { if (typeof topoFitView === "function" && $("topoSvg") && $("topoSvg").clientWidth > 0) topoFitView(); } catch (_) {}
+  }, 60);
+}
+
+function setSidebarCollapsed(on, save = true) {
+  $("netView").classList.toggle("sb-collapsed", on);
+  const b = $("btnSidebar");
+  b.title = on ? "Show the side menu" : "Hide the side menu";
+  b.setAttribute("aria-pressed", String(!on));
+  if (save) { try { localStorage.setItem(SB_KEY, on ? "1" : "0"); } catch (_) {} }
+  sbRefit();
+}
+
+function toggleSidebar() {
+  if (sbIsMobile()) { $("sidebar").classList.toggle("open"); return; }   // phones: slide-over menu, as before
+  setSidebarCollapsed(!$("netView").classList.contains("sb-collapsed"));
+}
+
+function restoreSidebarState() {
+  let on = false;
+  try { on = localStorage.getItem(SB_KEY) === "1"; } catch (_) {}
+  if (on && !sbIsMobile()) setSidebarCollapsed(true, false);
+  else if (!sbIsMobile()) $("btnSidebar").title = "Hide the side menu";
+}
+
 /* ------------------------------------------------------------ render + wiring */
 function renderSidebar() {
   renderAttention();
@@ -237,4 +270,5 @@ function renderSidebar() {
   setInterval(() => { if (view === "net") { renderHealth(); loadBusiest(); } }, 15000);
   setTimeout(loadBusiest, 1500);
   renderSidebar();
+  restoreSidebarState();
 })();
