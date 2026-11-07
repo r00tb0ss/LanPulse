@@ -148,6 +148,13 @@ class TopologyRates(unittest.TestCase):
         self.assertIsNone(topology._client_rate({}))
         self.assertIsNone(topology._client_rate({"bytes-r": "x"}))
 
+    def test_client_dirs(self):
+        self.assertEqual(topology._client_dirs({"tx_bytes-r": 1, "rx_bytes-r": 2}), (1.0, 2.0))
+        self.assertEqual(topology._client_dirs({"tx_bytes-r": 5}), (5.0, None))
+        self.assertEqual(topology._client_dirs({"bytes-r": 9}), (None, None))
+        self.assertEqual(topology._client_dirs({"tx_bytes-r": "x", "rx_bytes-r": -3}), (None, 0.0))
+        self.assertEqual(topology._client_dirs({}), (None, None))
+
 
 class FakeAgent:
     """A tiny SNMP agent: answers GET-BULK from a sorted OID table. Shares the module's own BER code,
