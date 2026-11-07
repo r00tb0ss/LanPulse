@@ -68,13 +68,17 @@ def latest(current: str, force: bool = False) -> dict:
     the newest version found wins."""
     if not force and _cache["data"] and time.time() - _cache["t"] < 600:
         return {**_cache["data"], "newer": version_tuple(_cache["data"]["version"]) > version_tuple(current)}
-    best, errors = None, []
+    best, errors, limited = None, [], False
     for label, kind, api in SOURCES:
         try:
             with _open(api, 15) as r:
                 d = _parse(kind, json.loads(r.read(2_000_000)))
         except urllib.error.HTTPError as e:
-            errors.append(f"{label}: no release published yet" if e.code == 404 else f"{label} answered {e.code}")
+            if e.code == 429:
+                limited = True
+                errors.append(f"{label}: rate limited, try again in a minute")
+            else:
+                errors.append(f"{label}: no release published yet" if e.code == 404 else f"{label} answered {e.code}")
             continue
         except Exception as e:
             errors.append(f"{label}: couldn't reach it ({e.__class__.__name__})")
@@ -85,6 +89,8 @@ def latest(current: str, force: bool = False) -> dict:
         d["source"] = label
         if best is None or version_tuple(d["version"]) > version_tuple(best["version"]):
             best = d
+    if best is None and limited and _cache["data"]:
+        return {**_cache["data"], "newer": version_tuple(_cache["data"]["version"]) > version_tuple(current)}
     if best is None:
         return {"error": "No release found. " + "; ".join(errors) + ". Check this server's internet access, or choose a file yourself."}
     _cache.update(t=time.time(), data=best)
