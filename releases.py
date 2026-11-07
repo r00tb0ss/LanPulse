@@ -17,11 +17,13 @@ from pathlib import Path
 
 GITLAB_PROJECT = "r00tb0ss/lanpulse"
 GITHUB_REPO = "r00tb0ss/LanPulse"
+PAGES_URL = "https://r00tb0ss.gitlab.io/lanpulse/latest.json"   # written by the pages job in .gitlab-ci.yml
 SOURCES = (
+    ("GitLab Pages", "pages", PAGES_URL),   # not rate-limited like the API, so it goes first
     ("GitLab", "gitlab", f"https://gitlab.com/api/v4/projects/{urllib.parse.quote(GITLAB_PROJECT, safe='')}/releases/permalink/latest"),
     ("GitHub", "github", f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"),
 )
-ALLOWED_HOSTS = ("gitlab.com", "github.com", "api.github.com", "objects.githubusercontent.com",
+ALLOWED_HOSTS = ("gitlab.com", "r00tb0ss.gitlab.io", "github.com", "api.github.com", "objects.githubusercontent.com",
                  "release-assets.githubusercontent.com", "github-releases.githubusercontent.com")
 _cache: dict = {"t": 0.0, "data": None}
 
@@ -48,6 +50,11 @@ def _open(url: str, timeout: int):
 
 
 def _parse(kind: str, j: dict) -> dict:
+    if kind == "pages":
+        tag = j.get("tag") or ""
+        ver = str(j.get("version") or tag.lstrip("vV"))
+        return {"tag": tag, "version": ver, "name": f"LanPulse {ver}", "notes": "", "url": j.get("url", ""),
+                "asset_url": j.get("asset_url", ""), "size": 0, "published": ""}
     tag = j.get("tag_name") or ""
     if kind == "gitlab":
         links = [a for a in (j.get("assets") or {}).get("links", []) if str(a.get("name", "")).lower().endswith(".zip")]
@@ -89,6 +96,8 @@ def latest(current: str, force: bool = False) -> dict:
         d["source"] = label
         if best is None or version_tuple(d["version"]) > version_tuple(best["version"]):
             best = d
+        if kind == "pages":
+            break   # Pages answered; don't spend the rate-limited API
     if best is None and limited and _cache["data"]:
         return {**_cache["data"], "newer": version_tuple(_cache["data"]["version"]) > version_tuple(current)}
     if best is None:

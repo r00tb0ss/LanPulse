@@ -82,7 +82,29 @@ class ReleaseSources(unittest.TestCase):
             releases._open = orig
             releases._cache.update(t=0.0, data=None)
         self.assertEqual((r["version"], r["source"], r["newer"]), ("1.25.36", "GitHub", True))
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)   # Pages, GitLab API, GitHub
+
+    def test_pages_answer_skips_the_api(self):
+        calls = []
+
+        def fake_open(url, timeout):
+            import io
+            import json
+            calls.append(url)
+            return io.BytesIO(json.dumps({"tag": "v1.25.37", "version": "1.25.37",
+                                          "asset_url": "https://gitlab.com/-/project/1/uploads/abc/lanpulse.zip",
+                                          "url": "https://gitlab.com/r00tb0ss/lanpulse/-/releases/v1.25.37"}).encode())
+
+        orig = releases._open
+        releases._open = fake_open
+        releases._cache.update(t=0.0, data=None)
+        try:
+            r = releases.latest("1.25.30", force=True)
+        finally:
+            releases._open = orig
+            releases._cache.update(t=0.0, data=None)
+        self.assertEqual((r["version"], r["source"], r["newer"]), ("1.25.37", "GitLab Pages", True))
+        self.assertEqual(len(calls), 1)
 
     def test_only_release_hosts_are_allowed(self):
         with self.assertRaises(Exception):

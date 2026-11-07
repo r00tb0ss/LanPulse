@@ -15,8 +15,26 @@ checks:
 pages:
   stage: deploy
   image: alpine:3.20
+  needs:
+    - checks
+    - job: publish-release
+      optional: true
   script:
     - mkdir public && cp -r docs/* public/
+    - apk add --no-cache curl jq
+    - VER=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app.py | head -n 1)
+    - API="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
+    # latest.json tells the in-app updater the newest version without touching the rate-limited API.
+    # Only written when the release (and so its lanpulse.zip link) already exists; the link is read from the
+    # release itself, so it works for releases made by tools/release_gitlab.py or by publish-release.
+    - |
+      URL=$(curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" "$API/releases/v$VER" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip")][0] | (.direct_asset_url // .url) // empty')
+      if [ -n "$URL" ]; then
+        jq -n --arg tag "v$VER" --arg v "$VER" --arg a "$URL" --arg u "$CI_PROJECT_URL/-/releases/v$VER" '{tag: $tag, version: $v, asset_url: $a, url: $u}' > public/latest.json
+        echo "latest.json written for v$VER"
+      else
+        echo "No release for v$VER yet, so no latest.json"
+      fi
   artifacts:
     paths: [public]
   rules:
@@ -27,6 +45,7 @@ pages:
 publish-release:
   stage: deploy
   image: alpine:3.20
+  allow_failure: true   # a failed release must not block the pages deploy, which waits on this job
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
       changes: [app.py]
