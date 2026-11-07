@@ -261,6 +261,11 @@ class Topology:
             uinfra, uclient = ud.get(mac), uc.get(mac)
             if n["kind"] == "gateway" and nid == gateway:
                 n["parent"] = "__internet"
+                for src in ((uinfra or {}).get("uplink"), (uinfra or {}).get("wan1")):    # the internet link, as the gateway sees it
+                    wtx, wrx = _client_dirs(src or {})
+                    if wtx is not None or wrx is not None:
+                        n["uplink_tx"], n["uplink_rx"] = wtx, wrx
+                        break
                 continue
             parent = None
             if man.get("parent"):
@@ -273,6 +278,7 @@ class Topology:
                     n["source"] = "unifi"
                 wired = bool(uclient.get("is_wired"))
                 n["rate"] = _client_rate(uclient)
+                n["rate_tx"], n["rate_rx"] = _client_dirs(uclient)
                 if wired:
                     sw = ud.get(pm) or {}
                     port = uclient.get("sw_port")
@@ -300,6 +306,7 @@ class Topology:
                     n["link"] = {"medium": "wifi" if wireless else "wired", "port": up.get("uplink_remote_port") or up.get("port_idx"),
                                  "speed": up.get("speed"), "mesh": wireless}
                     n["uplink_rate"] = _client_rate(up)
+                    n["uplink_tx"], n["uplink_rx"] = _client_dirs(up)
             if parent is None and nid in snmp_par:
                 parent, n["link"] = snmp_par[nid][0], {**snmp_par[nid][1]}
                 n["source"] = "snmp"
@@ -405,6 +412,20 @@ def _client_rate(c: dict):
         return max(0.0, float(v)) if v is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _client_dirs(c: dict):
+    """(tx, rx) bytes per second exactly as UniFi reports them, or (None, None) if it gave neither. tx and rx are counted
+    from the reporting device's side (a client's record is the access point's view), so which one is the device's upload
+    is decided in the dashboard, where the Swap button fixes it if it looks backwards next to the UniFi app."""
+    out = []
+    for k in ("tx_bytes-r", "rx_bytes-r"):
+        try:
+            v = c.get(k)
+            out.append(max(0.0, float(v)) if v is not None else None)
+        except (TypeError, ValueError):
+            out.append(None)
+    return (out[0], out[1]) if any(v is not None for v in out) else (None, None)
 
 
 def demo_unifi(devices) -> dict:

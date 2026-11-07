@@ -11,6 +11,8 @@ try { TOPO.color = localStorage.getItem("nm_topo_color") || "type"; } catch (_) 
 TOPO.spread = (() => { try { return localStorage.getItem("nm_topo_spread") !== "0"; } catch (_) { return true; } })();
 TOPO.pos = (() => { try { return JSON.parse(localStorage.getItem("nm_topo_pos") || "{}") || {}; } catch (_) { return {}; } })();
 const topoSavePos = () => { try { localStorage.setItem("nm_topo_pos", JSON.stringify(TOPO.pos)); } catch (_) {} };
+TOPO.flip = (() => { try { return localStorage.getItem("lp_topo_flip") === "1"; } catch (_) { return false; } })();
+const TOPO_DN = "#38bdf8", TOPO_UP = "#a78bfa", TOPO_GLOW = "#3b82f6";   // download, upload and the busy-cable glow, as in the UniFi topology
 const TOPO_INFRA = new Set(["gateway", "switch", "ap"]);
 const TOPO_SIZE = {hw: 224, hh: 74, cw: 164, ch: 46, gap: 10, pad: 12, vgap: 54, hgap: 28, maxChips: 24};
 const TOPO_COLORS = [["type", "Device type"], ["status", "Status"], ["risk", "Security risk"], ["zone", "Zone / VLAN"],
@@ -46,13 +48,22 @@ function topoSmooth(data) {
   TOPO.smFor = data;
   const prev = TOPO.sm || new Map(), now = new Map();
   for (const n of data.nodes) {
-    const p = prev.get(n.id) || {rate: 0, up: 0};
+    const p = prev.get(n.id) || {rate: 0, up: 0, tx: 0, rx: 0, utx: 0, urx: 0};
     const hold = (cur, old) => Math.max(cur || 0, (old || 0) * 0.65);      // fades to a third in ~2 refreshes
     const r = hold(n.rate, p.rate), u = hold(n.uplink_rate, p.up);
-    now.set(n.id, {rate: r < 50 ? 0 : r, up: u < 50 ? 0 : u});            // under 50 bytes/s counts as idle
+    const q = (v) => (v < 50 ? 0 : v);
+    now.set(n.id, {rate: q(r), up: q(u), tx: q(hold(n.rate_tx, p.tx)), rx: q(hold(n.rate_rx, p.rx)), utx: q(hold(n.uplink_tx, p.utx)), urx: q(hold(n.uplink_rx, p.urx))});            // under 50 bytes/s counts as idle
   }
   TOPO.sm = now;
-  for (const n of data.nodes) { const s = now.get(n.id); if (s.rate > 0) n.rate = s.rate; if (s.up > 0) n.uplink_rate = s.up; }
+  for (const n of data.nodes) {
+    const s = now.get(n.id);
+    if (s.rate > 0) n.rate = s.rate;
+    if (s.up > 0) n.uplink_rate = s.up;
+    if (s.tx > 0) n.rate_tx = s.tx;
+    if (s.rx > 0) n.rate_rx = s.rx;
+    if (s.utx > 0) n.uplink_tx = s.utx;
+    if (s.urx > 0) n.uplink_rx = s.urx;
+  }
 }
 
 function topoTraffic(data) {
@@ -87,7 +98,12 @@ function topoTraffic(data) {
   const maxSub = Math.max(1, ...data.nodes.filter((n) => n.kind !== "gateway").map((n) => sub.get(n.id) || 0));
   const lg = (c, m) => (c > 0 ? Math.max(0.08, Math.log1p(c) / Math.log1p(m)) : 0);   // log scale: a busy device doesn't flatten the rest
   const fmt = rates ? topoBps : (c) => c.toLocaleString() + " conn/h";
-  return {own, sub, max, maxSub, lg, rates, fmt};
+  // Upload and download per link, when UniFi reports the two directions separately
+  const dirs = new Map();
+  if (rates) for (const n of data.nodes) { const x = topoDirs(n); if (x) dirs.set(n.id, x); }
+  const maxDir = Math.max(1, ...[...dirs.values()].flatMap((x) => [x.dn, x.up]));
+  const lgd = (v) => (v > 0 ? Math.max(0.1, Math.log1p(v) / Math.log1p(maxDir)) : 0);
+  return {own, sub, max, maxSub, lg, rates, fmt, dirs, lgd};
 }
 
 /* bytes per second -> "4.2 Mbps" */
@@ -97,6 +113,27 @@ function topoBps(b) {
   if (bits >= 1e6) return (bits / 1e6).toFixed(bits >= 1e7 ? 0 : 1) + " Mbps";
   if (bits >= 1e3) return Math.round(bits / 1e3) + " Kbps";
   return Math.round(bits) + " bps";
+}
+
+/* bytes per second -> "1.09 Kbps", "13.9 Kbps", "178 Kbps" (three significant figures, like the UniFi app) */
+function topoBps3(b) {
+  let v = (b || 0) * 8, i = 0;
+  const u = ["bps", "Kbps", "Mbps", "Gbps"];
+  while (v >= 999.5 && i < 3) { v /= 1000; i++; }
+  return (i === 0 ? Math.round(v) : v >= 99.95 ? v.toFixed(0) : v >= 9.995 ? v.toFixed(1) : v.toFixed(2)) + " " + u[i];
+}
+
+/* This node's own link in each direction (bytes/s), or null when UniFi didn't report the two separately.
+   UniFi counts a client's tx/rx from the access point's side (tx = AP to client = the client's download) and a device's
+   uplink from the device's own side (tx = up toward the gateway). That is a best reading, not a certainty, so the toolbar
+   has a Swap button (TOPO.flip) to match it against the UniFi app. */
+function topoDirs(n) {
+  const infra = n.kind !== "client";
+  const a = infra ? n.uplink_tx : n.rate_tx, b = infra ? n.uplink_rx : n.rate_rx;      // UniFi's tx and rx
+  if (!(a > 0) && !(b > 0)) return null;
+  let up = infra ? a : b, dn = infra ? b : a;
+  if (TOPO.flip) [up, dn] = [dn, up];
+  return {dn: dn || 0, up: up || 0};
 }
 
 function startTopoTimer() {
@@ -218,17 +255,35 @@ const topoHeat = (lv) => `hsl(${Math.round(140 - 125 * Math.max(0, Math.min(1, l
 
 /* A link drawn like a cable: dark jacket, lighter core, and packets travelling toward the parent when there is traffic. */
 function topoCable(d, o) {
-  const {T, wired, w, lv, hot, exp} = o, heatc = topoHeat(lv);
+  const {T, wired, w, lv, hot, exp, dir} = o, heatc = topoHeat(lv);
   let g = "";
   if (wired) {
     g += `<path d="${d}" fill="none" stroke="${T.bg}" stroke-width="${w + 4}" stroke-linecap="round" opacity=".95"/>`;
     g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : T.muted}" stroke-width="${w}" stroke-linecap="round" opacity="${hot ? 1 : 0.45}"/>`;
-    if (lv) g += `<path d="${d}" fill="none" stroke="${heatc}" stroke-width="${w}" stroke-linecap="round" opacity="${0.18 + lv * 0.3}"/>`;
+    if (lv && !dir) g += `<path d="${d}" fill="none" stroke="${heatc}" stroke-width="${w}" stroke-linecap="round" opacity="${0.18 + lv * 0.3}"/>`;
   } else {
     g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : "#f59e0b"}" stroke-width="${hot ? 2.2 : 1.5}" stroke-dasharray="5 5" opacity=".75"/>`;
   }
-  if (lv && !exp) g += `<path class="tp-pulse" d="${d}" fill="none" stroke="${heatc}" stroke-width="${(w + 1.5 + lv * 2.5).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(1.7 - lv * 1.2).toFixed(2)}s"/>`;
+  if (dir) g += topoFlow(d, w, dir.dn, dir.up, exp);
+  else if (lv && !exp) g += `<path class="tp-pulse" d="${d}" fill="none" stroke="${heatc}" stroke-width="${(w + 1.5 + lv * 2.5).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(1.7 - lv * 1.2).toFixed(2)}s"/>`;
   return g;
+}
+
+/* UniFi-style flow: a soft glow that grows with traffic, and dots travelling each way along the cable. Blue is download
+   (toward the device), purple is upload (toward the gateway); each direction's dot speed follows its own rate. Idle
+   directions draw nothing, so quiet links stay still. Paths run from the parent to the device. */
+function topoFlow(d, w, dn, up, exp) {
+  const m = Math.max(dn, up);
+  if (!m) return "";
+  const glow = `<path d="${d}" fill="none" stroke="${TOPO_GLOW}" stroke-width="${(w + 3 + m * 5).toFixed(1)}" stroke-linecap="round" opacity="${(0.1 + m * 0.3).toFixed(2)}"/>`;
+  if (exp) return glow;
+  const dot = (cls, col, lv, delay) => (lv ? `<path class="tp-flow ${cls}" d="${d}" fill="none" stroke="${col}" stroke-width="${(w + 1.2).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(2.2 - lv * 1.6).toFixed(2)}s;animation-delay:-${delay}s"/>` : "");
+  return glow + dot("dn", TOPO_DN, dn, 0) + dot("up", TOPO_UP, up, 0.9);
+}
+
+/* "↓ 178 Kbps  ↑ 13.9 Kbps" in the download and upload colours */
+function topoRateLabel(dd, x, y, anchor = "middle", size = 10.5) {
+  return `<text x="${x}" y="${y}" font-size="${size}" text-anchor="${anchor}"><tspan fill="${TOPO_DN}">↓ ${topoBps3(dd.dn)}</tspan><tspan dx="8" fill="${TOPO_UP}">↑ ${topoBps3(dd.up)}</tspan></text>`;
 }
 
 function weakClients(data) {
@@ -248,13 +303,20 @@ function topoSvg(L, T, opts = {}) {
     ${glyph ? `<text x="${L.inet.x + 26}" y="${L.inet.y + 28}" ${FA} font-size="16" fill="${T.accent}"></text>` : ""}
     <text x="${L.inet.x + 52}" y="${L.inet.y + 27}" font-size="13" font-weight="600" fill="${T.text}">Internet</text></g>`);
   out.push(`<path d="M${g.cx},${L.inet.y + 44} V${g.y}" stroke="${T.accent}" stroke-width="2.4" fill="none" opacity=".7"/>`);
+  const gd = TR && TR.dirs.get(g.node.id);      // the gateway's own link is the internet connection
+  if (gd) {
+    const iy = L.inet.y + 44;
+    out.push(topoFlow(`M${g.cx},${iy} V${g.y}`, 2.4, TR.lgd(gd.dn), TR.lgd(gd.up), opts.export));
+    out.push(topoRateLabel(gd, g.cx + 14, (iy + g.y) / 2 + 4, "start", 11.5));
+  }
   // links between infrastructure
   for (const l of L.links) {
     const a = l.from, b = l.to, n = b.node, my = (a.y + S.hh + b.y) / 2, wired = (n.link || {}).medium !== "wifi";
     const w = wired ? ((n.link || {}).speed >= 2500 ? 3.4 : (n.link || {}).speed >= 1000 ? 2.6 : 1.8) : 2.2;
     const hot = focus && focus.has(n.id) && focus.has(a.node.id);
-    const tf = TR ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0;
-    out.push(`<g${dim(n.id)}>${topoCable(`M${a.cx},${a.y + S.hh} C${a.cx},${my} ${b.cx},${my} ${b.cx},${b.y}`, {T, wired, w, lv: tf, hot, exp: opts.export})}
+    const tf = TR ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0, dd = TR && TR.dirs.get(n.id);
+    out.push(`<g${dim(n.id)}>${topoCable(`M${a.cx},${a.y + S.hh} C${a.cx},${my} ${b.cx},${my} ${b.cx},${b.y}`, {T, wired, w, lv: tf, hot, exp: opts.export, dir: dd ? {dn: TR.lgd(dd.dn), up: TR.lgd(dd.up)} : null})}
+      ${dd ? topoRateLabel(dd, (a.cx + b.cx) / 2 + 8, my + 17, "start") : ""}
       ${topoLinkLabel(n) ? `<text x="${(a.cx + b.cx) / 2 + 8}" y="${my + 4}" font-size="10.5" fill="${T.muted}">${esc(topoLinkLabel(n))}</text>` : ""}</g>`);
   }
   // blocks of devices
@@ -274,9 +336,9 @@ function topoSvg(L, T, opts = {}) {
   if (TOPO.spread) {
     for (const c of L.chips) {
       const n = c.node, p = c.parent, x1 = p.cx, y1 = p.y + S.hh, x2 = c.x + S.cw / 2, y2 = c.y, my = y1 + (y2 - y1) * 0.55, wifi = (n.link || {}).medium === "wifi";
-      const cnt = TR ? TR.own.get(n.id) || 0 : 0, lv = cnt ? TR.lg(cnt, TR.max) : 0, hot = focus && focus.has(n.id);
+      const cnt = TR ? TR.own.get(n.id) || 0 : 0, lv = cnt ? TR.lg(cnt, TR.max) : 0, hot = focus && focus.has(n.id), dd = TR && TR.dirs.get(n.id);
       out.push(`<g${focus && !focus.has(n.id) ? ' opacity=".2"' : ""}>${topoCable(`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`,
-        {T, wired: !wifi, w: (n.link || {}).speed >= 2500 ? 3 : (n.link || {}).speed >= 1000 ? 2.4 : 1.8, lv, hot, exp: opts.export})}</g>`);
+        {T, wired: !wifi, w: (n.link || {}).speed >= 2500 ? 3 : (n.link || {}).speed >= 1000 ? 2.4 : 1.8, lv, hot, exp: opts.export, dir: dd ? {dn: TR.lgd(dd.dn), up: TR.lgd(dd.up)} : null})}</g>`);
     }
   }
   // device chips
@@ -292,7 +354,8 @@ function topoSvg(L, T, opts = {}) {
       <text x="${c.x + 32}" y="${c.y + 36}" font-size="10.5" fill="${T.muted}">${esc(tx(n.ip, 16))}</text>
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
-      ${TR && TOPO.spread ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
+      ${TR && TOPO.spread && TR.dirs.get(n.id) ? topoRateLabel(TR.dirs.get(n.id), c.x + S.cw / 2, c.y + S.ch + 13, "middle", 10) : ""}
+      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -538,6 +601,7 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
     ${TOPO.traffic && topoTraffic(d).rates ? '<span class="tp-src ok" title="Live speeds reported by your UniFi gateway, refreshed about every 30 seconds. Cables and bars use a log scale so one busy device doesn\'t hide the rest."><i class="fa-solid fa-gauge-high"></i>Live throughput from UniFi</span>' : ""}
     ${TOPO.traffic && !topoTraffic(d).rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
+    ${TOPO.traffic && topoTraffic(d).dirs.size ? `<button class="btn sm ${TOPO.flip ? "on" : ""}" id="tpFlip" title="Upload and download come from UniFi, which counts them from the access point's side. If they look backwards next to the UniFi app, click to swap them."><i class="fa-solid fa-arrow-right-arrow-left"></i>Swap ↑↓</button>` : ""}
     <span class="tp-spacer"></span>
     ${wifi ? `<span class="tp-chipinfo"><i class="fa-solid fa-wifi"></i>${wifi} on Wi-Fi${weak.length ? ` · <b class="warn">${weak.length} weak</b>` : ""}</span>` : ""}
     ${src}${snmpChip}`;
@@ -545,6 +609,7 @@ function renderTopoBar(d) {
   if ($("tpZone")) $("tpZone").onchange = (e) => { TOPO.zone = e.target.value; TOPO.fit = true; renderTopology(); };
   $("tpTraffic").onclick = () => { TOPO.traffic = !TOPO.traffic; if (TOPO.traffic) loadTopoTraffic(); else renderTopology(); };
   $("tpFit").onclick = topoFitView;
+  if ($("tpFlip")) $("tpFlip").onclick = () => { TOPO.flip = !TOPO.flip; try { localStorage.setItem("lp_topo_flip", TOPO.flip ? "1" : "0"); } catch (_) {} renderTopology(); };
   $("tpSpread").onclick = () => { TOPO.spread = !TOPO.spread; try { localStorage.setItem("nm_topo_spread", TOPO.spread ? "1" : "0"); } catch (_) {} TOPO.fit = true; renderTopology(); };
   if ($("tpResetPos")) $("tpResetPos").onclick = () => { TOPO.pos = {}; topoSavePos(); TOPO.fit = true; renderTopology(); };
   $("tpZoomIn").onclick = () => topoZoomBy(1.4);
@@ -592,6 +657,8 @@ function renderTopoInfo() {
   if (TOPO.traffic) {
     const T2 = topoTraffic(d), c = n.kind === "client" ? T2.own.get(n.id) : T2.sub.get(n.id);
     if (T2.rates) rows.push([n.kind === "client" ? "Throughput now" : "Throughput below", c ? topoBps(c) : "idle"]);
+    const dd = T2.dirs.get(n.id);
+    if (dd) rows.push(["Down / up", `↓ ${topoBps3(dd.dn)}   ↑ ${topoBps3(dd.up)}`]);
     const k = n.kind === "client" ? TOPO.talkers.get(n.id) : [...TOPO.talkers].filter(([id]) => { for (let cur = d.nodes.find((x) => x.id === id), i = 0; cur && i < 20; i++, cur = d.nodes.find((x) => x.id === cur.parent)) if (cur.id === n.id) return true; return false; }).reduce((a, [, v]) => a + v, 0);
     if (!T2.rates || k) rows.push(["Connections (1h)", k ? k.toLocaleString() : "none logged"]);
   }
