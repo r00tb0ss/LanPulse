@@ -43,11 +43,13 @@ publish-release:
       fi
     - git archive --prefix=lanpulse/ HEAD -o lanpulse.zip --format=zip
     - PKG="$API/packages/generic/lanpulse/$VER/lanpulse.zip"
-    - curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file lanpulse.zip "$PKG"
+    - |
+      curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file lanpulse.zip "$PKG"
     - |
       if [ -f "docs/releases/$VER.md" ]; then cp "docs/releases/$VER.md" notes.md; else echo "LanPulse $VER" > notes.md; fi
     - |
       jq -n --arg tag "v$VER" --arg name "LanPulse $VER" --arg ref "$CI_COMMIT_SHA" --arg url "$PKG" --rawfile desc notes.md \
         '{tag_name: $tag, name: $name, ref: $ref, description: $desc, assets: {links: [{name: "lanpulse.zip", url: $url, link_type: "package"}]}}' > release.json
-    - curl -fsS -X POST -H "JOB-TOKEN: $CI_JOB_TOKEN" -H "Content-Type: application/json" --data @release.json "$API/releases"
+    - |
+      curl -fsS -X POST -H "JOB-TOKEN: $CI_JOB_TOKEN" -H "Content-Type: application/json" --data @release.json "$API/releases"
     - echo "Published v$VER"
