@@ -22,13 +22,13 @@ const FA = `font-family="'Font Awesome 6 Free','Font Awesome 7 Free','Font Aweso
 const FAB = `font-family="'Font Awesome 6 Brands','Font Awesome 7 Brands','Font Awesome 5 Brands'" font-weight="400"`;
 
 /* ------------------------------------------------------------ data */
-async function loadTopology(force = false) {
+async function loadTopology(force = false, live = false) {
   if (TOPO.loading) return;
   TOPO.loading = true;
   try {
-    const r = await api(force ? "/api/topology/refresh" : "/api/topology", force ? "POST" : "GET");
+    const r = await api(force ? "/api/topology/refresh" : live ? "/api/topology?live=1" : "/api/topology", force ? "POST" : "GET");
     if (r) { TOPO.data = r; if (netLayout === "topo") renderTopology(); }
-    if (TOPO.traffic) loadTopoTraffic();
+    if (TOPO.traffic && !live) loadTopoTraffic();      // the live ticks only need the UniFi speeds, not the heavier connection counts
   } finally { TOPO.loading = false; }
 }
 
@@ -145,6 +145,10 @@ function topoDirs(n) {
 function startTopoTimer() {
   clearInterval(TOPO.timer);
   TOPO.timer = setInterval(() => { if (netLayout === "topo" && view === "net") loadTopology(); }, 30000);
+  // With Traffic on, ask every 5 s while this view is open and visible. The server notices and polls UniFi every 5 s too,
+  // then relaxes back to 30 s once nobody is asking.
+  clearInterval(TOPO.liveTimer);
+  TOPO.liveTimer = setInterval(() => { if (TOPO.traffic && netLayout === "topo" && view === "net" && !document.hidden) loadTopology(false, true); }, 5000);
 }
 
 /* ------------------------------------------------------------ colours */
@@ -276,7 +280,7 @@ function topoCable(d, o) {
     g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : TOPO.color === "plain" ? TOPO_GLOW : "#f59e0b"}" stroke-width="${hot ? 2.2 : 1.5}" stroke-dasharray="5 5" opacity=".75"/>`;
   }
   if (dir) g += topoFlow(d, w, dir.dn, dir.up, exp);
-  else if (lv && !exp) g += `<path class="tp-pulse" d="${d}" fill="none" stroke="${heatc}" stroke-width="${(w + 1.5 + lv * 2.5).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(1.7 - lv * 1.2).toFixed(2)}s"/>`;
+  else if (lv && !exp) g += `<path class="tp-pulse" d="${d}" fill="none" stroke="${heatc}" stroke-width="${(w + 1.5 + lv * 2.5).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(1.7 - lv * 1.2).toFixed(2)}s;animation-delay:-${((Date.now() / 1000) % (1.7 - lv * 1.2)).toFixed(2)}s"/>`;
   return g;
 }
 
@@ -288,7 +292,12 @@ function topoFlow(d, w, dn, up, exp) {
   if (!m) return "";
   const glow = `<path d="${d}" fill="none" stroke="${TOPO_GLOW}" stroke-width="${(w + 3 + m * 5).toFixed(1)}" stroke-linecap="round" opacity="${(0.1 + m * 0.3).toFixed(2)}"/>`;
   if (exp) return glow;
-  const dot = (cls, col, lv, delay) => (lv ? `<path class="tp-flow ${cls}" d="${d}" fill="none" stroke="${col}" stroke-width="${(w + 1.2).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(2.2 - lv * 1.6).toFixed(2)}s;animation-delay:-${delay}s"/>` : "");
+  // The animation phase comes from the clock, so redrawing on every live update doesn't make the dots jump back to the start
+  const dot = (cls, col, lv, delay) => {
+    if (!lv) return "";
+    const dur = 2.2 - lv * 1.6;
+    return `<path class="tp-flow ${cls}" d="${d}" fill="none" stroke="${col}" stroke-width="${(w + 1.2).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${dur.toFixed(2)}s;animation-delay:-${(((Date.now() / 1000) % dur) + delay).toFixed(2)}s"/>`;
+  };
   return glow + dot("dn", TOPO_DN, dn, 0) + dot("up", TOPO_UP, up, 0.9);
 }
 
@@ -610,7 +619,7 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpZoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
     <button class="btn sm" id="tpFit" title="Fit to screen"><i class="fa-solid fa-expand"></i></button>
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
-    ${TOPO.traffic && topoTraffic(d).rates ? '<span class="tp-src ok" title="Live speeds reported by your UniFi gateway, refreshed about every 30 seconds. Cables and bars use a log scale so one busy device doesn\'t hide the rest."><i class="fa-solid fa-gauge-high"></i>Live throughput from UniFi</span>' : ""}
+    ${TOPO.traffic && topoTraffic(d).rates ? '<span class="tp-src ok" title="Live speeds reported by your UniFi gateway, refreshed about every 5 seconds while this view is open. Cables and bars use a log scale so one busy device doesn\'t hide the rest."><i class="fa-solid fa-gauge-high"></i>Live throughput from UniFi</span>' : ""}
     ${TOPO.traffic && !topoTraffic(d).rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
     ${TOPO.traffic && topoTraffic(d).dirs.size ? `<button class="btn sm ${TOPO.flip ? "on" : ""}" id="tpFlip" title="Upload and download for Wi-Fi devices and switch/AP links come from UniFi, which counts them from the device's side. If they look backwards next to the UniFi app, click to swap them. Wired devices are read at the switch port and aren't affected."><i class="fa-solid fa-arrow-right-arrow-left"></i>Swap ↑↓</button>` : ""}
     <span class="tp-spacer"></span>
