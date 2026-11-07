@@ -2053,6 +2053,8 @@ def build_app(nm: LanPulse) -> FastAPI:
             log.exception("topology refresh failed")
             nm.topology.set_unifi(None, f"Unexpected error ({e.__class__.__name__}).")
 
+    topo_watch = {"until": 0.0}      # pushed forward while a browser is watching the live topology
+
     async def topology_loop():
         await asyncio.sleep(8)
         while True:
@@ -2060,10 +2062,15 @@ def build_app(nm: LanPulse) -> FastAPI:
                 await refresh_topology()
             except Exception:
                 log.exception("topology loop")
-            await asyncio.sleep(30)
+            waited = 0
+            while waited < (5 if time.time() < topo_watch["until"] else 30):    # 30 s, or 5 s while someone is watching
+                await asyncio.sleep(1)
+                waited += 1
 
     @app.get("/api/topology")
-    async def topology_get():
+    async def topology_get(live: int = 0):
+        if live:
+            topo_watch["until"] = time.time() + 20       # the dashboard is showing live traffic: poll UniFi every 5 s for a while
         return nm.topology.build()
 
     @app.post("/api/topology/refresh")
