@@ -175,12 +175,16 @@ function topoLayout(data) {
   for (const n of nodes) { const p = n.parent || "__internet"; if (!ch.has(p)) ch.set(p, []); ch.get(p).push(n); }
   const byName = (a, b) => (a.zone || "").localeCompare(b.zone || "") || (a.name || "").localeCompare(b.name || "");
   const zoneOk = (n) => !TOPO.zone || n.zone === TOPO.zone;
+  // Online selected (the Online tile) or Offline unticked: take offline devices off the map; Offline selected does the reverse.
+  // Searches and the other tiles only dim, so a match can still be seen in place. Switches and access points always stay.
+  const hideOff = statFilter === "__online" || ($("fOffline") && !$("fOffline").checked), hideOn = statFilter === "__offline";
+  const statusOk = (n) => !(hideOff && !n.online) && !(hideOn && n.online);
   const root = data.gateway ? nodes.find((n) => n.id === data.gateway) : null;
 
   function build(X, depth) {
     const kids = (ch.get(X.id) || []).slice();
     const infra = kids.filter((k) => TOPO_INFRA.has(k.kind)).sort(byName);
-    const cl = kids.filter((k) => !TOPO_INFRA.has(k.kind) && zoneOk(k)).sort(byName);
+    const cl = kids.filter((k) => !TOPO_INFRA.has(k.kind) && zoneOk(k) && statusOk(k)).sort(byName);
     const folded = TOPO.collapsed.has(X.id);
     const subs = folded ? [] : infra.map((k) => build(k, depth + 1));
     let cb = null;
