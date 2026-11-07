@@ -48,11 +48,11 @@ function topoSmooth(data) {
   TOPO.smFor = data;
   const prev = TOPO.sm || new Map(), now = new Map();
   for (const n of data.nodes) {
-    const p = prev.get(n.id) || {rate: 0, up: 0, tx: 0, rx: 0, utx: 0, urx: 0};
+    const p = prev.get(n.id) || {rate: 0, up: 0, tx: 0, rx: 0, utx: 0, urx: 0, pdn: 0, pup: 0};
     const hold = (cur, old) => Math.max(cur || 0, (old || 0) * 0.65);      // fades to a third in ~2 refreshes
     const r = hold(n.rate, p.rate), u = hold(n.uplink_rate, p.up);
     const q = (v) => (v < 50 ? 0 : v);
-    now.set(n.id, {rate: q(r), up: q(u), tx: q(hold(n.rate_tx, p.tx)), rx: q(hold(n.rate_rx, p.rx)), utx: q(hold(n.uplink_tx, p.utx)), urx: q(hold(n.uplink_rx, p.urx))});            // under 50 bytes/s counts as idle
+    now.set(n.id, {rate: q(r), up: q(u), tx: q(hold(n.rate_tx, p.tx)), rx: q(hold(n.rate_rx, p.rx)), utx: q(hold(n.uplink_tx, p.utx)), urx: q(hold(n.uplink_rx, p.urx)), pdn: q(hold(n.rate_dn, p.pdn)), pup: q(hold(n.rate_up, p.pup))});            // under 50 bytes/s counts as idle
   }
   TOPO.sm = now;
   for (const n of data.nodes) {
@@ -63,6 +63,8 @@ function topoSmooth(data) {
     if (s.rx > 0) n.rate_rx = s.rx;
     if (s.utx > 0) n.uplink_tx = s.utx;
     if (s.urx > 0) n.uplink_rx = s.urx;
+    if (s.pdn > 0) n.rate_dn = s.pdn;
+    if (s.pup > 0) n.rate_up = s.pup;
   }
 }
 
@@ -128,6 +130,10 @@ function topoBps3(b) {
    uplink from the device's own side (tx = up toward the gateway). That is a best reading, not a certainty, so the toolbar
    has a Swap button (TOPO.flip) to match it against the UniFi app. */
 function topoDirs(n) {
+  if (n.rate_dn != null || n.rate_up != null) {      // a wired device, counted at its switch port: the direction is certain, so Swap doesn't apply
+    const pd = n.rate_dn || 0, pu = n.rate_up || 0;
+    return pd > 0 || pu > 0 ? {dn: pd, up: pu} : null;
+  }
   const infra = n.kind !== "client";
   const a = infra ? n.uplink_tx : n.rate_tx, b = infra ? n.uplink_rx : n.rate_rx;      // UniFi's tx and rx
   if (!(a > 0) && !(b > 0)) return null;
@@ -601,7 +607,7 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
     ${TOPO.traffic && topoTraffic(d).rates ? '<span class="tp-src ok" title="Live speeds reported by your UniFi gateway, refreshed about every 30 seconds. Cables and bars use a log scale so one busy device doesn\'t hide the rest."><i class="fa-solid fa-gauge-high"></i>Live throughput from UniFi</span>' : ""}
     ${TOPO.traffic && !topoTraffic(d).rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
-    ${TOPO.traffic && topoTraffic(d).dirs.size ? `<button class="btn sm ${TOPO.flip ? "on" : ""}" id="tpFlip" title="Upload and download come from UniFi, which counts them from the access point's side. If they look backwards next to the UniFi app, click to swap them."><i class="fa-solid fa-arrow-right-arrow-left"></i>Swap ↑↓</button>` : ""}
+    ${TOPO.traffic && topoTraffic(d).dirs.size ? `<button class="btn sm ${TOPO.flip ? "on" : ""}" id="tpFlip" title="Upload and download for Wi-Fi devices and switch/AP links come from UniFi, which counts them from the device's side. If they look backwards next to the UniFi app, click to swap them. Wired devices are read at the switch port and aren't affected."><i class="fa-solid fa-arrow-right-arrow-left"></i>Swap ↑↓</button>` : ""}
     <span class="tp-spacer"></span>
     ${wifi ? `<span class="tp-chipinfo"><i class="fa-solid fa-wifi"></i>${wifi} on Wi-Fi${weak.length ? ` · <b class="warn">${weak.length} weak</b>` : ""}</span>` : ""}
     ${src}${snmpChip}`;
