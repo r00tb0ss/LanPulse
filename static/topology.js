@@ -5,9 +5,9 @@
    link details, zones (VLANs), colour modes, focus, a change feed, export and a minimap. Drawn as plain SVG so it
    can be exported. Data comes from /api/topology (UniFi where connected, manual choices for any other router). */
 
-const TOPO = {data: null, sel: null, view: {x: 0, y: 0, k: 1}, fit: true, color: "type", zone: "", traffic: false,
+const TOPO = {data: null, sel: null, view: {x: 0, y: 0, k: 1}, fit: true, color: "plain", zone: "", traffic: false,
   talkers: new Map(), collapsed: new Set(), expanded: new Set(), pop: "", layout: null, timer: null, loading: false};
-try { TOPO.color = localStorage.getItem("nm_topo_color") || "type"; } catch (_) {}
+try { TOPO.color = localStorage.getItem("lp_topo_color") || "plain"; } catch (_) {}
 TOPO.spread = (() => { try { return localStorage.getItem("nm_topo_spread") !== "0"; } catch (_) { return true; } })();
 TOPO.pos = (() => { try { return JSON.parse(localStorage.getItem("nm_topo_pos") || "{}") || {}; } catch (_) { return {}; } })();
 const topoSavePos = () => { try { localStorage.setItem("nm_topo_pos", JSON.stringify(TOPO.pos)); } catch (_) {} };
@@ -15,7 +15,7 @@ TOPO.flip = (() => { try { return localStorage.getItem("lp_topo_flip") === "1"; 
 const TOPO_DN = "#38bdf8", TOPO_UP = "#a78bfa", TOPO_GLOW = "#3b82f6";   // download, upload and the busy-cable glow, as in the UniFi topology
 const TOPO_INFRA = new Set(["gateway", "switch", "ap"]);
 const TOPO_SIZE = {hw: 224, hh: 74, cw: 164, ch: 46, gap: 10, pad: 12, vgap: 54, hgap: 28, maxChips: 24};
-const TOPO_COLORS = [["type", "Device type"], ["status", "Status"], ["risk", "Security risk"], ["zone", "Zone / VLAN"],
+const TOPO_COLORS = [["plain", "Single color (UniFi style)"], ["type", "Device type"], ["status", "Status"], ["risk", "Security risk"], ["zone", "Zone / VLAN"],
   ["signal", "Wi-Fi signal"], ["age", "New devices"]];
 const SIGNAL_CLR = {good: "#22c55e", fair: "#f59e0b", poor: "#ef4444"};
 const FA = `font-family="'Font Awesome 6 Free','Font Awesome 7 Free','Font Awesome 5 Free'" font-weight="900"`;
@@ -152,6 +152,7 @@ function topoTheme() {
 function topoNodeColor(n, T) {
   const d = devices.get(n.id);
   switch (TOPO.color) {
+    case "plain": return T.muted;
     case "status": return !n.online ? T.dim : d && !d.trusted ? T.red : T.green;
     case "risk": { const r = d ? risk(d) : 9; return r === 0 ? T.red : r === 1 ? T.amber : r === 2 ? "#60a5fa" : T.green; }
     case "zone": { const z = (TOPO.data.zones || []).find((x) => x.name === n.zone); return z ? z.color : T.dim; }
@@ -240,7 +241,7 @@ function topoLinkLabel(n) {
 
 function sigBars(x, y, q, T) {
   const lvl = q === "good" ? 3 : q === "fair" ? 2 : q === "poor" ? 1 : 0;
-  return [0, 1, 2].map((i) => `<rect x="${x + i * 5}" y="${y - 4 - i * 3}" width="3.4" height="${4 + i * 3}" rx="1" fill="${i < lvl ? SIGNAL_CLR[q] : T.border2}"/>`).join("");
+  return [0, 1, 2].map((i) => `<rect x="${x + i * 5}" y="${y - 4 - i * 3}" width="3.4" height="${4 + i * 3}" rx="1" fill="${i < lvl ? (TOPO.color === "plain" ? T.muted : SIGNAL_CLR[q]) : T.border2}"/>`).join("");
 }
 
 function infraSummary(n) {
@@ -251,7 +252,7 @@ function infraSummary(n) {
 }
 
 /* traffic colour: green when quiet through orange to red when busy (not the theme accent, so it stands out from the map) */
-const topoHeat = (lv) => `hsl(${Math.round(140 - 125 * Math.max(0, Math.min(1, lv)))} 92% 56%)`;
+const topoHeat = (lv) => TOPO.color === "plain" ? "#60a5fa" : `hsl(${Math.round(140 - 125 * Math.max(0, Math.min(1, lv)))} 92% 56%)`;
 
 /* A link drawn like a cable: dark jacket, lighter core, and packets travelling toward the parent when there is traffic. */
 function topoCable(d, o) {
@@ -259,10 +260,10 @@ function topoCable(d, o) {
   let g = "";
   if (wired) {
     g += `<path d="${d}" fill="none" stroke="${T.bg}" stroke-width="${w + 4}" stroke-linecap="round" opacity=".95"/>`;
-    g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : T.muted}" stroke-width="${w}" stroke-linecap="round" opacity="${hot ? 1 : 0.45}"/>`;
+    g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : TOPO.color === "plain" ? TOPO_GLOW : T.muted}" stroke-width="${w}" stroke-linecap="round" opacity="${hot ? 1 : TOPO.color === "plain" ? 0.5 : 0.45}"/>`;
     if (lv && !dir) g += `<path d="${d}" fill="none" stroke="${heatc}" stroke-width="${w}" stroke-linecap="round" opacity="${0.18 + lv * 0.3}"/>`;
   } else {
-    g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : "#f59e0b"}" stroke-width="${hot ? 2.2 : 1.5}" stroke-dasharray="5 5" opacity=".75"/>`;
+    g += `<path d="${d}" fill="none" stroke="${hot ? T.accent : TOPO.color === "plain" ? TOPO_GLOW : "#f59e0b"}" stroke-width="${hot ? 2.2 : 1.5}" stroke-dasharray="5 5" opacity=".75"/>`;
   }
   if (dir) g += topoFlow(d, w, dir.dn, dir.up, exp);
   else if (lv && !exp) g += `<path class="tp-pulse" d="${d}" fill="none" stroke="${heatc}" stroke-width="${(w + 1.5 + lv * 2.5).toFixed(1)}" stroke-linecap="round" stroke-dasharray="0.1 15.9" style="animation-duration:${(1.7 - lv * 1.2).toFixed(2)}s"/>`;
@@ -362,7 +363,7 @@ function topoSvg(L, T, opts = {}) {
   if (focus) out.push(topoPathSvg(L, T));   // behind the cards, so the highlight runs between them
   // infrastructure cards (drawn last so links tuck underneath)
   for (const h of L.headers) {
-    const n = h.node, col = n.kind === "gateway" ? "#f59e0b" : n.kind === "ap" ? "#fbbf24" : "#fb923c", t = TYPES[n.kind === "ap" ? "ap" : n.kind === "switch" ? "switch" : "router"];
+    const n = h.node, col = TOPO.color === "plain" ? T.accent : n.kind === "gateway" ? "#f59e0b" : n.kind === "ap" ? "#fbbf24" : "#fb923c", t = TYPES[n.kind === "ap" ? "ap" : n.kind === "switch" ? "switch" : "router"];
     const e = n.extra || {}, radios = (e.radios || []).slice(0, 3), act = TR && n.kind !== "gateway" ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0;
     out.push(`<g class="tp-head${TOPO.sel === n.id ? " tp-sel" : ""}" data-id="${esc(n.id)}" cursor="pointer"${focus && !focus.has(n.id) ? ' opacity=".22"' : ""}>
       <rect x="${h.x}" y="${h.y}" width="${S.hw}" height="${S.hh}" rx="14" fill="${T.panel}" stroke="${TOPO.sel === n.id ? T.accent : col}" stroke-width="${TOPO.sel === n.id ? 2.4 : 1.6}"/>
@@ -605,7 +606,7 @@ function renderTopoBar(d) {
     <span class="tp-spacer"></span>
     ${wifi ? `<span class="tp-chipinfo"><i class="fa-solid fa-wifi"></i>${wifi} on Wi-Fi${weak.length ? ` · <b class="warn">${weak.length} weak</b>` : ""}</span>` : ""}
     ${src}${snmpChip}`;
-  $("tpColor").onchange = (e) => { TOPO.color = e.target.value; try { localStorage.setItem("nm_topo_color", TOPO.color); } catch (_) {} renderTopology(); };
+  $("tpColor").onchange = (e) => { TOPO.color = e.target.value; try { localStorage.setItem("lp_topo_color", TOPO.color); } catch (_) {} renderTopology(); };
   if ($("tpZone")) $("tpZone").onchange = (e) => { TOPO.zone = e.target.value; TOPO.fit = true; renderTopology(); };
   $("tpTraffic").onclick = () => { TOPO.traffic = !TOPO.traffic; if (TOPO.traffic) loadTopoTraffic(); else renderTopology(); };
   $("tpFit").onclick = topoFitView;
