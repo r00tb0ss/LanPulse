@@ -286,6 +286,10 @@ class Topology:
                     for p in sw.get("port_table", []) or []:
                         if p.get("port_idx") == port:
                             speed = p.get("speed")
+                            # a switch port counts from the switch's side, so sent out the port is this device's download
+                            ptx, prx = _client_dirs(p)
+                            if ptx is not None or prx is not None:
+                                n["rate_dn"], n["rate_up"] = ptx, prx
                     n["link"] = {"medium": "wired", "port": port, "speed": speed or uclient.get("wired_rate_mbps")}
                     if not n.get("rate"):
                         for p in sw.get("port_table", []) or []:
