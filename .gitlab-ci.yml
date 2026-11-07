@@ -21,3 +21,33 @@ pages:
     paths: [public]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# When a merge to main changes app.py (where VERSION lives), publish a release with lanpulse.zip, unless that version
+# already has one. Notes come from docs/releases/<version>.md. Also runs from a manual pipeline on main.
+publish-release:
+  stage: deploy
+  image: alpine:3.20
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [app.py]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web"
+  script:
+    - apk add --no-cache curl git jq
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - VER=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app.py | head -n 1)
+    - test -n "$VER"
+    - API="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
+    - |
+      if curl -fsS -o /dev/null -H "JOB-TOKEN: $CI_JOB_TOKEN" "$API/releases/v$VER"; then
+        echo "v$VER already released"; exit 0
+      fi
+    - git archive --prefix=lanpulse/ HEAD -o lanpulse.zip --format=zip
+    - PKG="$API/packages/generic/lanpulse/$VER/lanpulse.zip"
+    - curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file lanpulse.zip "$PKG"
+    - |
+      if [ -f "docs/releases/$VER.md" ]; then cp "docs/releases/$VER.md" notes.md; else echo "LanPulse $VER" > notes.md; fi
+    - |
+      jq -n --arg tag "v$VER" --arg name "LanPulse $VER" --arg ref "$CI_COMMIT_SHA" --arg url "$PKG" --rawfile desc notes.md \
+        '{tag_name: $tag, name: $name, ref: $ref, description: $desc, assets: {links: [{name: "lanpulse.zip", url: $url, link_type: "package"}]}}' > release.json
+    - curl -fsS -X POST -H "JOB-TOKEN: $CI_JOB_TOKEN" -H "Content-Type: application/json" --data @release.json "$API/releases"
+    - echo "Published v$VER"
