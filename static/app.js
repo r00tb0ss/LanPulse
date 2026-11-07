@@ -784,7 +784,7 @@ function initUI() {
     if (await api("/api/layout", "POST", {positions: {}})) { setPhysics(true); network.stabilize(150); toast("Automatic layout restored"); }
   };
   $("btnLegend").onclick = () => $("legend").classList.toggle("hidden");
-  $("btnSidebar").onclick = () => $("sidebar").classList.toggle("open");
+  $("btnSidebar").onclick = () => (typeof toggleSidebar === "function" ? toggleSidebar() : $("sidebar").classList.toggle("open"));
   $("btnSettings").onclick = openSettings;
   $("btnSetClose").onclick = closeSettings;
   $("settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
