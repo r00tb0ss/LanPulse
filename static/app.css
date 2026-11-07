@@ -948,6 +948,36 @@ body[data-theme="ocean"]{
 }
 body[data-theme="ocean"] .brand i,body[data-theme="ocean"] .brand b{color:var(--accent)}
 
+/* Frost — cool slate and ice blue, soft contrast that is easy on the eyes */
+body[data-theme="frost"]{
+  --bg:#242933; --bg2:#2b313d; --panel:#323948; --panel2:#3b4354; --border:#465066; --border2:#5a667f;
+  --text:#eceff4; --muted:#b4bfd2; --dim:#8390a8; --accent:#88c0d0; --accent2:#5e9fb3;
+  --green:#a3be8c; --red:#e8707e; --amber:#ebcb8b;
+  --topbar:linear-gradient(180deg,#373f50,#2a303c); --map-area:#3a4356; --map-border:#6a7894;
+  --ctrl:#3b4354; --ctrl-solid:#3b4354; --glow:#34405a; --map-glow:#38445e; --map-deep:#222730;
+  color-scheme:dark;
+}
+body[data-theme="frost"] .brand i,body[data-theme="frost"] .brand b{color:var(--accent)}
+
+/* Sand — warm paper light theme with terracotta accents, gentler than pure white */
+body[data-theme="sand"]{
+  --bg:#f4efe6; --bg2:#fbf8f2; --panel:#fbf8f2; --panel2:#efe8dc; --border:#ddd2c0; --border2:#c9bba3;
+  --text:#2b2118; --muted:#6a5a48; --dim:#988873; --accent:#c2562a; --accent2:#a4441d;
+  --green:#3f8a4f; --red:#c93a3a; --amber:#b9770e;
+  --topbar:linear-gradient(180deg,#fbf8f2,#efe8dc); --map-area:#3b3026; --map-border:#6e5b45;
+  --ctrl:#fbf8f2; --ctrl-solid:#fbf8f2; --glow:#eadfcd; --map-glow:#4a3c2e; --map-deep:#2a2119;
+  color-scheme:light;
+}
+body[data-theme="sand"] .topbar{box-shadow:0 1px 3px rgba(60,40,20,.08)}
+body[data-theme="sand"] .brand i,body[data-theme="sand"] .brand b{color:var(--accent)}
+
+/* Light themes: the map stays dark, so the text laid over it must stay light; and the red "reached" tile must stay readable */
+body[data-theme="light"] .map-title,body[data-theme="sand"] .map-title{color:#e8edf6}
+body[data-theme="light"] .map-legend,body[data-theme="sand"] .map-legend,
+body[data-theme="light"] .map-src,body[data-theme="sand"] .map-src{color:#b8c4d8}
+body[data-theme="light"] .kpi.danger,body[data-theme="sand"] .kpi.danger{border-color:#e8b4ae;background:linear-gradient(180deg,#fdeceb,var(--panel))}
+body[data-theme="light"] .kpi.danger .k-num,body[data-theme="sand"] .kpi.danger .k-num{color:#b42318}
+
 /* theme picker in settings */
 .theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .theme-card{border:2px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;background:var(--panel2);text-align:left}
@@ -962,6 +992,8 @@ html[data-pretheme="hacker"]{background:#000700}
 html[data-pretheme="synthwave"]{background:#140a2e}
 html[data-pretheme="ember"]{background:#0c0a09}
 html[data-pretheme="ocean"]{background:#041a1f}
+html[data-pretheme="frost"]{background:#242933}
+html[data-pretheme="sand"]{background:#f4efe6}
 
 /* ---- Network Security Score bar ---- */
 .posture-bar{display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--border);

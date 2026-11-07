@@ -11,6 +11,8 @@ const THEMES = [
   {id: "synthwave", name: "Midnight Synthwave", sub: "neon magenta & cyan", sw: ["#140a2e", "#ff4fd8", "#2dd4bf"]},
   {id: "ember", name: "Ember", sub: "warm black, copper glow", sw: ["#0c0a09", "#ff8a4c", "#f5c542"]},
   {id: "ocean", name: "Deep Ocean", sub: "sea-green depths, aqua", sw: ["#041a1f", "#22d3c5", "#4ade80"]},
+  {id: "frost", name: "Frost", sub: "cool slate, ice blue", sw: ["#242933", "#88c0d0", "#a3be8c"]},
+  {id: "sand", name: "Sand", sub: "warm paper, terracotta", sw: ["#f4efe6", "#c2562a", "#3f8a4f"]},
 ];
 
 function currentTheme() {
