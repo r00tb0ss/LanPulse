@@ -59,7 +59,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.36"
+VERSION = "1.25.37"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -1594,7 +1594,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.post("/api/update/fetch")
     async def update_fetch():
-        """Download the newest GitHub release into the same staging slot an upload uses; installing still needs a click."""
+        """Download the newest release (GitLab, or GitHub as a fallback) into the same staging slot an upload uses; installing still needs a click."""
         import releases
         if (r := update_refusal()):
             return r

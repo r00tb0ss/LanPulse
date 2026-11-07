@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 The LanPulse authors
-"""Find and download the newest LanPulse release from GitHub (used by Settings > Update).
+"""Find and download the newest LanPulse release (used by Settings > Update).
 
-Only the repository's own releases are used, over HTTPS, and every redirect must stay on GitHub's hosts. The downloaded
-file goes through the same checks as a manually uploaded zip before anything is installed."""
+Releases are looked up on GitLab first and on GitHub as a fallback. Only the project's own releases are used, over HTTPS,
+and every redirect must stay on those hosts. The downloaded file goes through the same checks as a manually uploaded zip
+before anything is installed."""
 from __future__ import annotations
 
 import json
@@ -14,9 +15,13 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-REPO = "r00tb0ss/LanPulse"
-API = f"https://api.github.com/repos/{REPO}/releases/latest"
-ALLOWED_HOSTS = ("github.com", "api.github.com", "objects.githubusercontent.com",
+GITLAB_PROJECT = "r00tb0ss/lanpulse"
+GITHUB_REPO = "r00tb0ss/LanPulse"
+SOURCES = (
+    ("GitLab", "gitlab", f"https://gitlab.com/api/v4/projects/{urllib.parse.quote(GITLAB_PROJECT, safe='')}/releases/permalink/latest"),
+    ("GitHub", "github", f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"),
+)
+ALLOWED_HOSTS = ("gitlab.com", "github.com", "api.github.com", "objects.githubusercontent.com",
                  "release-assets.githubusercontent.com", "github-releases.githubusercontent.com")
 _cache: dict = {"t": 0.0, "data": None}
 
@@ -29,42 +34,65 @@ class _Redirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         u = urllib.parse.urlsplit(newurl)
         if u.scheme != "https" or u.hostname not in ALLOWED_HOSTS:
-            raise urllib.error.URLError("Redirected away from GitHub; refusing to follow.")
+            raise urllib.error.URLError("Redirected away from the release host; refusing to follow.")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _open(url: str, timeout: int):
     u = urllib.parse.urlsplit(url)
     if u.scheme != "https" or u.hostname not in ALLOWED_HOSTS:
-        raise urllib.error.URLError("Only GitHub release downloads are allowed.")
+        raise urllib.error.URLError("Only LanPulse release downloads are allowed.")
     opener = urllib.request.build_opener(_Redirects())
     return opener.open(urllib.request.Request(url, headers={"User-Agent": "LanPulse-updater",
-                                                            "Accept": "application/vnd.github+json"}), timeout=timeout)
+                                                            "Accept": "application/json"}), timeout=timeout)
+
+
+def _parse(kind: str, j: dict) -> dict:
+    tag = j.get("tag_name") or ""
+    if kind == "gitlab":
+        links = [a for a in (j.get("assets") or {}).get("links", []) if str(a.get("name", "")).lower().endswith(".zip")]
+        asset = next((a for a in links if a["name"].lower() == "lanpulse.zip"), links[0] if links else None)
+        return {"tag": tag, "version": tag.lstrip("vV"), "name": j.get("name") or tag,
+                "notes": (j.get("description") or "")[:4000], "url": (j.get("_links") or {}).get("self", ""),
+                "asset_url": (asset.get("direct_asset_url") or asset.get("url") or "") if asset else "", "size": 0,
+                "published": j.get("released_at", "")}
+    assets = [a for a in j.get("assets", []) if str(a.get("name", "")).lower().endswith(".zip")]
+    asset = next((a for a in assets if a["name"].lower() == "lanpulse.zip"), assets[0] if assets else None)
+    return {"tag": tag, "version": tag.lstrip("vV"), "name": j.get("name") or tag, "notes": (j.get("body") or "")[:4000],
+            "url": j.get("html_url", ""), "asset_url": asset["browser_download_url"] if asset else "",
+            "size": asset.get("size", 0) if asset else 0, "published": j.get("published_at", "")}
 
 
 def latest(current: str, force: bool = False) -> dict:
-    """Newest published release: {tag, version, notes, newer, asset_url, size, error}."""
+    """Newest published release: {tag, version, notes, newer, asset_url, size, source, error}. Tries each source in turn;
+    the newest version found wins."""
     if not force and _cache["data"] and time.time() - _cache["t"] < 600:
         return {**_cache["data"], "newer": version_tuple(_cache["data"]["version"]) > version_tuple(current)}
-    try:
-        with _open(API, 15) as r:
-            j = json.loads(r.read(2_000_000))
-    except urllib.error.HTTPError as e:
-        return {"error": "No release is published on GitHub yet." if e.code == 404 else f"GitHub answered {e.code}."}
-    except Exception as e:
-        return {"error": f"Couldn't reach GitHub ({e.__class__.__name__}). Check this server's internet access."}
-    tag = j.get("tag_name") or ""
-    assets = [a for a in j.get("assets", []) if str(a.get("name", "")).lower().endswith(".zip")]
-    asset = next((a for a in assets if a["name"].lower() == "lanpulse.zip"), assets[0] if assets else None)
-    data = {"tag": tag, "version": tag.lstrip("vV"), "name": j.get("name") or tag, "notes": (j.get("body") or "")[:4000],
-            "url": j.get("html_url", ""), "asset_url": asset["browser_download_url"] if asset else "",
-            "size": asset.get("size", 0) if asset else 0, "published": j.get("published_at", "")}
-    _cache.update(t=time.time(), data=data)
-    return {**data, "newer": version_tuple(data["version"]) > version_tuple(current)}
+    best, errors = None, []
+    for label, kind, api in SOURCES:
+        try:
+            with _open(api, 15) as r:
+                d = _parse(kind, json.loads(r.read(2_000_000)))
+        except urllib.error.HTTPError as e:
+            errors.append(f"{label}: no release published yet" if e.code == 404 else f"{label} answered {e.code}")
+            continue
+        except Exception as e:
+            errors.append(f"{label}: couldn't reach it ({e.__class__.__name__})")
+            continue
+        if not d["version"] or not d["asset_url"]:
+            errors.append(f"{label}: release has no lanpulse.zip")
+            continue
+        d["source"] = label
+        if best is None or version_tuple(d["version"]) > version_tuple(best["version"]):
+            best = d
+    if best is None:
+        return {"error": "No release found. " + "; ".join(errors) + ". Check this server's internet access, or choose a file yourself."}
+    _cache.update(t=time.time(), data=best)
+    return {**best, "newer": version_tuple(best["version"]) > version_tuple(current)}
 
 
 def download(url: str, dest: Path, max_bytes: int) -> int:
-    """Stream the release zip to dest. Raises ValueError when it's too big, URLError when GitHub can't be reached."""
+    """Stream the release zip to dest. Raises ValueError when it's too big, URLError when the release host can't be reached."""
     size = 0
     with _open(url, 120) as r, open(dest, "wb") as f:
         while chunk := r.read(1 << 16):

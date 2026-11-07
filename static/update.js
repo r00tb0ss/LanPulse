@@ -48,7 +48,7 @@ function drawUpdate(body, u, staged = u.staged, note = "") {
       </div>` : ""}
     ${!busy ? `<div class="upd-latest" id="updLatest">
         <button class="btn" id="updCheck" ${blocked ? "disabled" : ""}><i class="fa-solid fa-cloud-arrow-down"></i>Check for updates</button>
-        <span class="muted">Looks at the LanPulse releases on GitHub. Or choose a file yourself below.</span></div>` : ""}
+        <span class="muted">Looks at the LanPulse releases on GitLab (and GitHub). Or choose a file yourself below.</span></div>` : ""}
     ${!busy ? `<label class="upd-drop ${blocked ? "off" : ""}" id="updDrop">
         <input type="file" id="updFile" accept=".zip,application/zip" ${blocked ? "disabled" : ""}>
         <i class="fa-solid fa-file-zipper"></i>
@@ -150,12 +150,12 @@ function showUpdatedBar(version) {
 }
 
 
-// "Check for updates": ask GitHub for the newest release; if it's newer, offer to download it into the staging slot
+// "Check for updates": ask for the newest release; if it's newer, offer to download it into the staging slot
 // (then the usual Install button appears, so nothing installs without a click).
 async function checkLatest(body, u) {
   const box = $("updLatest");
   if (!box) return;
-  box.innerHTML = `<div class="loading-line"><i class="fa-solid fa-spinner fa-spin"></i>Checking GitHub…</div>`;
+  box.innerHTML = `<div class="loading-line"><i class="fa-solid fa-spinner fa-spin"></i>Checking for updates…</div>`;
   const r = await api("/api/update/check?force=true", "GET");
   if (!$("updLatest")) return;
   if (!r || r.error) {

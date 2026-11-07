@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import honeypot  # noqa: E402
 import openvas  # noqa: E402
 import signatures  # noqa: E402
+import releases  # noqa: E402
 import snmpdisc  # noqa: E402
 import topology  # noqa: E402
 
@@ -45,6 +46,47 @@ class HoneypotParsing(unittest.TestCase):
         self.assertIn("Administrator", d("rdp", b"\x03\x00\x00\x2bCookie: mstshash=Administrator\r\n"))
         self.assertIn("SMBv1", d("smb", b"\x00\x00\x00\x2f\xffSMB\x72" + b"\x00" * 28 + b"\x02NT LM 0.12\x00"))
         self.assertEqual(d("smb", b""), "")
+
+
+class ReleaseSources(unittest.TestCase):
+    def test_gitlab_release_is_parsed(self):
+        d = releases._parse("gitlab", {"tag_name": "v1.26.0", "name": "LanPulse 1.26.0", "description": "notes",
+                                       "released_at": "2026-11-08T00:00:00Z", "_links": {"self": "https://gitlab.com/x/-/releases/v1.26.0"},
+                                       "assets": {"links": [{"name": "lanpulse.zip", "url": "https://gitlab.com/-/project/1/uploads/abc/lanpulse.zip",
+                                                             "direct_asset_url": "https://gitlab.com/-/project/1/uploads/abc/lanpulse.zip"}]}})
+        self.assertEqual((d["version"], d["asset_url"]), ("1.26.0", "https://gitlab.com/-/project/1/uploads/abc/lanpulse.zip"))
+
+    def test_github_release_is_parsed(self):
+        d = releases._parse("github", {"tag_name": "v1.25.36", "body": "n", "html_url": "u", "published_at": "p",
+                                       "assets": [{"name": "lanpulse.zip", "browser_download_url": "https://github.com/a/b.zip", "size": 5}]})
+        self.assertEqual((d["version"], d["asset_url"], d["size"]), ("1.25.36", "https://github.com/a/b.zip", 5))
+
+    def test_newest_source_wins_and_failures_fall_back(self):
+        calls = []
+
+        def fake_open(url, timeout):
+            import io
+            import json
+            calls.append(url)
+            if "gitlab" in url:
+                raise OSError("offline")
+            return io.BytesIO(json.dumps({"tag_name": "v1.25.36", "assets": [
+                {"name": "lanpulse.zip", "browser_download_url": "https://github.com/a/b.zip"}]}).encode())
+
+        orig = releases._open
+        releases._open = fake_open
+        releases._cache.update(t=0.0, data=None)
+        try:
+            r = releases.latest("1.25.30", force=True)
+        finally:
+            releases._open = orig
+            releases._cache.update(t=0.0, data=None)
+        self.assertEqual((r["version"], r["source"], r["newer"]), ("1.25.36", "GitHub", True))
+        self.assertEqual(len(calls), 2)
+
+    def test_only_release_hosts_are_allowed(self):
+        with self.assertRaises(Exception):
+            releases._open("https://example.com/lanpulse.zip", 5)
 
 
 class HoneypotSummary(unittest.TestCase):
