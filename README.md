@@ -5,6 +5,8 @@ any browser. Discover every device and see how they connect with live traffic on
 world map, catch scanners in a built-in honeypot, scan for vulnerabilities, and get an at-a-glance security score and an
 alert the moment something inside your network is compromised.
 
+[![Support LanPulse on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20LanPulse-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/r00tb0ss)
+
 > **Project page with full feature tour and screenshots:** https://r00tb0ss.github.io/LanPulse/
 
 ![LanPulse operations-center view](docs/images/noc.png)
@@ -464,3 +466,7 @@ of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Publ
 
 Third-party software, data and services used by LanPulse keep their own licenses. See
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). IP geolocation by [DB-IP](https://db-ip.com).
+
+## Support
+
+LanPulse is free and open source (GPL-2.0-or-later). If it helps you, you can [support it on Ko-fi](https://ko-fi.com/r00tb0ss). Bug reports, ideas and pull requests are just as welcome.
