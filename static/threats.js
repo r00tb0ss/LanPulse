@@ -720,7 +720,7 @@ function renderIpPanel(d) {
     <div class="p-sec"><h4>Look it up elsewhere</h4><div class="links">
       ${[["AbuseIPDB", `https://www.abuseipdb.com/check/${d.ip}`], ["Shodan", `https://www.shodan.io/host/${d.ip}`],
          ["VirusTotal", `https://www.virustotal.com/gui/ip-address/${d.ip}`], ["GreyNoise", `https://viz.greynoise.io/ip/${d.ip}`],
-         ["Censys", `https://search.censys.io/hosts/${d.ip}`], ["Whois", `https://www.whois.com/whois/${d.ip}`]]
+         ["Censys", `https://platform.censys.io/hosts/${d.ip}`], ["Whois", `https://bgp.he.net/ip/${d.ip}#_whois`]]
         .map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${n}<i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></a>`).join("")}
     </div></div>`;
 
