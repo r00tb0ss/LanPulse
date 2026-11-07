@@ -362,10 +362,10 @@ auto-refreshing. Press **Esc** to exit.
 
 ## Themes
 
-**Settings → Appearance** offers six looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
-**Ember** (warm black, copper glow), **Deep Ocean** (sea-green depths, aqua), **80s Hacker** (green phosphor on black)
-and **Midnight Synthwave** (neon magenta and cyan). The choice is saved in your
-browser.
+**Settings → Appearance** offers eight looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
+**Ember** (warm black, copper glow), **Deep Ocean** (sea-green depths, aqua), **80s Hacker** (green phosphor on black),
+**Midnight Synthwave** (neon magenta and cyan), **Frost** (cool slate, ice blue) and **Sand** (warm paper, terracotta).
+The choice is saved in your browser.
 
 ## Red Team
 
