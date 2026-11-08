@@ -1181,6 +1181,14 @@ html[data-pretheme="sand"]{background:#f4efe6}
 #topoSvg .tp-flow{animation:tpflow 1s linear infinite}
 #topoSvg .tp-flow.dn{animation-name:tpflow-dn}
 #topoSvg .tp-chip{touch-action:none}
+/* device panel: sections that fold */
+.fold>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;list-style:none}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary h4{margin:0}
+.fold>summary .hint{margin-left:auto;font-size:11px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fold>summary::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);opacity:.5;margin:-3px 2px 0 0;flex:none;transition:transform .15s}
+.fold[open]>summary::after{transform:rotate(-135deg);margin-top:3px}
+.fold[open]>summary{margin-bottom:8px}
 @media (prefers-reduced-motion:reduce){#topoSvg .tp-pulse,#topoSvg .tp-flow{animation:none}}
 
 /* honeypot details */
