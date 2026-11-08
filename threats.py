@@ -454,6 +454,7 @@ class ThreatMonitor:
         self.syslog_ok = None
         self.syslog_error = ""
         self.last_event = 0.0
+        self.loop: asyncio.AbstractEventLoop | None = None
         self.dirty = True
         row = self.db.execute("SELECT MAX(t) FROM attacks").fetchone()
         self.last_event = row[0] or 0.0                     # survive restarts
@@ -533,6 +534,7 @@ class ThreatMonitor:
 
     # ---- lifecycle
     async def start(self):
+        self.loop = asyncio.get_running_loop()
         tasks = [asyncio.create_task(self.housekeeping()), asyncio.create_task(self.committer())]
         if self.nm.args.demo:
             self.seed_demo()
@@ -684,7 +686,7 @@ class ThreatMonitor:
                 return None
         t = t or time.time()
         lan = self.find_target(raw)
-        dev = next((d for d in self.nm.devices.values() if d["ip"] == lan), None) if lan else None
+        dev = next((d for d in list(self.nm.devices.values()) if d["ip"] == lan), None) if lan else None
         g = geo or self.geo.lookup(src)
         ev = {"t": t, "src": src, "sport": raw.get("sport"), "dst": raw.get("dst") or self.public_ip,
               "dport": raw.get("dport"), "proto": raw.get("proto", "tcp"),
@@ -705,12 +707,15 @@ class ThreatMonitor:
                 self.uncommitted, self.last_commit = 0, time.time()
         self.last_event = t
         self.dirty = True
+        bc = self.nm.broadcast({"type": "threat", "event": ev})
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.nm.broadcast({"type": "threat", "event": ev}))
-            self.check_alerts(ev, dev)
-        except RuntimeError:
-            pass                    # no running loop (seeding)
+            asyncio.get_running_loop().create_task(bc)
+        except RuntimeError:                  # called from a worker thread (honeypot / ingest API): hand it to the main loop
+            if not self.loop:
+                bc.close()
+                return ev                     # no loop yet (seeding)
+            asyncio.run_coroutine_threadsafe(bc, self.loop)
+        self.check_alerts(ev, dev)
         return ev
 
     def is_external(self, ip: str) -> bool:
@@ -760,7 +765,7 @@ class ThreatMonitor:
         for h, c in hist:
             if 0 <= h < hours:
                 hbins[h] = c
-        by_ip = {d["ip"]: d for d in self.nm.devices.values()}
+        by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
         ev_keys = ("t", "src", "dport", "proto", "action", "lan", "service", "sensor", "detail", "iso", "country", "city")
         recent_ev = []
         for r in recent:
@@ -796,7 +801,7 @@ class ThreatMonitor:
         with self.lock:
             rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
                                    "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
-        by_ip = {d["ip"]: d for d in self.nm.devices.values()}
+        by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
         ports, targets, sensors = collections.Counter(), collections.Counter(), collections.Counter()
         svc = {}
         blocked = 0
@@ -811,7 +816,7 @@ class ThreatMonitor:
             if sensor:
                 sensors[sensor] += 1
             h = int((now - t) // 3600)
-            if h < 24:
+            if 0 <= h < 24:                       # a timestamp slightly in the future would index past the end
                 hourly[23 - h] += 1
         keys = ("t", "dport", "proto", "action", "lan", "service", "sensor", "detail")
         recent = [dict(zip(keys, r)) for r in rows[:40]]
@@ -864,6 +869,8 @@ class ThreatMonitor:
         hit = self.intel_cache.get(ip)
         if hit and time.time() - hit[0] < 6 * 3600:
             return hit[1]
+        if len(self.intel_cache) > 2000:          # entries expire after 6 h but were never removed
+            self.intel_cache.clear()
         if self.nm.args.demo:
             r = random.Random(ip)
             info = {"rdns": f"host-{ip.replace('.', '-')}.example.net", "isp": r.choice(["Example Hosting Ltd", "Demo Cloud Inc", "Sample Telecom"]),
