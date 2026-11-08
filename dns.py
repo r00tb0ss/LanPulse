@@ -361,7 +361,7 @@ class DnsMonitor:
 
     # ---- helpers
     def device(self, ip: str):
-        return next((d for d in self.nm.devices.values() if d["ip"] == ip), None)
+        return next((d for d in list(self.nm.devices.values()) if d["ip"] == ip), None)      # a copy: summary() runs in a worker thread
 
     def name(self, ip: str) -> str:
         d = self.device(ip)
@@ -397,7 +397,7 @@ class DnsMonitor:
         gw = self.nm.net.get("gateway")
         total = total or 0
         router_only = bool(not device_ip and clients and clients[0][0] == gw and clients[0][1] > 0.7 * total and total > 100)
-        recent = [e for e in self.recent if not device_ip or e["client"] == device_ip][:40]
+        recent = [e for e in list(self.recent) if not device_ip or e["client"] == device_ip][:40]      # the poller adds to it meanwhile
         return {
             "type": "dns_summary", "hours": hours, "device": device_ip,
             "enabled": bool(self.cfg.get("enabled")) or self.nm.args.demo, "status": self.status,
