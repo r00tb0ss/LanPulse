@@ -178,6 +178,8 @@ def txt_dict(items) -> dict:
 
 # --------------------------------------------------------------------------- UPnP
 def parse_upnp_xml(text: str) -> dict:
+    if "<!doctype" in text.lower() or "<!entity" in text.lower():
+        return {}                         # a device description never needs these; they are how XML expansion bombs are built
     root = ET.fromstring(text)
     dev = None
     for el in root.iter():
