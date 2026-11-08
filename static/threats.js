@@ -130,6 +130,22 @@ function initWorld() {
   el.innerHTML = "";
   fixWorldMap();
   tChart = echarts.init(el, null, {renderer: "canvas"});
+  // Replacing a series' data restarts its ripple animation. Refreshes arrive every few seconds and mostly carry the same
+  // dots, so skip any of these series whose data hasn't changed since the last call.
+  const rawSet = tChart.setOption.bind(tChart), sigs = {};
+  tChart.setOption = (opt, ...rest) => {
+    if (opt && Array.isArray(opt.series)) {
+      const keep = opt.series.filter((x) => {
+        if (!x || !["attackers", "dests", "home", "labels"].includes(x.id)) return true;
+        const k = JSON.stringify(x);
+        if (sigs[x.id] === k) return false;
+        sigs[x.id] = k;
+        return true;
+      });
+      opt = keep.length ? {...opt, series: keep} : (({series, ...o}) => o)(opt);
+    }
+    return rawSet(opt, ...rest);
+  };
   tChart.setOption({
     backgroundColor: "transparent",
     tooltip: {
@@ -276,7 +292,7 @@ function updateWorld() {
       {id: "attackers", data: s.attackers.filter((a) => attacksOn && a.lat != null && !(hideScanners && isScanner(a))).map((a) => ({
         name: a.ip, ip: a.ip, iso: a.iso, count: a.count, tag: a.tag, place: placeOf(a), services: a.services.join(", "),
         value: [a.lon, a.lat, a.count], size: 5 + Math.min(16, Math.sqrt(a.count) * 1.4),
-        itemStyle: {color: isScanner(a) ? SCANNER_COLOR : reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8", shadowBlur: isScanner(a) ? 0 : 10,
+        itemStyle: {color: isScanner(a) ? SCANNER_COLOR : reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8", shadowBlur: isScanner(a) || (attacksOn && typeof showTraffic === "function" && showTraffic()) ? 0 : 10,
           shadowColor: reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8"}}))},
       {id: "home", data: home ? [{value: home, place: [s.home.city, s.home.country].filter(Boolean).join(", ") + (s.public_ip ? ` · ${s.public_ip}` : "")}] : []},
     ],
