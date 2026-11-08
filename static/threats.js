@@ -166,6 +166,12 @@ function initWorld() {
       {id: "home", type: "effectScatter", coordinateSystem: "geo", zlevel: 4, data: [],
         rippleEffect: {brushType: "fill", scale: 4.5, period: 2.5}, symbolSize: 13,
         itemStyle: {color: "#22c55e", shadowBlur: 14, shadowColor: "#22c55e"}},
+      // Country names live in their own series above every marker: the map's own labels are drawn underneath them.
+      {id: "labels", type: "scatter", coordinateSystem: "geo", zlevel: 5, silent: true, symbolSize: 0, data: [],
+        tooltip: {show: false},
+        label: {show: true, position: "inside", fontSize: 9, fontFamily: "Inter, system-ui, sans-serif",
+          textShadowColor: "#0a0f1c", textShadowBlur: 3,
+          rich: {atk: {color: "#fecaca"}, dst: {color: "#5eead4"}, both: {color: "#fca5a5"}}}},
     ],
   });
   tChart.on("click", (p) => {
@@ -286,7 +292,7 @@ function updateCountryLabels() {
   if (!tChart) return;
   const attacksOn = typeof showAttacks !== "function" || showAttacks();
   const trafficOn = typeof showTraffic === "function" && showTraffic() && typeof flowSummary !== "undefined" && flowSummary;
-  const label = {};   // map region name -> {name, atk, dst}
+  const label = {}, spot = {};   // map region name -> {name, atk, dst}; and where on the map its name goes
   const both = attacksOn && trafficOn;
   const top = (arr) => [...(arr || [])].sort((a, b) => b.count - a.count).slice(0, both ? 25 : 60);
   if (attacksOn && tSummary) top(tSummary.countries).forEach((c) => {
@@ -309,7 +315,9 @@ function updateCountryLabels() {
       try {
         const r = gs && gs.getRegion(k), c = r && r.getCenter && r.getCenter();
         const px = c ? gs.dataToPoint(c) : tChart.convertToPixel({geoIndex: 0}, anchor[k]);
-        return px && px.every(Number.isFinite) ? px : null;
+        const ok = px && px.every(Number.isFinite);
+        if (ok) spot[k] = c || anchor[k];
+        return ok ? px : null;
       } catch (_) { return null; }
     };
     const placed = [], kept = [];
@@ -327,10 +335,8 @@ function updateCountryLabels() {
     const n = (v.atk || 0) + (v.dst || 0);
     return `{${kind}|${both ? v.name : `${v.name} (${fmtN(n)})`}}`;
   };
-  tChart.setOption({geo: {label: {show: true, fontSize: 9, fontFamily: "Inter, system-ui, sans-serif",
-    textShadowColor: "#0a0f1c", textShadowBlur: 3,
-    rich: {atk: {color: "#fecaca"}, dst: {color: "#5eead4"}, both: {color: "#fca5a5"}},
-    formatter: (p) => label[p.name] ? fmt(label[p.name]) : ""}}});
+  const pts = Object.keys(label).filter((k) => spot[k]).map((k) => ({name: k, value: spot[k], label: {formatter: fmt(label[k])}}));
+  tChart.setOption({geo: {label: {show: false}}, series: [{id: "labels", data: pts}]});
 }
 
 function pushArc(ev) {
