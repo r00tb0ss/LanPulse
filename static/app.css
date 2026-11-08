@@ -49,6 +49,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .conns b{display:block;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .conns small{display:block;font:11px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .conns .ct{font:600 12px var(--mono);text-align:right}
+.conns .cn:first-child{border-top:none}
+.conns .cn.flag{background:var(--bg-danger);border-radius:8px;padding:7px 8px;border-top:none;margin-bottom:4px}
 .mapwrap{flex:1;position:relative;
   background:radial-gradient(circle at 50% 45%,#13203d 0%,#0a0f1c 70%)}
 #map{position:absolute;inset:0}

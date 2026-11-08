@@ -200,18 +200,38 @@ function connAgo(t) {
   return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
 }
 
-/* One row per destination the device talked to: where it is, who owns it, what for, how often, and when last. */
-function connRows(f) {
-  const rows = (f.dests || []).slice(0, 8);
+const connOpen = new Set();      // devices whose full connection list is expanded
+
+/* Several addresses owned by one company are one row; flagged destinations first, then the busiest. */
+function connGroup(dests) {
+  const by = new Map();
+  for (const r of dests) {
+    const k = r.org || r.ip;      // an unknown owner stays one row per address
+    const g = by.get(k) || {org: r.org || "Unknown network", iso: r.iso, ip: r.ip, n: 0, count: 0, blocked: 0, last: 0, ports: new Set(), bad: false, c2: false};
+    g.n++;
+    g.count += r.count;
+    g.blocked += r.blocked || 0;
+    g.last = Math.max(g.last, r.last || 0);
+    (r.ports || []).forEach((p) => g.ports.add(p));
+    g.bad = g.bad || !!r.bad;
+    g.c2 = g.c2 || !!r.c2;
+    by.set(k, g);
+  }
+  return [...by.values()].map((g) => ({...g, ports: [...g.ports].sort((a, b) => a - b)})).sort((a, b) => (b.bad - a.bad) || (b.count - a.count));
+}
+
+/* One row per owner the device talked to: where it is, who owns it, what for, how often, and when last. */
+function connRows(f, id) {
+  const all = connGroup(f.dests || []), open = connOpen.has(id), rows = open ? all : all.slice(0, 5);
   if (!rows.length) return "";
-  return `<div class="muted" style="margin:12px 0 2px;font-size:11px">Top connections</div><div class="conns">${rows.map((r) => {
+  return `<div class="conns" style="margin-top:8px">${rows.map((r) => {
     const svc = (r.ports || []).slice(0, 3).map((p) => CONN_PORTS[p] || String(p)).join(", ");
     const flag = r.c2 ? '<span class="sev high">C2</span> ' : r.bad ? '<span class="sev high">attacker</span> ' : "";
-    const sub = [r.ip, svc, r.blocked ? `${fmtN(r.blocked)} blocked` : "", connAgo(r.last)].filter(Boolean).map(esc).join(" · ");
-    return `<div class="cn"><span class="cc">${esc(r.iso || "—")}</span>
+    const sub = [r.n > 1 ? `${r.n} addresses` : r.ip, svc, r.blocked ? `${fmtN(r.blocked)} blocked` : "", connAgo(r.last)].filter(Boolean).map(esc).join(" · ");
+    return `<div class="cn${r.bad ? " flag" : ""}"><span class="cc">${esc(r.iso || "—")}</span>
       <div><b>${flag}${esc(r.org || "Unknown network")}</b><small class="muted">${sub}</small></div>
       <div class="ct">${fmtN(r.count)}</div></div>`;
-  }).join("")}</div>`;
+  }).join("")}${all.length > 5 ? `<button class="btn" id="bAllConn" style="margin-top:8px">${open ? "Show fewer" : `Show all ${all.length}`}</button>` : ""}</div>`;
 }
 
 /* ------------------------------------------------------------ device panel: where it connects */
@@ -222,13 +242,10 @@ async function loadDeviceFlows(id) {
   const box = $("flowBox");
   if (!f || selected !== id || !box) return;
   if (!f.total) { box.classList.add("hidden"); box.innerHTML = ""; return; }
-  const max = Math.max(1, ...f.orgs.map((o) => o.count));
   box.classList.remove("hidden");
   box.innerHTML = `<h4>Where it connects · last 24h</h4>
     ${(f.bad || []).length ? `<div class="finding"><span class="sev high">alert</span><span>Contacted ${f.bad.length} IP${f.bad.length > 1 ? "s" : ""} that attacked you: ${f.bad.slice(0, 3).map((b) => esc(b.ip)).join(", ")}</span></div>` : ""}
-    <div class="rank" style="margin-top:6px">${f.orgs.slice(0, 6).map((o) => `<div class="rk"><span class="ico"><i class="fa-solid fa-building" style="color:#5b6b88"></i></span>
-      <span class="nm">${esc(o.org)}</span><span class="ct">${fmtN(o.count)}</span><div class="bar"><i style="width:${(100 * o.count / max).toFixed(1)}%;background:#2dd4bf"></i></div></div>`).join("")}</div>
-    ${connRows(f)}
+    ${connRows(f, id)}
     <div class="btns" style="margin-top:10px"><button class="btn" id="bShowFlows" data-ip="${esc(d.ip)}"><i class="fa-solid fa-earth-americas"></i>Show on map</button></div>`;
 }
 
@@ -252,7 +269,9 @@ function showDeviceOnMap(ip) {
 /* ------------------------------------------------------------ wiring */
 (function initTraffic() {
   $("tLayer").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setLayer(b.dataset.layer); });
-  $("panel").addEventListener("click", (e) => { const b = e.target.closest("#bShowFlows"); if (b) showDeviceOnMap(b.dataset.ip); });
+  $("panel").addEventListener("click", (e) => { const b = e.target.closest("#bShowFlows"); if (b) showDeviceOnMap(b.dataset.ip);
+    if (e.target.closest("#bAllConn") && selected) { connOpen.has(selected) ? connOpen.delete(selected) : connOpen.add(selected); loadDeviceFlows(selected); }
+  });
   $("tDevice").onchange = (e) => { flowDevice = e.target.value; flowArcs = []; drawFlowArcs(true); $("tFlowLive").innerHTML = ""; loadFlows(); };
   $("tOrgs").addEventListener("click", (e) => {
     const r = e.target.closest("[data-dst],[data-org]");
