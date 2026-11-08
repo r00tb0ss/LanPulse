@@ -224,7 +224,7 @@ class FlowStore:
             args.append(device_ip)
         with self.lock:
             dests = self.db.execute(f"SELECT dst, SUM(n), SUM(nb), COUNT(DISTINCT src), GROUP_CONCAT(DISTINCT src), "
-                                    f"GROUP_CONCAT(DISTINCT dport) FROM flows WHERE {where} GROUP BY dst "
+                                    f"GROUP_CONCAT(DISTINCT dport), MAX(m) FROM flows WHERE {where} GROUP BY dst "
                                     f"ORDER BY SUM(n) DESC LIMIT 400", args).fetchall()
             talkers = self.db.execute(f"SELECT src, SUM(n), COUNT(DISTINCT dst) FROM flows WHERE {where} "
                                       f"GROUP BY src ORDER BY SUM(n) DESC LIMIT {max(1, min(int(talkers), 1000))}", args).fetchall()
@@ -233,13 +233,14 @@ class FlowStore:
         by_ip = {d["ip"]: d for d in self.nm.devices.values()}
         orgs, countries = collections.Counter(), collections.Counter()
         dest_rows = []
-        for dst, n, nb, ndev, srcs, ports in dests:
+        for dst, n, nb, ndev, srcs, ports, last in dests:
             g, a = self.nm.threats.geo.lookup(dst), self.nm.threats.geo.asn(dst)
             org = a.get("org", "") or "Unknown network"
             orgs[org] += n
             if g["iso"]:
                 countries[(g["iso"], g["country"])] += n
             dest_rows.append({"ip": dst, "count": n, "blocked": nb or 0, "devices": ndev, "org": org, "asn": a.get("asn"),
+                              "last": (last or 0) * 60,
                               "iso": g["iso"], "country": g["country"], "city": g["city"], "lat": g["lat"], "lon": g["lon"],
                               "bad": dst in self.bad_ips or self.nm.threats.known_c2(dst),
                               "c2": self.nm.threats.known_c2(dst),
