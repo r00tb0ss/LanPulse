@@ -16,6 +16,7 @@ async function openNoc() {
   nocTimer = setInterval(nocTick, 15000);
   nocClockTimer = setInterval(nocClock, 1000);
   nocClock();
+  nocInitMap.waits = 0;
   setTimeout(nocInitMap, 60);
 }
 
@@ -46,7 +47,8 @@ async function nocTick() {
   if ($("nocUpd")) $("nocUpd").textContent = "updated " + new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
   if (p) { postureData = p; nocScore(p); }
   if (t) nocStats(t);
-  nocMapUpdate(t);
+  if (!nocChart) nocInitMap();                      // retried every refresh if the first attempt couldn't draw
+  nocMapUpdate(t || (typeof tSummary !== "undefined" ? tSummary : null));
   nocFeed();
   nocCompromised(fc);
   nocHealth(topo); nocServices(sv); nocHoneypot(hp); nocTalkers(fl);
@@ -190,7 +192,13 @@ function nocInitMap() {
     return;
   }
   if (nocChart) return;
+  if (host.clientWidth < 40 || host.clientHeight < 40) {      // not laid out yet: a chart made now would stay blank
+    if ((nocInitMap.waits = (nocInitMap.waits || 0) + 1) < 40) setTimeout(nocInitMap, 150);
+    return;
+  }
   try {
+    if (typeof fixWorldMap === "function") fixWorldMap();     // the Threats tab normally does this; the NOC may open first
+    host.innerHTML = "";
     nocChart = echarts.init(host, null, {renderer: "canvas"});
     const area = (typeof cssVar === "function" ? cssVar("--map-area", "#16243f") : "#16243f");
     const border = (typeof cssVar === "function" ? cssVar("--map-border", "#2b4170") : "#2b4170");
@@ -203,7 +211,11 @@ function nocInitMap() {
     });
     nocMapUpdate(typeof tSummary !== "undefined" ? tSummary : null);
     nocCountries();
-  } catch (_) {}
+  } catch (e) {
+    console.warn("LanPulse: the NOC map couldn't be drawn:", e);
+    if (nocChart) { try { nocChart.dispose(); } catch (_) {} nocChart = null; }
+    host.innerHTML = '<div class="muted" style="padding:16px">The map couldn\'t be drawn. Open the browser console for details.</div>';
+  }
 }
 
 function nocMapUpdate(t) {
