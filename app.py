@@ -59,7 +59,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.51"
+VERSION = "1.25.52"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -756,16 +756,27 @@ class LanPulse:
 
     def _atomic(self, path: Path, obj, private=False):
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(obj))
+        data = json.dumps(obj)
         if private:
-            os.chmod(tmp, 0o600)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)      # settings hold passwords and keys: never readable by others, not even briefly
+            with os.fdopen(fd, "w") as f:
+                f.write(data)
+            os.chmod(tmp, 0o600)        # a leftover temp file may already exist with another mode
+        else:
+            tmp.write_text(data)
         tmp.replace(path)
 
     def save(self):
-        try:
-            self._atomic(self.data_file, {"devices": self.devices, "events": self.events[-300:]})
-        except Exception as e:
-            log.warning("Save failed: %s", e)
+        for _ in range(3):
+            try:
+                self._atomic(self.data_file, {"devices": self.devices, "events": self.events[-300:]})
+                return
+            except RuntimeError:        # saved from a worker thread while the main loop changed the device list: try again
+                time.sleep(0.05)
+            except Exception as e:
+                log.warning("Save failed: %s", e)
+                return
+        log.warning("Save failed: the device list kept changing")
 
     def save_settings(self):
         self._atomic(self.settings_file, self.settings, private=True)

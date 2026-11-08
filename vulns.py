@@ -716,7 +716,7 @@ class VulnScanner:
         # LanPulse's own checks (risky services, end-of-life Windows) belong on this page too
         config = [{"id": d["id"], "name": self.nm.label(d), "ip": d["ip"], "level": f["level"], "text": f["text"],
                    "port": f.get("port")}
-                  for d in devs.values() for f in d.get("findings", []) if f["level"] in ("high", "medium") and not f.get("dismissed")]
+                  for d in list(devs.values()) for f in d.get("findings", []) if f["level"] in ("high", "medium") and not f.get("dismissed")]
         all_f = [f for items in self.results.values() for f in items]
         return {"type": "vuln_summary", "status": self.status, "enabled": self.cfg.get("enabled", True),
                 "devices": rows, "fix": fix, "config": config[:500],
