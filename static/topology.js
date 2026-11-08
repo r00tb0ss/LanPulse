@@ -49,11 +49,12 @@ function topoSmooth(data) {
   TOPO.smFor = data;
   const prev = TOPO.sm || new Map(), now = new Map();
   for (const n of data.nodes) {
-    const p = prev.get(n.id) || {rate: 0, up: 0, tx: 0, rx: 0, utx: 0, urx: 0, pdn: 0, pup: 0};
+    const p = prev.get(n.id) || {rate: 0, up: 0, tx: 0, rx: 0, utx: 0, urx: 0, pdn: 0, pup: 0, lpd: 0, lpu: 0};
     const hold = (cur, old) => Math.max(cur || 0, (old || 0) * 0.65);      // fades to a third in ~2 refreshes
     const r = hold(n.rate, p.rate), u = hold(n.uplink_rate, p.up);
     const q = (v) => (v < 50 ? 0 : v);
-    now.set(n.id, {rate: q(r), up: q(u), tx: q(hold(n.rate_tx, p.tx)), rx: q(hold(n.rate_rx, p.rx)), utx: q(hold(n.uplink_tx, p.utx)), urx: q(hold(n.uplink_rx, p.urx)), pdn: q(hold(n.rate_dn, p.pdn)), pup: q(hold(n.rate_up, p.pup))});            // under 50 bytes/s counts as idle
+    now.set(n.id, {rate: q(r), up: q(u), tx: q(hold(n.rate_tx, p.tx)), rx: q(hold(n.rate_rx, p.rx)), utx: q(hold(n.uplink_tx, p.utx)), urx: q(hold(n.uplink_rx, p.urx)), pdn: q(hold(n.rate_dn, p.pdn)), pup: q(hold(n.rate_up, p.pup)),
+      lpd: q(hold((n.link || {}).port_dn, p.lpd)), lpu: q(hold((n.link || {}).port_up, p.lpu))});            // under 50 bytes/s counts as idle
   }
   TOPO.sm = now;
   for (const n of data.nodes) {
@@ -66,6 +67,8 @@ function topoSmooth(data) {
     if (s.urx > 0) n.uplink_rx = s.urx;
     if (s.pdn > 0) n.rate_dn = s.pdn;
     if (s.pup > 0) n.rate_up = s.pup;
+    if (n.link && s.lpd > 0) n.link.port_dn = s.lpd;
+    if (n.link && s.lpu > 0) n.link.port_up = s.lpu;
   }
 }
 
@@ -104,9 +107,12 @@ function topoTraffic(data) {
   // Upload and download per link, when UniFi reports the two directions separately
   const dirs = new Map();
   if (rates) for (const n of data.nodes) { const x = topoDirs(n); if (x) dirs.set(n.id, x); }
-  const maxDir = Math.max(1, ...[...dirs.values()].flatMap((x) => [x.dn, x.up]));
+  // Devices sharing one switch port (VMs on a host): the port's total is drawn on their cables, but never given to a device as its own
+  const pdirs = new Map();
+  if (rates) for (const n of data.nodes) { const l = n.link || {}; if (l.shared > 1 && !dirs.has(n.id) && (l.port_dn > 0 || l.port_up > 0)) pdirs.set(n.id, {dn: l.port_dn || 0, up: l.port_up || 0}); }
+  const maxDir = Math.max(1, ...[...dirs.values(), ...pdirs.values()].flatMap((x) => [x.dn, x.up]));
   const lgd = (v) => (v > 0 ? Math.max(0.1, Math.log1p(v) / Math.log1p(maxDir)) : 0);
-  return {own, sub, max, maxSub, lg, rates, fmt, dirs, lgd};
+  return {own, sub, max, maxSub, lg, rates, fmt, dirs, pdirs, lgd};
 }
 
 /* bytes per second -> "4.2 Mbps" */
@@ -357,7 +363,7 @@ function topoSvg(L, T, opts = {}) {
   if (TOPO.spread) {
     for (const c of L.chips) {
       const n = c.node, p = c.parent, x1 = p.cx, y1 = p.y + S.hh, x2 = c.x + S.cw / 2, y2 = c.y, my = y1 + (y2 - y1) * 0.55, wifi = (n.link || {}).medium === "wifi";
-      const cnt = TR ? TR.own.get(n.id) || 0 : 0, lv = cnt ? TR.lg(cnt, TR.max) : 0, hot = focus && focus.has(n.id), dd = TR && TR.dirs.get(n.id);
+      const cnt = TR ? TR.own.get(n.id) || 0 : 0, lv = cnt ? TR.lg(cnt, TR.max) : 0, hot = focus && focus.has(n.id), dd = TR && (TR.dirs.get(n.id) || TR.pdirs.get(n.id));
       out.push(`<g${focus && !focus.has(n.id) ? ' opacity=".2"' : ""}>${topoCable(`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`,
         {T, wired: !wifi, w: (n.link || {}).speed >= 2500 ? 3 : (n.link || {}).speed >= 1000 ? 2.4 : 1.8, lv, hot, exp: opts.export, dir: dd ? {dn: TR.lgd(dd.dn), up: TR.lgd(dd.up)} : null})}</g>`);
     }
@@ -376,7 +382,7 @@ function topoSvg(L, T, opts = {}) {
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
       ${TR && TOPO.spread && TR.dirs.get(n.id) ? topoRateLabel(TR.dirs.get(n.id), c.x + S.cw / 2, c.y + S.ch + 13, "middle", 10) : ""}
-      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
+      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : l.shared > 1 ? `shares port ${l.port}` : TR.rates ? "idle" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -681,6 +687,8 @@ function renderTopoInfo() {
     if (T2.rates) rows.push([n.kind === "client" ? "Throughput now" : "Throughput below", c ? topoBps(c) : "idle"]);
     const dd = T2.dirs.get(n.id);
     if (dd) rows.push(["Down / up", `↓ ${topoBps3(dd.dn)}   ↑ ${topoBps3(dd.up)}`]);
+    const pd = T2.pdirs.get(n.id);
+    if (pd) rows.push(["Port total", `↓ ${topoBps3(pd.dn)}   ↑ ${topoBps3(pd.up)} · shared by ${l.shared}`]);
     const k = n.kind === "client" ? TOPO.talkers.get(n.id) : [...TOPO.talkers].filter(([id]) => { for (let cur = d.nodes.find((x) => x.id === id), i = 0; cur && i < 20; i++, cur = d.nodes.find((x) => x.id === cur.parent)) if (cur.id === n.id) return true; return false; }).reduce((a, [, v]) => a + v, 0);
     if (!T2.rates || k) rows.push(["Connections (1h)", k ? k.toLocaleString() : "none logged"]);
   }
