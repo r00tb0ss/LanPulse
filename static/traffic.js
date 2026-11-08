@@ -99,7 +99,7 @@ function updateTrafficLayer() {
   tChart.setOption({series: [{id: "dests", data: dests.map((d) => ({
     name: d.ip, d, value: [d.lon, d.lat, d.count], size: 4 + 12 * Math.sqrt(d.count / max),
     itemStyle: {color: d.bad ? "#f43f5e" : "#2dd4bf", opacity: d.bad ? 1 : 0.85, borderColor: "#0a1122", borderWidth: 1,
-      shadowBlur: d.bad ? 12 : 6, shadowColor: d.bad ? "#f43f5e" : "#2dd4bf"}}))}]});
+      shadowBlur: showAttacks() ? 0 : d.bad ? 12 : 6, shadowColor: d.bad ? "#f43f5e" : "#2dd4bf"}}))}]});
   if (!showTraffic()) { flowArcs = []; drawFlowArcs(true); }
   if (typeof updateCountryLabels === "function") updateCountryLabels();
 }

@@ -130,6 +130,22 @@ function initWorld() {
   el.innerHTML = "";
   fixWorldMap();
   tChart = echarts.init(el, null, {renderer: "canvas"});
+  // Replacing a series' data restarts its ripple animation. Refreshes arrive every few seconds and mostly carry the same
+  // dots, so skip any of these series whose data hasn't changed since the last call.
+  const rawSet = tChart.setOption.bind(tChart), sigs = {};
+  tChart.setOption = (opt, ...rest) => {
+    if (opt && Array.isArray(opt.series)) {
+      const keep = opt.series.filter((x) => {
+        if (!x || !["attackers", "dests", "home", "labels"].includes(x.id)) return true;
+        const k = JSON.stringify(x);
+        if (sigs[x.id] === k) return false;
+        sigs[x.id] = k;
+        return true;
+      });
+      opt = keep.length ? {...opt, series: keep} : (({series, ...o}) => o)(opt);
+    }
+    return rawSet(opt, ...rest);
+  };
   tChart.setOption({
     backgroundColor: "transparent",
     tooltip: {
@@ -166,6 +182,12 @@ function initWorld() {
       {id: "home", type: "effectScatter", coordinateSystem: "geo", zlevel: 4, data: [],
         rippleEffect: {brushType: "fill", scale: 4.5, period: 2.5}, symbolSize: 13,
         itemStyle: {color: "#22c55e", shadowBlur: 14, shadowColor: "#22c55e"}},
+      // Country names live in their own series above every marker: the map's own labels are drawn underneath them.
+      {id: "labels", type: "scatter", coordinateSystem: "geo", zlevel: 5, silent: true, symbolSize: 0, data: [],
+        tooltip: {show: false},
+        label: {show: true, position: "inside", fontSize: 9, fontFamily: "Inter, system-ui, sans-serif",
+          textShadowColor: "#0a0f1c", textShadowBlur: 3,
+          rich: {atk: {color: "#fecaca"}, dst: {color: "#5eead4"}, both: {color: "#fca5a5"}}}},
     ],
   });
   tChart.on("click", (p) => {
@@ -270,7 +292,7 @@ function updateWorld() {
       {id: "attackers", data: s.attackers.filter((a) => attacksOn && a.lat != null && !(hideScanners && isScanner(a))).map((a) => ({
         name: a.ip, ip: a.ip, iso: a.iso, count: a.count, tag: a.tag, place: placeOf(a), services: a.services.join(", "),
         value: [a.lon, a.lat, a.count], size: 5 + Math.min(16, Math.sqrt(a.count) * 1.4),
-        itemStyle: {color: isScanner(a) ? SCANNER_COLOR : reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8", shadowBlur: isScanner(a) ? 0 : 10,
+        itemStyle: {color: isScanner(a) ? SCANNER_COLOR : reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8", shadowBlur: isScanner(a) || (attacksOn && typeof showTraffic === "function" && showTraffic()) ? 0 : 10,
           shadowColor: reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8"}}))},
       {id: "home", data: home ? [{value: home, place: [s.home.city, s.home.country].filter(Boolean).join(", ") + (s.public_ip ? ` · ${s.public_ip}` : "")}] : []},
     ],
@@ -286,7 +308,7 @@ function updateCountryLabels() {
   if (!tChart) return;
   const attacksOn = typeof showAttacks !== "function" || showAttacks();
   const trafficOn = typeof showTraffic === "function" && showTraffic() && typeof flowSummary !== "undefined" && flowSummary;
-  const label = {};   // map region name -> {name, atk, dst}
+  const label = {}, spot = {};   // map region name -> {name, atk, dst}; and where on the map its name goes
   const both = attacksOn && trafficOn;
   const top = (arr) => [...(arr || [])].sort((a, b) => b.count - a.count).slice(0, both ? 25 : 60);
   if (attacksOn && tSummary) top(tSummary.countries).forEach((c) => {
@@ -309,7 +331,9 @@ function updateCountryLabels() {
       try {
         const r = gs && gs.getRegion(k), c = r && r.getCenter && r.getCenter();
         const px = c ? gs.dataToPoint(c) : tChart.convertToPixel({geoIndex: 0}, anchor[k]);
-        return px && px.every(Number.isFinite) ? px : null;
+        const ok = px && px.every(Number.isFinite);
+        if (ok) spot[k] = c || anchor[k];
+        return ok ? px : null;
       } catch (_) { return null; }
     };
     const placed = [], kept = [];
@@ -327,10 +351,8 @@ function updateCountryLabels() {
     const n = (v.atk || 0) + (v.dst || 0);
     return `{${kind}|${both ? v.name : `${v.name} (${fmtN(n)})`}}`;
   };
-  tChart.setOption({geo: {label: {show: true, fontSize: 9, fontFamily: "Inter, system-ui, sans-serif",
-    textShadowColor: "#0a0f1c", textShadowBlur: 3,
-    rich: {atk: {color: "#fecaca"}, dst: {color: "#5eead4"}, both: {color: "#fca5a5"}},
-    formatter: (p) => label[p.name] ? fmt(label[p.name]) : ""}}});
+  const pts = Object.keys(label).filter((k) => spot[k]).map((k) => ({name: k, value: spot[k], label: {formatter: fmt(label[k])}}));
+  tChart.setOption({geo: {label: {show: false}}, series: [{id: "labels", data: pts}]});
 }
 
 function pushArc(ev) {
