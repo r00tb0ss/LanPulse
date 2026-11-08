@@ -13,6 +13,7 @@ TOPO.pos = (() => { try { return JSON.parse(localStorage.getItem("nm_topo_pos") 
 const topoSavePos = () => { try { localStorage.setItem("nm_topo_pos", JSON.stringify(TOPO.pos)); } catch (_) {} };
 TOPO.flip = (() => { try { return localStorage.getItem("lp_topo_flip") === "1"; } catch (_) { return false; } })();
 const TOPO_DN = "#38bdf8", TOPO_UP = "#a78bfa", TOPO_GLOW = "#3b82f6";   // download, upload and the busy-cable glow, as in the UniFi topology
+const TOPO_FAR = 0.6;   // zoomed out further than this, the map shows names only; the detail text (class tp-d) fades out
 const TOPO_INFRA = new Set(["gateway", "switch", "ap"]);
 const TOPO_SIZE = {hw: 224, hh: 74, cw: 164, ch: 46, gap: 10, pad: 12, vgap: 54, hgap: 28, maxChips: 24};
 const TOPO_COLORS = [["plain", "Single color (UniFi style)"], ["type", "Device type"], ["status", "Status"], ["risk", "Security risk"], ["zone", "Zone / VLAN"],
@@ -303,7 +304,7 @@ function topoFlow(d, w, dn, up, exp) {
 
 /* "↓ 178 Kbps  ↑ 13.9 Kbps" in the download and upload colours */
 function topoRateLabel(dd, x, y, anchor = "middle", size = 10.5) {
-  return `<text x="${x}" y="${y}" font-size="${size}" text-anchor="${anchor}"><tspan fill="${TOPO_DN}">↓ ${topoBps3(dd.dn)}</tspan><tspan dx="8" fill="${TOPO_UP}">↑ ${topoBps3(dd.up)}</tspan></text>`;
+  return `<text class="tp-d" x="${x}" y="${y}" font-size="${size}" text-anchor="${anchor}"><tspan fill="${TOPO_DN}">↓ ${topoBps3(dd.dn)}</tspan><tspan dx="8" fill="${TOPO_UP}">↑ ${topoBps3(dd.up)}</tspan></text>`;
 }
 
 function weakClients(data) {
@@ -337,7 +338,7 @@ function topoSvg(L, T, opts = {}) {
     const tf = TR ? TR.lg(TR.sub.get(n.id) || 0, TR.maxSub) : 0, dd = TR && TR.dirs.get(n.id);
     out.push(`<g${dim(n.id)}>${topoCable(`M${a.cx},${a.y + S.hh} C${a.cx},${my} ${b.cx},${my} ${b.cx},${b.y}`, {T, wired, w, lv: tf, hot, exp: opts.export, dir: dd ? {dn: TR.lgd(dd.dn), up: TR.lgd(dd.up)} : null})}
       ${dd ? topoRateLabel(dd, (a.cx + b.cx) / 2 + 8, my + 17, "start") : ""}
-      ${topoLinkLabel(n) ? `<text x="${(a.cx + b.cx) / 2 + 8}" y="${my + 4}" font-size="10.5" fill="${T.muted}">${esc(topoLinkLabel(n))}</text>` : ""}</g>`);
+      ${topoLinkLabel(n) ? `<text class="tp-d" x="${(a.cx + b.cx) / 2 + 8}" y="${my + 4}" font-size="10.5" fill="${T.muted}">${esc(topoLinkLabel(n))}</text>` : ""}</g>`);
   }
   // blocks of devices
   for (const b of L.blocks) {
@@ -371,11 +372,11 @@ function topoSvg(L, T, opts = {}) {
       <rect x="${c.x}" y="${c.y + 6}" width="4" height="${S.ch - 12}" rx="2" fill="${col}"/>
       ${glyph ? `<text x="${c.x + 17}" y="${c.y + 29}" ${t.brand ? FAB : FA} font-size="15" fill="${col}" text-anchor="middle">${t.icon}</text>` : `<circle cx="${c.x + 17}" cy="${c.y + 24}" r="6" fill="${col}"/>`}
       <text x="${c.x + 32}" y="${c.y + 20}" font-size="12" font-weight="600" fill="${T.text}">${esc(tx(n.name, 15))}</text>
-      <text x="${c.x + 32}" y="${c.y + 36}" font-size="10.5" fill="${T.muted}">${esc(tx(n.ip, 16))}</text>
+      <text class="tp-d" x="${c.x + 32}" y="${c.y + 36}" font-size="10.5" fill="${T.muted}">${esc(tx(n.ip, 16))}</text>
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
       ${TR && TOPO.spread && TR.dirs.get(n.id) ? topoRateLabel(TR.dirs.get(n.id), c.x + S.cw / 2, c.y + S.ch + 13, "middle", 10) : ""}
-      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
+      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -389,8 +390,8 @@ function topoSvg(L, T, opts = {}) {
       <rect x="${h.x}" y="${h.y}" width="${S.hw}" height="5" rx="2.5" fill="${col}" opacity=".9"/>
       ${glyph ? `<text x="${h.x + 26}" y="${h.y + 36}" ${FA} font-size="20" fill="${col}" text-anchor="middle">${t.icon}</text>` : `<circle cx="${h.x + 26}" cy="${h.y + 32}" r="9" fill="${col}"/>`}
       <text x="${h.x + 48}" y="${h.y + 28}" font-size="13.5" font-weight="700" fill="${T.text}">${esc(tx(n.name, radios.length ? 14 : 22))}</text>
-      <text x="${h.x + 48}" y="${h.y + 44}" font-size="11" fill="${T.muted}">${esc(tx([n.model, n.ip].filter(Boolean).join(" · "), 28))}</text>
-      <text x="${h.x + 48}" y="${h.y + 60}" font-size="11" fill="${T.accent}">${esc(infraSummary(n))}</text>
+      <text class="tp-d" x="${h.x + 48}" y="${h.y + 44}" font-size="11" fill="${T.muted}">${esc(tx([n.model, n.ip].filter(Boolean).join(" · "), 28))}</text>
+      <text class="tp-d" x="${h.x + 48}" y="${h.y + 60}" font-size="11" fill="${T.accent}">${esc(infraSummary(n))}</text>
       ${radios.map((r, i) => `<g><rect x="${h.x + S.hw - 10 - (radios.length - i) * 38}" y="${h.y + 12}" width="34" height="15" rx="7" fill="${T.panel2}" stroke="${T.border2}"/>
         <text x="${h.x + S.hw - 10 - (radios.length - i) * 38 + 17}" y="${h.y + 23}" font-size="9" text-anchor="middle" fill="${T.muted}">${esc(r.band.replace(" GHz", "G"))}</text></g>`).join("")}
       ${n.online ? "" : `<text x="${h.x + S.hw - 12}" y="${h.y + 24}" font-size="10" text-anchor="end" fill="${T.red}">offline</text>`}
@@ -537,6 +538,7 @@ function topoRedraw() {      // re-draw after a drag without refitting or closin
 function topoApplyView() {
   const v = TOPO.view;
   $("topoRoot").setAttribute("transform", `translate(${v.x},${v.y}) scale(${v.k})`);
+  $("topoSvg").classList.toggle("tp-far", v.k < TOPO_FAR);
   topoMini();
 }
 
