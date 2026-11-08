@@ -327,6 +327,15 @@ function closePanel() {
   renderList();
 }
 
+/* Panel sections that fold. The choice is remembered, because the panel is redrawn on every update. */
+const FOLD = (() => { try { return JSON.parse(localStorage.getItem("lp_fold") || "{}"); } catch (_) { return {}; } })();
+document.addEventListener("toggle", (e) => {
+  const k = e.target.dataset && e.target.dataset.fold;
+  if (!k || FOLD[k] === e.target.open) return;
+  FOLD[k] = e.target.open;
+  try { localStorage.setItem("lp_fold", JSON.stringify(FOLD)); } catch (_) {}
+}, true);
+
 function renderPanel(force) {
   const d = devices.get(selected);
   if (!d) { closePanel(); return; }
@@ -387,40 +396,40 @@ function renderPanel(force) {
     <div class="p-sec ${vulnHtml ? "" : "hidden"}" id="vulnBox">${vulnHtml}</div>
     <div class="p-sec ${ovHtml ? "" : "hidden"}" id="ovBox">${ovHtml}</div>
     <div class="p-sec"><h4>Security</h4>${findHtml}</div>
-    <div class="p-sec"><h4>Timeline</h4><div id="tlBox">${tlHtml}</div></div>
-    ${d.model || d.friendly || (d.evidence || []).length || (d.services || []).length ? `<div class="p-sec"><h4>Identification</h4><dl class="kv">
+    <details class="p-sec fold" data-fold="timeline" ${FOLD.timeline ? "open" : ""}><summary><h4>Timeline</h4></summary><div id="tlBox">${tlHtml}</div></details>
+    ${d.model || d.friendly || (d.evidence || []).length || (d.services || []).length ? `<details class="p-sec fold" data-fold="ident" ${FOLD.ident ? "open" : ""}><summary><h4>Identification</h4><span class="hint muted">${esc(d.model || d.friendly || "")}</span></summary><dl class="kv">
       ${d.model ? `<dt>Model</dt><dd>${esc(d.model)}</dd>` : ""}
       ${d.friendly ? `<dt>Calls itself</dt><dd>${esc(d.friendly)}</dd>` : ""}
       ${(d.services || []).length ? `<dt>Services</dt><dd class="chips-wrap">${d.services.map((x) => `<span class="svc">${esc(x)}</span>`).join("")}</dd>` : ""}
       </dl>${(d.evidence || []).length ? `<div class="evid">${d.evidence.map((e) => `<span class="ev-chip"><i class="fa-solid fa-fingerprint"></i>${esc(e)}</span>`).join("")}</div>` : ""}
-    </div>` : ""}
-    <div class="p-sec"><h4>Network</h4><dl class="kv">
+    </details>` : ""}
+    <details class="p-sec fold" data-fold="network" ${FOLD.network ? "open" : ""}><summary><h4>Network</h4><span class="hint muted">${esc(d.ip)}${d.vendor ? ` · ${esc(d.vendor)}` : ""}</span></summary><dl class="kv">
       <dt>IP address</dt><dd>${esc(d.ip)}</dd>
       <dt>MAC address</dt><dd>${esc(d.mac || "—")}${d.randomized_mac ? ' <span class="muted">(private)</span>' : ""}</dd>
       <dt>Vendor</dt><dd>${esc(d.vendor || "Unknown")}</dd>
       <dt>Hostname</dt><dd>${esc(d.hostname || "—")}</dd>
       <dt>Latency</dt><dd>${d.online && d.rtt_ms != null ? d.rtt_ms + " ms" : "—"}</dd>
       ${(d.ip_history || []).length > 1 ? `<dt>Past IPs</dt><dd>${esc([...new Set(d.ip_history)].join(", "))}</dd>` : ""}
-    </dl></div>
-    <div class="p-sec"><h4>System</h4><dl class="kv">
+    </dl></details>
+    <details class="p-sec fold" data-fold="system" ${FOLD.system ? "open" : ""}><summary><h4>System</h4><span class="hint muted">${esc(d.os || "")}</span></summary><dl class="kv">
       <dt>OS guess</dt><dd>${esc(d.os || "—")}</dd>
       ${d.os_accuracy ? `<dt>Confidence</dt><dd>${d.os_accuracy}%<div class="bar"><div style="width:${d.os_accuracy}%"></div></div></dd>` : ""}
       <dt>First seen</dt><dd>${esc(full(d.first_seen))}</dd>
       <dt>Last seen</dt><dd id="lastSeen">${ago(d.last_seen)}</dd>
       <dt>Port scan</dt><dd>${d.deep_scanned_at ? ago(d.deep_scanned_at) : d.scanning ? "in progress…" : "pending"}</dd>
-    </dl></div>
-    <div class="p-sec"><h4>Open ports (${ports.length})</h4>
+    </dl></details>
+    <details class="p-sec fold" data-fold="ports" ${FOLD.ports ? "open" : ""}><summary><h4>Open ports</h4><span class="hint muted">${ports.length}</span></summary>
       ${ports.length ? `<table class="ports"><tr><th>Port</th><th>Service</th><th>Product</th></tr>${portRows}</table>`
         : `<div class="muted">${d.deep_scanned_at ? "No open TCP ports found." : "Not scanned yet."}</div>`}
-    </div>
-    <div class="p-sec"><h4>Customize</h4><div class="form">
+    </details>
+    <details class="p-sec fold" data-fold="customize" ${FOLD.customize ? "open" : ""}><summary><h4>Customize</h4><span class="hint muted">name, type, notes</span></summary><div class="form">
       <label for="eName">Display name</label><input id="eName" maxlength="64" placeholder="${esc(d.hostname || d.vendor || "e.g. Living room TV")}" value="${esc(d.name)}">
       <label for="eType">Device type</label><select id="eType">${typeOpts}</select>
       <label for="eNotes">Notes</label><textarea id="eNotes" maxlength="2000" placeholder="Location, owner, purpose…">${esc(d.notes)}</textarea>
       <div class="btns">
         <button class="btn primary" id="bSave"><i class="fa-solid fa-floppy-disk"></i>Save</button>
         ${!d.online ? `<button class="btn danger" id="bForget"><i class="fa-solid fa-trash"></i>Forget device</button>` : ""}
-      </div></div></div>`;
+      </div></div></details>`;
 
   const dev = (path = "") => `/api/devices/${encodeURIComponent(d.id)}${path}`;
   const post = async (body) => {        // change the device, then show the change on its timeline
