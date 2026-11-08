@@ -59,7 +59,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.44"
+VERSION = "1.25.45"
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -2145,6 +2145,55 @@ def build_app(nm: LanPulse) -> FastAPI:
             except (snmpdisc.SnmpError, OSError) as e:
                 res.append({"ip": h, "ok": False, "error": str(e)[:160]})
         return {"ok": any(x["ok"] for x in res), "ms": int((time.time() - t0) * 1000), "hosts": res}
+
+    @app.get("/api/unifi/rates")
+    async def unifi_rates(q: str = ""):
+        """Read-only diagnostic: which rate and traffic fields UniFi returns for a device (name, IP or MAC), from the client list
+        LanPulse reads, from the device's switch port, and from the newer client list the UniFi app uses, next to what LanPulse
+        shows. Numbers only, so it shows where a per-device speed lives without returning anything else."""
+        import re as _re
+        q = q.strip().lower()
+        if not q:
+            return JSONResponse({"error": "Add ?q=<name, IP or MAC>, for example /api/unifi/rates?q=ubuntuserver"}, status_code=400)
+        key = _re.compile(r"(bytes|rate|packets|^tx|^rx|-tx|-rx)", _re.I)
+
+        def fields(rec, depth=0):
+            out = {}
+            for k, v in (rec or {}).items():
+                if isinstance(v, dict) and depth < 2:
+                    out.update({f"{k}.{kk}": vv for kk, vv in fields(v, depth + 1).items()})
+                elif isinstance(v, (int, float)) and not isinstance(v, bool) and key.search(str(k)):
+                    out[str(k)] = v
+            return out
+
+        with nm.topology.lock:
+            data = nm.topology.unifi or {}
+        clients = [c for c in data.get("clients", [])
+                   if q in " ".join(str(c.get(k, "")) for k in ("name", "hostname", "ip", "mac")).lower()][:3]
+        if not clients:
+            return JSONResponse({"error": "No UniFi client matches that. UniFi may not be connected; try the IP address."}, status_code=404)
+        devs = {str(d.get("mac", "")).lower(): d for d in data.get("devices", [])}
+        built = {n.get("ip"): n for n in nm.topology.build().get("nodes", [])}
+        v2, v2_error = [], ""
+        try:
+            c2 = unifi_client()
+            v2 = await asyncio.to_thread(c2._call, "GET", f"/proxy/network/v2/api/site/{c2.site}/clients/active")
+            v2 = v2 if isinstance(v2, list) else []
+        except Exception as e:
+            v2_error = str(e)
+        out = []
+        for c in clients:
+            mac = str(c.get("mac", "")).lower()
+            sw = devs.get(str(c.get("sw_mac", "")).lower())
+            port = next((p for p in (sw or {}).get("port_table", []) or [] if p.get("port_idx") == c.get("sw_port")), None)
+            node = built.get(c.get("ip")) or {}
+            out.append({"name": c.get("name") or c.get("hostname") or c.get("ip"), "ip": c.get("ip"), "wired": bool(c.get("is_wired")),
+                        "sw_port": c.get("sw_port"),
+                        "stat_sta": fields(c),
+                        "switch_port": {"port_idx": port.get("port_idx"), **fields(port)} if port else None,
+                        "clients_active_v2": next((fields(r) for r in v2 if str(r.get("mac", "")).lower() == mac), None),
+                        "lanpulse_shows": {k: node.get(k) for k in ("rate", "rate_tx", "rate_rx", "rate_dn", "rate_up")} | {"link": node.get("link")}})
+        return {"matches": out, "v2_error": v2_error, "note": "bytes per second; direction fields are named as UniFi names them"}
 
     @app.post("/api/unifi/test")
     async def unifi_test():
