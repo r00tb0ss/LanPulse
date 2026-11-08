@@ -419,6 +419,8 @@ def _client_rate(c: dict):
         v = c.get("bytes-r")
         if v is None:
             a, b = c.get("tx_bytes-r"), c.get("rx_bytes-r")
+            if a is None and b is None:
+                a, b = c.get("wired-tx_bytes-r"), c.get("wired-rx_bytes-r")      # wired clients report their speed under these names
             v = (a or 0) + (b or 0) if a is not None or b is not None else None
         return max(0.0, float(v)) if v is not None else None
     except (TypeError, ValueError):
@@ -432,7 +434,9 @@ def _client_dirs(c: dict):
     out = []
     for k in ("tx_bytes-r", "rx_bytes-r"):
         try:
-            v = c.get(k)
+            v = c.get("wired-" + k)      # wired clients report their speed under these names
+            if v is None:
+                v = c.get(k)
             out.append(max(0.0, float(v)) if v is not None else None)
         except (TypeError, ValueError):
             out.append(None)

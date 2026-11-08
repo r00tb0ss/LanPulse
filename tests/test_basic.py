@@ -148,6 +148,12 @@ class TopologyRates(unittest.TestCase):
         self.assertIsNone(topology._client_rate({}))
         self.assertIsNone(topology._client_rate({"bytes-r": "x"}))
 
+    def test_wired_client_rates(self):
+        c = {"wired-tx_bytes-r": 6693.7, "wired-rx_bytes-r": 1799.3}      # what UniFi sends for a wired client
+        self.assertEqual(topology._client_dirs(c), (6693.7, 1799.3))
+        self.assertAlmostEqual(topology._client_rate(c), 8493.0)
+        self.assertEqual(topology._client_dirs({"tx_bytes-r": 4, "rx_bytes-r": 5}), (4.0, 5.0))      # a Wi-Fi client
+
     def test_client_dirs(self):
         self.assertEqual(topology._client_dirs({"tx_bytes-r": 1, "rx_bytes-r": 2}), (1.0, 2.0))
         self.assertEqual(topology._client_dirs({"tx_bytes-r": 5}), (5.0, None))
