@@ -45,13 +45,25 @@ def match_domain(host: str) -> str | None:
 def classify(ip: str) -> dict | None:
     try:
         host = socket.gethostbyaddr(ip)[0]
-    except Exception:
+    except socket.herror as e:
+        if e.args and e.args[0] == 2:          # TRY_AGAIN: the resolver was busy or unreachable, so this says nothing
+            raise LookupError("DNS temporarily unavailable") from None
+        return None                             # the address really has no name
+    except socket.gaierror as e:
+        if e.errno == socket.EAI_AGAIN:
+            raise LookupError("DNS temporarily unavailable") from None
         return None
+    except OSError:
+        raise LookupError("DNS lookup failed") from None
     name = match_domain(host)
     if not name:
         return None
     try:
         confirmed = ip in socket.gethostbyname_ex(host)[2]
+    except socket.gaierror as e:
+        if e.errno == socket.EAI_AGAIN:
+            raise LookupError("DNS temporarily unavailable") from None
+        confirmed = False
     except Exception:
         confirmed = False
     return {"tag": "scanner", "label": name, "host": host} if confirmed else None
@@ -69,13 +81,14 @@ class ScannerTagger:
         self.cache: dict[str, dict | None] = {ip: ({"tag": t, "label": l, "host": h} if t else None) for ip, t, l, h in rows}
         self.q: queue.Queue[str] = queue.Queue(maxsize=5000)
         self.pending: set[str] = set()
+        self.retry: dict[str, float] = {}          # address -> earliest time to try again after a DNS hiccup
         self.on_tag = None
         threading.Thread(target=self.worker, daemon=True, name="scanner-tagger").start()
 
     def get(self, ip: str) -> dict | None:
         if ip in self.cache:
             return self.cache[ip]
-        if ip not in self.pending:
+        if ip not in self.pending and time.time() >= self.retry.get(ip, 0):
             self.pending.add(ip)
             try:
                 self.q.put_nowait(ip)
@@ -94,7 +107,14 @@ class ScannerTagger:
     def worker(self):
         while True:
             ip = self.q.get()
-            info = None if self.demo else classify(ip)
+            try:
+                info = None if self.demo else classify(ip)
+            except LookupError:                     # a DNS hiccup is not an answer: don't remember it, ask again in 10 minutes
+                self.pending.discard(ip)
+                if len(self.retry) > 5000:
+                    self.retry.clear()
+                self.retry[ip] = time.time() + 600
+                continue
             self.set(ip, info)
             self.pending.discard(ip)
             if info and self.on_tag:
