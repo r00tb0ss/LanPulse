@@ -242,7 +242,8 @@ def resource_script(targets_by_device: list[tuple[dict, list[dict]]]) -> str:
     for d, targets in targets_by_device:
         if not targets:
             continue
-        out.append(f"# ===== {d.get('ip', '?')}  {d.get('name', '')} =====")
+        one_line = lambda v: " ".join(str(v or "").split())[:80]      # a name with a line break must not start a new command
+        out.append(f"# ===== {one_line(d.get('ip', '?'))}  {one_line(d.get('name', ''))} =====")
         for t in targets:
             out += t["commands"]
             out.append("# run")        # intentionally commented - you uncomment to execute

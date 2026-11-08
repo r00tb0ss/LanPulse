@@ -48,7 +48,7 @@ SYSTEM_PROMPT = (
 PROVIDERS = ("ollama", "openai", "anthropic")
 DEFAULTS = {"ollama": ("http://localhost:11434", "llama3.1"),
             "openai": ("http://localhost:1234/v1", "gpt-4o-mini"),
-            "anthropic": ("https://api.anthropic.com", "claude-sonnet-5")}
+            "anthropic": ("https://api.anthropic.com", "claude-sonnet-5-5")}
 
 SUGGESTED = [
     "What should I fix first on my network?",
@@ -73,6 +73,24 @@ def _cfg(nm) -> dict:
     c["base_url"] = (c["base_url"] or base).rstrip("/")
     c["model"] = c["model"] or model
     return c
+
+
+def is_local(url: str) -> bool:
+    """Does this AI server sit on your own network (so questions never leave it)? Judged by the real host name,
+    not by text that merely appears somewhere in the address."""
+    import ipaddress
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return False
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+    except ValueError:
+        return "." not in host or host.endswith((".local", ".lan", ".home", ".internal", ".home.arpa"))
 
 
 # --------------------------------------------------------------------------- provider calls
@@ -142,7 +160,7 @@ def _risk(nm) -> list[str]:
 def _device_lines(nm) -> list[str]:
     vres = getattr(nm.vulns, "results", {}) or {}
     out = []
-    devs = sorted(nm.devices.values(),
+    devs = sorted(list(nm.devices.values()),
                   key=lambda d: (-sum(1 for f in vres.get(d["id"], []) if f.get("confidence") == "confirmed"),
                                  -sum(1 for f in vres.get(d["id"], []) if f.get("kev")),
                                  not d.get("online", False)))
@@ -232,13 +250,11 @@ def ask(nm, question: str) -> dict:
     if not answer:
         return {"error": "The model returned an empty answer. Try a different model."}
     return {"answer": answer, "provider": cfg["provider"], "model": cfg["model"],
-            "local": cfg["provider"] == "ollama" or ".local" in cfg["base_url"] or "localhost" in cfg["base_url"]
-                     or "127.0.0.1" in cfg["base_url"] or cfg["base_url"].split("//")[-1].startswith(("192.168.", "10.", "172."))}
+            "local": is_local(cfg["base_url"])}
 
 
 def status(nm) -> dict:
     cfg = _cfg(nm)
     return {"enabled": cfg["enabled"], "provider": cfg["provider"], "model": cfg["model"],
             "configured": bool(cfg["base_url"]), "suggested": SUGGESTED,
-            "local": cfg["provider"] == "ollama" or "localhost" in cfg["base_url"] or "127.0.0.1" in cfg["base_url"]
-                     or cfg["base_url"].split("//")[-1].startswith(("192.168.", "10.", "172."))}
+            "local": is_local(cfg["base_url"])}
