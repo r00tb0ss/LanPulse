@@ -382,7 +382,7 @@ function topoSvg(L, T, opts = {}) {
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
       ${TR && TOPO.spread && TR.dirs.get(n.id) ? topoRateLabel(TR.dirs.get(n.id), c.x + S.cw / 2, c.y + S.ch + 13, "middle", 10) : ""}
-      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : l.shared > 1 ? `shares port ${l.port}` : TR.rates ? "idle" : "no traffic"}</text>` : ""}
+      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : l.shared > 1 ? (n.rate_tx != null || n.rate_rx != null ? "idle" : `shares port ${l.port}`) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
