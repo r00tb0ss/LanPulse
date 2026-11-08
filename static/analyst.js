@@ -4,7 +4,7 @@
   const PROV = {
     ollama: ["Ollama (local)", "http://localhost:11434", "llama3.1"],
     openai: ["OpenAI-compatible (LM Studio, Groq, OpenRouter, OpenAI…)", "http://localhost:1234/v1", "gpt-4o-mini"],
-    anthropic: ["Anthropic (Claude)", "https://api.anthropic.com", "claude-sonnet-5"],
+    anthropic: ["Anthropic (Claude)", "https://api.anthropic.com", "claude-sonnet-5-5"],
   };
   const open = () => $("aiDrawer").classList.contains("hidden") === false;
 
