@@ -59,7 +59,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.55"
+VERSION = "1.25.56"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -300,7 +300,7 @@ def arp_sweep(subnet: str, iface: str, gateway: str = "") -> tuple[dict[str, dic
     try:
         root = ET.fromstring(out)
     except ET.ParseError:
-        return found
+        return found, pairs
     for host in root.findall("host"):
         ip = mac = ""
         for a in host.findall("address"):
@@ -394,7 +394,7 @@ def nmap_deep(ip: str, top_ports: int, thorough: bool = False) -> dict | None:
     hints = {x.get("product", "") for x in host.findall("ports/port/service")
              if x.get("ostype") == "Windows" or "windows" in x.get("product", "").lower()}
     info["probes"], smb_os = parse_scripts(host)
-    info["vulners"] = list(getattr(parse_scripts, "vulners", []))
+    info["vulners"] = list(getattr(_parse_tls, "vulners", []))
     if smb_os:                       # smb-os-discovery names the exact Windows version; feed it to CVE matching
         hints.add(smb_os)
     info["os_hint"] = " | ".join(sorted(x for x in hints if x))[:300]
@@ -416,6 +416,9 @@ def parse_vulners(scr, port: int) -> list[dict]:
         out.append({"cve": cid, "cvss": round(min(max(cvss, 0.0), 10.0), 1),
                     "exploit": el.get("is_exploit", "").lower() == "true", "port": port})
     return out
+
+
+_parse_tls = __import__("threading").local()      # several scans run in worker threads at once: each keeps its own result
 
 
 def parse_scripts(host) -> tuple[list[dict], str]:
@@ -479,7 +482,7 @@ def parse_scripts(host) -> tuple[list[dict], str]:
             if key not in seen:
                 seen.add(key)
                 probes.append({"id": sid, "cve": cve, "port": port, "title": SCRIPT_TITLE.get(sid, sid)})
-    parse_scripts.vulners = vul[:80]          # read right after the call by nmap_deep
+    _parse_tls.vulners = vul[:80]          # read right after the call by nmap_deep, in the same thread
     return probes[:40], smb_os
 
 
