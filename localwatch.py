@@ -163,7 +163,7 @@ class LocalWatch:
         return bool(d and d.get("scans_ok"))
 
     def device_by_ip(self, ip: str) -> dict | None:
-        return next((d for d in self.nm.devices.values() if d["ip"] == ip), None)
+        return next((d for d in list(self.nm.devices.values()) if d["ip"] == ip), None)      # a copy: the sniffer thread calls this
 
     # ---- packet handlers (sniffer thread)
     def on_packet(self, pkt):
@@ -206,7 +206,7 @@ class LocalWatch:
         return self.cfg.get("gateway_mac", "")
 
     def spoof_text(self, mac: str, gw: str) -> str:
-        who = next((d for d in self.nm.devices.values() if d.get("mac") == mac and not d.get("is_gateway")), None)
+        who = next((d for d in list(self.nm.devices.values()) if d.get("mac") == mac and not d.get("is_gateway")), None)
         name = f"{self.nm.label(who)} ({who['ip']}, {mac})" if who else mac
         return (f"{name} claims to be your router {gw}. The router's real hardware address is {self.gw_pinned}. "
                 f"Devices that believe it send their traffic through it (man-in-the-middle).")
@@ -398,7 +398,7 @@ class LocalWatch:
                 self.dhcp_servers.pop(oldest, None)
         if rec["allowed"] or not self.cfg.get("dhcp_check", True):
             return
-        who = next((d for d in self.nm.devices.values() if d.get("mac") == mac and mac), None)
+        who = next((d for d in list(self.nm.devices.values()) if d.get("mac") == mac and mac), None)
         name = f"{self.nm.label(who)} ({server})" if who else f"{server} ({mac or 'unknown hardware address'})"
         hands = ", ".join(x for x in (f"address {rec['offered']}" if rec["offered"] else "",
                                        f"router {rec['router']}" if rec["router"] else "",
@@ -511,8 +511,15 @@ class LocalWatch:
             self.db.commit()
         self.decorate(ev)
         log.info("Local threat: %s from %s: %s", ev["kind"], ev["src"] or ev["mac"], ev["detail"])
+        bc = self.nm.broadcast({"type": "local_threat", "event": ev})
         try:
-            asyncio.get_running_loop().create_task(self.nm.broadcast({"type": "local_threat", "event": ev}))
+            asyncio.get_running_loop().create_task(bc)
+        except RuntimeError:                      # called from a worker thread (router log / honeypot intake)
+            if self.loop:
+                asyncio.run_coroutine_threadsafe(bc, self.loop)
+            else:
+                bc.close()
+        try:
             dev = self.device_by_ip(ev["src"]) if ev["src"] else None
             subject = dev or {"id": f"local:{ev['src'] or ev['mac']}", "ip": ev["src"] or "?", "mac": ev["mac"],
                               "vendor": "", "type": "unknown"}
@@ -526,7 +533,7 @@ class LocalWatch:
     def decorate(self, ev: dict):
         s = self.device_by_ip(ev["src"]) if ev.get("src") else None
         if not s and ev.get("mac"):
-            s = next((d for d in self.nm.devices.values() if d.get("mac") == ev["mac"]), None)
+            s = next((d for d in list(self.nm.devices.values()) if d.get("mac") == ev["mac"]), None)
         t = self.device_by_ip(ev["target"]) if ev.get("target") else None
         ev["src_id"], ev["src_name"] = (s["id"], self.nm.label(s)) if s else ("", "")
         ev["target_id"], ev["target_name"] = (t["id"], self.nm.label(t)) if t else ("", "")
