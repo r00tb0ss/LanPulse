@@ -39,6 +39,7 @@ class FlowStore:
                 self.geo_seen.setdefault(src, set()).add(iso)
                 self.geo_since[src] = min(self.geo_since.get(src, first), first)
         self.acc: dict[tuple, list[int]] = {}
+        self.acc_lock = threading.Lock()          # add() runs on the event loop, flush() also from summary() in a worker thread
         self.live: list[dict] = []
         self.recent: collections.deque = collections.deque(maxlen=80)
         self.bad_ips: set[str] = set()
@@ -53,9 +54,10 @@ class FlowStore:
     def add(self, src: str, dst: str, dport, proto: str, blocked: bool, t: float | None = None):
         t = t or time.time()
         key = (int(t // 60), src, dst, int(dport or 0), (proto or "tcp").lower())
-        a = self.acc.setdefault(key, [0, 0])
-        a[0] += 1
-        a[1] += 1 if blocked else 0
+        with self.acc_lock:
+            a = self.acc.setdefault(key, [0, 0])
+            a[0] += 1
+            a[1] += 1 if blocked else 0
         self.last_flow = t
         c2 = not blocked and self.nm.threats.known_c2(dst)      # our device reaching a known botnet C2 = likely infected
         bad = c2 or self.is_bad(dst)
@@ -204,10 +206,11 @@ class FlowStore:
 
     def flush(self, force: bool = False):
         cur = int(time.time() // 60)
-        done = [k for k in self.acc if force or k[0] < cur]
+        with self.acc_lock:
+            done = [k for k in self.acc if force or k[0] < cur]
+            rows = [(*k, *self.acc.pop(k)) for k in done]
         if not done:
             return
-        rows = [(*k, *self.acc.pop(k)) for k in done]
         with self.lock:
             self.db.executemany("INSERT INTO flows VALUES (?,?,?,?,?,?,?) ON CONFLICT(m, src, dst, dport, proto) "
                                 "DO UPDATE SET n = n + excluded.n, nb = nb + excluded.nb", rows)
@@ -230,7 +233,7 @@ class FlowStore:
                                       f"GROUP BY src ORDER BY SUM(n) DESC LIMIT {max(1, min(int(talkers), 1000))}", args).fetchall()
             total, uniq = self.db.execute(f"SELECT SUM(n), COUNT(DISTINCT dst) FROM flows WHERE {where}", args).fetchone()
         self.is_bad("")
-        by_ip = {d["ip"]: d for d in self.nm.devices.values()}
+        by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
         orgs, countries = collections.Counter(), collections.Counter()
         dest_rows = []
         for dst, n, nb, ndev, srcs, ports, last in dests:

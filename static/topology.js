@@ -109,7 +109,7 @@ function topoTraffic(data) {
   if (rates) for (const n of data.nodes) { const x = topoDirs(n); if (x) dirs.set(n.id, x); }
   // Devices sharing one switch port (VMs on a host): the port's total is drawn on their cables, but never given to a device as its own
   const pdirs = new Map();
-  if (rates) for (const n of data.nodes) { const l = n.link || {}; if (l.shared > 1 && !dirs.has(n.id) && (l.port_dn > 0 || l.port_up > 0)) pdirs.set(n.id, {dn: l.port_dn || 0, up: l.port_up || 0}); }
+  if (rates) for (const n of data.nodes) { const l = n.link || {}; if (l.shared > 1 && !dirs.has(n.id) && n.rate_tx == null && n.rate_rx == null && (l.port_dn > 0 || l.port_up > 0)) pdirs.set(n.id, {dn: l.port_dn || 0, up: l.port_up || 0}); }
   const maxDir = Math.max(1, ...[...dirs.values(), ...pdirs.values()].flatMap((x) => [x.dn, x.up]));
   const lgd = (v) => (v > 0 ? Math.max(0.1, Math.log1p(v) / Math.log1p(maxDir)) : 0);
   return {own, sub, max, maxSub, lg, rates, fmt, dirs, pdirs, lgd};

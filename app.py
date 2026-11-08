@@ -59,7 +59,9 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.47"
+VERSION = "1.25.48"
+from concurrent.futures import ThreadPoolExecutor as _Pool
+ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
 BASE = Path(__file__).resolve().parent
 log = logging.getLogger("lanpulse")
@@ -842,6 +844,10 @@ class LanPulse:
             self.queue.put_nowait(key)
 
     # ---- alerts
+    def _trim_alerts(self, now: float):
+        if len(self.alert_sent) > 2000:          # alerts about one-off addresses would otherwise pile up forever
+            self.alert_sent = {k: t for k, t in self.alert_sent.items() if now - t < 86400}
+
     def notify(self, rule: str, d: dict, title: str, msg: str, priority: int = 3):
         if not self.settings["rules"].get(rule):
             return
@@ -850,12 +856,13 @@ class LanPulse:
         if now - self.alert_sent.get(key, 0) < 600:       # same alert at most every 10 minutes
             return
         self.alert_sent[key] = now
+        self._trim_alerts(now)
         if not any(c.get("enabled") for c in self.settings["channels"].values()):
             return
         detail = (f"{msg}\nIP {d['ip']}  MAC {d.get('mac') or '-'}\nVendor: {d.get('vendor') or 'unknown'}"
                   f"  Type: {d.get('type')}")
         ev = {"rule": rule, "device": {k: d.get(k) for k in ("id", "ip", "mac", "vendor", "hostname", "type")}}
-        task = asyncio.create_task(asyncio.to_thread(alerts.send_all, self.settings, title, detail, priority, ev))
+        task = ALERT_POOL.submit(alerts.send_all, self.settings, title, detail, priority, ev)
         task.add_done_callback(lambda t: t.exception())   # errors are already logged by send_all
 
     def notify_plain(self, rule: str, key: str, title: str, msg: str, priority: int = 3, gap: int = 600):
@@ -867,9 +874,10 @@ class LanPulse:
         if now - self.alert_sent.get(k, 0) < gap:
             return
         self.alert_sent[k] = now
+        self._trim_alerts(now)
         if not any(c.get("enabled") for c in self.settings["channels"].values()):
             return
-        task = asyncio.create_task(asyncio.to_thread(alerts.send_all, self.settings, title, msg, priority,
+        task = (ALERT_POOL.submit(alerts.send_all, self.settings, title, msg, priority,
                                                      {"rule": rule, "key": key}))
         task.add_done_callback(lambda t: t.exception())
 
@@ -1248,10 +1256,10 @@ def build_app(nm: LanPulse) -> FastAPI:
         ip = request.client.host if request.client else "?"
         if nm.auth.throttled(ip):
             return login_page("Too many attempts. Wait 5 minutes and try again.", 429)
-        form = urllib.parse.parse_qs((await request.body()).decode())
+        form = urllib.parse.parse_qs((await request.body()).decode("utf-8", "replace"))
         user = form.get("user", [""])[0]
         pw = form.get("password", [""])[0]
-        if not nm.auth.check(user, pw):
+        if not await asyncio.to_thread(nm.auth.check, user, pw):      # the password hash is slow on purpose, so keep it off the event loop
             nm.auth.failed(ip)
             await asyncio.sleep(1)
             return login_page("Wrong username or password.", 401)
@@ -1900,7 +1908,7 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.post("/api/threats/ingest")
     async def threat_ingest(request: Request):
         key = request.headers.get("x-api-key") or request.query_params.get("key") or ""
-        if not secrets.compare_digest(key, nm.settings["threats"]["ingest_key"]):
+        if not secrets.compare_digest(key.encode(), nm.settings["threats"]["ingest_key"].encode()):
             return JSONResponse({"error": "Wrong or missing X-API-Key"}, 401)
         try:
             body = await request.json()

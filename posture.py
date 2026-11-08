@@ -42,7 +42,7 @@ def compute(nm) -> dict:
         comp = []
     counts = {k: 0 for k in WEIGHTS}
     findings = []            # (category, points, text) for the fix-list
-    devs = [d for d in nm.devices.values() if not d.get("is_self")]
+    devs = [d for d in list(nm.devices.values()) if not d.get("is_self")]
 
     comp_ips = {c["ip"] for c in comp}
     for c in comp:
