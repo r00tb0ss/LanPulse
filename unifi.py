@@ -75,6 +75,8 @@ class UniFi:
             raise UniFiError(f"UniFi returned HTTP {e.code} for {path}")
         except urllib.error.URLError as e:
             raise UniFiError(f"Can't reach {self.host}: {e.reason}")
+        if isinstance(data, list):
+            return data
         meta = data.get("meta", {})
         if isinstance(meta, dict) and meta.get("rc") == "error":
             raise UniFiError(f"UniFi error: {meta.get('msg', 'unknown')}")
