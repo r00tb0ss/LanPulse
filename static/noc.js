@@ -36,8 +36,9 @@ function nocClock() {
 
 let nocMisses = 0;
 async function nocTick() {
-  const [p, t, topo, hp, sv, fl] = await Promise.all([api("/api/posture?days=30", "GET"), api("/api/threats/summary?hours=24", "GET"),
-    api("/api/topology", "GET"), api("/api/honeypot?hours=24", "GET"), api("/api/services", "GET"), api("/api/flows?hours=1", "GET")]);
+  const [p, t, topo, hp, sv, fl, fc] = await Promise.all([api("/api/posture?days=30", "GET"), api("/api/threats/summary?hours=24", "GET"),
+    api("/api/topology", "GET"), api("/api/honeypot?hours=24", "GET"), api("/api/services", "GET"), api("/api/flows?hours=1", "GET"),
+    api("/api/flows?hours=24", "GET")]);
   // a wall display runs unattended: say so on screen when the server stops answering instead of silently going stale
   nocMisses = p || t ? 0 : nocMisses + 1;
   if ($("nocStale")) $("nocStale").classList.toggle("hidden", nocMisses < 2);
@@ -47,7 +48,7 @@ async function nocTick() {
   if (t) nocStats(t);
   nocMapUpdate(t);
   nocFeed();
-  nocCompromised();
+  nocCompromised(fc);
   nocHealth(topo); nocServices(sv); nocHoneypot(hp); nocTalkers(fl);
 }
 
@@ -133,10 +134,19 @@ function nocStats(t) {
   el.innerHTML = tiles.map(([l, v, c]) => `<div class="noc-stat ${c}"><span class="nv">${v}</span><span class="nl">${esc(l)}</span></div>`).join("");
 }
 
-function nocCompromised() {
+function nocCompromised(f) {
   const el = $("nocAlert");
   if (!el) return;
-  const comp = (typeof flowSummary !== "undefined" && flowSummary && flowSummary.compromised) || [];
+  // Use the flow summary this tick fetched. The Threats tab's copy is only loaded once someone opens its traffic layer,
+  // so relying on it would show a green "all clear" on a wall display that never checked.
+  const src = f || (typeof flowSummary !== "undefined" ? flowSummary : null);
+  if (!src) {
+    el.className = "noc-tile noc-alert";
+    el.innerHTML = `<div class="noc-alert-big"><i class="fa-solid fa-hourglass-half"></i> Checking for compromised devices…</div>
+      <div class="noc-alert-row muted">Waiting for connection data.</div>`;
+    return;
+  }
+  const comp = src.compromised || [];
   if (comp.length) {
     el.className = "noc-tile noc-alert danger";
     el.innerHTML = `<div class="noc-alert-big"><i class="fa-solid fa-triangle-exclamation"></i> ${comp.length} POSSIBLY COMPROMISED</div>
