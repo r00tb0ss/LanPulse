@@ -356,7 +356,7 @@ class OpenVAS:
 
     def _import(self, ip: str, items: list[dict]):
         mac = str((self.scans.get(ip) or {}).get("mac") or "").lower()
-        for d in self.nm.devices.values():
+        for d in list(self.nm.devices.values()):          # a copy: this runs in a worker thread
             if (mac and str(d.get("mac") or "").lower() == mac) or (not mac and d.get("ip") == ip):
                 d["openvas"] = items
                 d["openvas_for"] = {"ip": ip, "mac": mac or str(d.get("mac") or "").lower()}
@@ -394,7 +394,7 @@ class OpenVAS:
         def mine(d):    # a scan record only counts for the machine that was scanned, not whoever holds the IP now
             s = self.scans.get(d["ip"], {})
             return s if not s.get("mac") or s["mac"] == str(d.get("mac") or "").lower() else {}
-        due = [d for d in self.nm.devices.values() if d.get("online") and d.get("ip") and not d.get("is_self")
+        due = [d for d in list(self.nm.devices.values()) if d.get("online") and d.get("ip") and not d.get("is_self")
                and time.time() - mine(d).get("finished", 0) > week
                and time.time() - mine(d).get("started", 0) > week]
         if due:
