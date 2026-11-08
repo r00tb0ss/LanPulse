@@ -189,6 +189,31 @@ function openDest(d) {
   if (view === "threats" && d.lat != null) flyTo([d.lon, d.lat], Math.max(geoView().zoom, 3.5));
 }
 
+/* ------------------------------------------------------------ device panel: top connections */
+const CONN_PORTS = {21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS", 80: "HTTP", 110: "POP3", 123: "NTP", 143: "IMAP",
+  443: "HTTPS", 465: "SMTPS", 587: "SMTP", 853: "DNS-TLS", 993: "IMAPS", 995: "POP3S", 1883: "MQTT", 3389: "RDP", 3478: "STUN",
+  5223: "Apple push", 5228: "Google push", 8080: "HTTP-alt", 8443: "HTTPS-alt", 8883: "MQTT-TLS"};
+
+function connAgo(t) {
+  if (!t) return "";
+  const s = Math.max(0, Date.now() / 1000 - t);
+  return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+}
+
+/* One row per destination the device talked to: where it is, who owns it, what for, how often, and when last. */
+function connRows(f) {
+  const rows = (f.dests || []).slice(0, 8);
+  if (!rows.length) return "";
+  return `<div class="muted" style="margin:12px 0 2px;font-size:11px">Top connections</div><div class="conns">${rows.map((r) => {
+    const svc = (r.ports || []).slice(0, 3).map((p) => CONN_PORTS[p] || String(p)).join(", ");
+    const flag = r.c2 ? '<span class="sev high">C2</span> ' : r.bad ? '<span class="sev high">attacker</span> ' : "";
+    const sub = [r.ip, svc, r.blocked ? `${fmtN(r.blocked)} blocked` : "", connAgo(r.last)].filter(Boolean).map(esc).join(" · ");
+    return `<div class="cn"><span class="cc">${esc(r.iso || "—")}</span>
+      <div><b>${flag}${esc(r.org || "Unknown network")}</b><small class="muted">${sub}</small></div>
+      <div class="ct">${fmtN(r.count)}</div></div>`;
+  }).join("")}</div>`;
+}
+
 /* ------------------------------------------------------------ device panel: where it connects */
 async function loadDeviceFlows(id) {
   const d = devices.get(id);
@@ -203,6 +228,7 @@ async function loadDeviceFlows(id) {
     ${(f.bad || []).length ? `<div class="finding"><span class="sev high">alert</span><span>Contacted ${f.bad.length} IP${f.bad.length > 1 ? "s" : ""} that attacked you: ${f.bad.slice(0, 3).map((b) => esc(b.ip)).join(", ")}</span></div>` : ""}
     <div class="rank" style="margin-top:6px">${f.orgs.slice(0, 6).map((o) => `<div class="rk"><span class="ico"><i class="fa-solid fa-building" style="color:#5b6b88"></i></span>
       <span class="nm">${esc(o.org)}</span><span class="ct">${fmtN(o.count)}</span><div class="bar"><i style="width:${(100 * o.count / max).toFixed(1)}%;background:#2dd4bf"></i></div></div>`).join("")}</div>
+    ${connRows(f)}
     <div class="btns" style="margin-top:10px"><button class="btn" id="bShowFlows" data-ip="${esc(d.ip)}"><i class="fa-solid fa-earth-americas"></i>Show on map</button></div>`;
 }
 

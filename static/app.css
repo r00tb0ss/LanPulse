@@ -43,6 +43,12 @@ button,input,select,textarea{font:inherit;color:inherit}
    Phones keep the slide-over menu below. The button hides itself on the other tabs (body.mode-threats). */
 #btnSidebar{display:grid}
 @media (min-width:901px){.layout.sb-collapsed .sidebar{display:none}}
+/* device panel: top connections list */
+.conns .cn{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border)}
+.conns .cc{font:700 10px var(--mono);text-align:center;opacity:.7}
+.conns b{display:block;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conns small{display:block;font:11px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conns .ct{font:600 12px var(--mono);text-align:right}
 .mapwrap{flex:1;position:relative;
   background:radial-gradient(circle at 50% 45%,#13203d 0%,#0a0f1c 70%)}
 #map{position:absolute;inset:0}
