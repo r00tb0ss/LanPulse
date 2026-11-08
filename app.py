@@ -59,7 +59,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.54"
+VERSION = "1.25.55"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -944,7 +944,10 @@ class LanPulse:
                 continue
             lt = time.localtime()
             today = time.strftime("%Y-%m-%d", lt)
-            hh, mm = (int(x) for x in cfg.get("time", "08:00").split(":"))
+            try:
+                hh, mm = (int(x) for x in str(cfg.get("time", "08:00")).split(":")[:2])
+            except ValueError:
+                continue                    # a time like "8" must not end the daily-summary task for good
             late = (lt.tm_hour * 60 + lt.tm_min) - (hh * 60 + mm)
             if cfg.get("last_sent") == today or not 0 <= late < 60:
                 continue
@@ -1923,7 +1926,8 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.post("/api/threats/ingest")
     async def threat_ingest(request: Request):
         key = request.headers.get("x-api-key") or request.query_params.get("key") or ""
-        if not secrets.compare_digest(key.encode(), nm.settings["threats"]["ingest_key"].encode()):
+        want = str(nm.settings["threats"].get("ingest_key") or "").encode()
+        if not want or not secrets.compare_digest(key.encode(), want):      # no key set means nothing is accepted, not everything
             return JSONResponse({"error": "Wrong or missing X-API-Key"}, 401)
         try:
             body = await request.json()
