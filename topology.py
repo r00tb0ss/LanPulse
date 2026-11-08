@@ -286,6 +286,7 @@ class Topology:
                     # behind it) that total belongs to none of them in particular, so it is not shown as theirs.
                     sharing = sum(1 for c in uc.values() if c.get("is_wired") and norm_mac(c.get("sw_mac")) == pm and c.get("sw_port") == port)
                     speed = None
+                    port_dn = port_up = None
                     for p in sw.get("port_table", []) or []:
                         if p.get("port_idx") == port:
                             speed = p.get("speed")
@@ -293,7 +294,10 @@ class Topology:
                             ptx, prx = _client_dirs(p)
                             if sharing <= 1 and (ptx is not None or prx is not None):
                                 n["rate_dn"], n["rate_up"] = ptx, prx
-                    n["link"] = {"medium": "wired", "port": port, "speed": speed or uclient.get("wired_rate_mbps"), "shared": sharing if sharing > 1 else 0}
+                            elif ptx is not None or prx is not None:
+                                port_dn, port_up = ptx, prx      # shared: kept as the port's total, never as this device's own
+                    n["link"] = {"medium": "wired", "port": port, "speed": speed or uclient.get("wired_rate_mbps"), "shared": sharing if sharing > 1 else 0,
+                                 "port_dn": port_dn, "port_up": port_up}
                     if not n.get("rate") and sharing <= 1:
                         for p in sw.get("port_table", []) or []:
                             if p.get("port_idx") == port:
