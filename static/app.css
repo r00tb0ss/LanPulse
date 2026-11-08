@@ -36,6 +36,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* layout */
 .stage{position:relative;height:calc(100% - 56px)}
+/* topology: zoomed out far enough, only names, icons and cables stay; the detail text fades (toggled by topoApplyView) */
+#topoSvg .tp-d{transition:opacity .15s}
+#topoSvg.tp-far .tp-d{opacity:0}
 .layout{display:flex;height:100%;position:relative}
 .sidebar{width:320px;min-width:320px;display:flex;flex-direction:column;background:var(--bg2);
   border-right:1px solid var(--border);overflow:hidden}
