@@ -659,7 +659,7 @@ function renderTopoInfo() {
   if (n.model) rows.push(["Model", n.model + (e.version ? ` · v${e.version}` : "")]);
   if (n.zone) { const z = d.zones.find((x) => x.name === n.zone); rows.push(["Zone", `${n.zone}${z && z.vlan ? ` (VLAN ${z.vlan})` : ""}`]); }
   if (par && n.kind !== "gateway") rows.push(["Connected to", `${par.name}${n.source === "manual" ? " (set by you)" : n.source === "unifi" ? "" : n.source === "snmp" ? " (via SNMP)" : " (assumed)"}`]);
-  if (l.medium === "wired") rows.push(["Link", ["Wired", l.port ? `port ${l.port}` : "", l.speed ? `${l.speed} Mbps` : ""].filter(Boolean).join(" · ")]);
+  if (l.medium === "wired") rows.push(["Link", ["Wired", l.port ? `port ${l.port}` : "", l.speed ? `${l.speed} Mbps` : "", l.shared > 1 ? `shared with ${l.shared - 1} other device${l.shared === 2 ? "" : "s"}` : ""].filter(Boolean).join(" · ")]);
   if (l.medium === "wifi") {
     const wf = [l.ssid, l.band, l.channel ? `ch ${l.channel}` : ""].filter(Boolean).join(" · ") || (l.mesh ? "Wireless uplink" : "");
     rows.push(["Link", wf || "Wi-Fi (set by you)"]);

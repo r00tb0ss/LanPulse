@@ -282,16 +282,19 @@ class Topology:
                 if wired:
                     sw = ud.get(pm) or {}
                     port = uclient.get("sw_port")
+                    # A switch port's counters are the whole port's. When several devices share one (a VM host, a small switch
+                    # behind it) that total belongs to none of them in particular, so it is not shown as theirs.
+                    sharing = sum(1 for c in uc.values() if c.get("is_wired") and norm_mac(c.get("sw_mac")) == pm and c.get("sw_port") == port)
                     speed = None
                     for p in sw.get("port_table", []) or []:
                         if p.get("port_idx") == port:
                             speed = p.get("speed")
                             # a switch port counts from the switch's side, so sent out the port is this device's download
                             ptx, prx = _client_dirs(p)
-                            if ptx is not None or prx is not None:
+                            if sharing <= 1 and (ptx is not None or prx is not None):
                                 n["rate_dn"], n["rate_up"] = ptx, prx
-                    n["link"] = {"medium": "wired", "port": port, "speed": speed or uclient.get("wired_rate_mbps")}
-                    if not n.get("rate"):
+                    n["link"] = {"medium": "wired", "port": port, "speed": speed or uclient.get("wired_rate_mbps"), "shared": sharing if sharing > 1 else 0}
+                    if not n.get("rate") and sharing <= 1:
                         for p in sw.get("port_table", []) or []:
                             if p.get("port_idx") == port:
                                 n["rate"] = _client_rate(p) or n.get("rate")
