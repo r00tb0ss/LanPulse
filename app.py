@@ -59,7 +59,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.53"
+VERSION = "1.25.54"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -1420,8 +1420,12 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.post("/api/layout")
     async def save_layout(request: Request):
         body = await request.json()
-        pos = body.get("positions") or {}
-        nm.settings["layout"] = {str(k): {"x": float(v["x"]), "y": float(v["y"])} for k, v in pos.items()}
+        try:
+            pos = body.get("positions") or {}
+            layout = {str(k): {"x": float(v["x"]), "y": float(v["y"])} for k, v in pos.items()}
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return JSONResponse({"error": "Expected positions as {id: {x, y}}"}, 400)
+        nm.settings["layout"] = layout
         nm.save_settings()
         await nm.broadcast()
         return {"saved": len(nm.settings["layout"])}
@@ -1459,11 +1463,11 @@ def build_app(nm: LanPulse) -> FastAPI:
         body = await request.json()
         user = str(body.get("user", "")).strip()
         new = str(body.get("new_password", ""))
-        if nm.auth.enabled and not nm.auth.check(nm.auth.user, str(body.get("current_password", ""))):
+        if nm.auth.enabled and not await asyncio.to_thread(nm.auth.check, nm.auth.user, str(body.get("current_password", ""))):
             return JSONResponse({"error": "Current password is wrong."}, 403)
         if not user or len(new) < 8:
             return JSONResponse({"error": "Enter a username and a password of at least 8 characters."}, 400)
-        nm.auth.set_password(user, new)
+        await asyncio.to_thread(nm.auth.set_password, user, new)      # the password hash is slow on purpose: keep it off the event loop
         resp = JSONResponse({"ok": True})
         resp.set_cookie("nm_session", nm.auth.make_session(user), httponly=True, samesite="strict",
                         secure=secure_cookie, max_age=14 * 86400)
@@ -2315,6 +2319,17 @@ def set_password_cli(data_dir: str):
     print(f"Saved. Restart LanPulse if it's running: sudo systemctl restart lanpulse")
 
 
+def write_private(path: Path, text: str):
+    """Write a file only its owner can read, from the moment it exists (settings hold passwords and keys)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
+
+
 def port_in_use(host: str, port: int) -> bool:
     """Would LanPulse fail to start on this port because another program already listens there?"""
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
@@ -2381,11 +2396,7 @@ def load_system_settings(args) -> dict:
         system["_imported"] = True
         settings["system"] = system
         if not args.demo:
-            Path(args.data_dir).mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(settings, indent=1))
-            os.chmod(tmp, 0o600)
-            tmp.replace(path)
+            write_private(path, json.dumps(settings, indent=1))
     return system
 
 
@@ -2424,8 +2435,7 @@ def main():
         path = Path(args.data_dir) / "settings.json"
         settings = alerts.with_defaults(json.loads(path.read_text()) if path.exists() else {})
         settings["system"].update(port=8080, https=False, host="0.0.0.0", _imported=True)
-        path.write_text(json.dumps(settings, indent=1))
-        os.chmod(path, 0o600)
+        write_private(path, json.dumps(settings, indent=1))       # also creates the data folder if it doesn't exist yet
         print("Web server reset to http://<this-ip>:8080. Now run: sudo systemctl restart lanpulse")
         return
     system = load_system_settings(args)
