@@ -57,7 +57,7 @@ class History:
             rows = self.db.execute("SELECT m, rtt FROM samples WHERE id = ? AND m >= ? ORDER BY m",
                                    (dev_id, start)).fetchall()
         data = dict(rows)
-        for (i, m), (s, n) in self.acc.items():
+        for (i, m), (s, n) in list(self.acc.items()):      # a copy: the event loop keeps adding to it while this runs in a worker thread
             if i == dev_id and m >= start:
                 data[m] = round(s / n, 2) if n else None
         first_m = int(first_seen // 60)

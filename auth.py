@@ -40,7 +40,9 @@ class Auth:
                      "secret": secrets.token_hex(32)}       # new secret signs everyone out
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.data))
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)      # never readable by others, not even briefly
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(self.data))
         os.chmod(tmp, 0o600)
         tmp.replace(self.path)
 
