@@ -15,6 +15,7 @@ Settings come from environment variables (the installer writes /etc/lanpulse-for
   LANPULSE_FINGERPRINT  optional SHA-256 of the server certificate to trust (LanPulse uses a self-signed one)
   LANPULSE_INSECURE     set to 1 to skip certificate checks (only on a network you trust)
   COWRIE_HOME           default /home/cowrie/cowrie
+  TRAP_HOME             set it to also forward the FTP/web decoys (lanpulse-trap.py); same folder layout as COWRIE_HOME
   SENSOR_NAME           default the Pi's host name
   STATE_FILE            default /var/lib/lanpulse-forwarder/state.json
 """
@@ -297,8 +298,17 @@ def main() -> int:
                 queue_session(st, s)
             if st.d["outbox"]:
                 flush_outbox(client, st, home)
+            if trap_st is not None:
+                for ev in read_new(trap_log, trap_st):
+                    done = sessions.feed(ev)
+                    if done:
+                        queue_session(trap_st, done)
+                if trap_st.d["outbox"]:
+                    flush_outbox(client, trap_st, trap_home)
             if time.time() - last_save > 5:
                 st.save()
+                if trap_st is not None:
+                    trap_st.save()
                 last_save = time.time()
         except Exception as e:                            # never die: a honeypot sensor should keep running
             print("forwarder error:", repr(e), file=sys.stderr, flush=True)
