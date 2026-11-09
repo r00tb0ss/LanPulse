@@ -82,6 +82,10 @@
   @media(max-width:760px){.themes{grid-template-columns:repeat(2,1fr)}}
   .theme figcaption{text-align:center;color:var(--muted);font-size:13px;margin-top:8px}
   .theme img{border-radius:10px;border:1px solid var(--border)}
+  .noir-prev{aspect-ratio:16/10;background:#0a0a0b;border:1px solid #2c2c31;border-top:2px solid #d92b3d;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;justify-content:center}
+  .noir-prev b{color:#ff3b4e;letter-spacing:2px;font-size:15px}
+  .noir-prev span{color:#f2f2f3;font-size:12px}
+  .noir-prev i{display:block;height:6px;width:60%;background:#ff3b4e}
   /* install */
   .install{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px}
   pre{background:#060a14;border:1px solid var(--border);border-radius:10px;padding:16px;overflow:auto;font-family:var(--mono);font-size:13.5px;color:#cbd5e1;margin:12px 0}
@@ -233,6 +237,7 @@
         <li>Logs who connected, which decoy and the <b>credentials tried</b>.</li>
         <li>Internal vs. external sources, with an instant alert for internal ones.</li>
         <li>Accepts events from external sensors such as an ESP32. Low-interaction only — it never gives a shell.</li>
+        <li><b>Add a sensor</b> (Raspberry Pi, Linux box or container) with one command: a Cowrie SSH/Telnet trap plus optional <b>FTP and web decoys</b> that keep what attackers upload. Every session is replayed command by command, and every captured file is analysed statically — never run.</li>
       </ul>
     </div>
     <figure class="shot"><img src="images/honeypot.png" alt="Honeypot view showing hits from inside the network, decoys hit and credentials tried"></figure>
@@ -247,6 +252,7 @@
       <ul>
         <li><b>Ollama</b> (local), any <b>OpenAI-compatible</b> server, or <b>Anthropic</b>.</li>
         <li>It can explain and prioritise, never scan, block or change anything.</li>
+        <li>Knows what LanPulse is and where everything lives, and sees live honeypot, DNS, services, traffic and vulnerability data for the area you ask about.</li>
         <li>Clearly shows whether answers stay on your network or go to a cloud provider.</li>
       </ul>
     </div>
@@ -293,6 +299,8 @@
     <div class="card"><div class="ic">🌐</div><h4>DNS visibility (Pi-hole)</h4><p>Reads your Pi-hole query log and flags lookups of known-malware domains, per device.</p></div>
     <div class="card"><div class="ic">❤</div><h4>Service uptime</h4><p>HTTP, TCP and ping checks for the things you care about, with history and down/up alerts.</p></div>
     <div class="card"><div class="ic">🍯</div><h4>Honeypot</h4><p>Decoy services that log every probe and the credentials tried; a hit from inside your LAN flags a likely-compromised device.</p></div>
+    <div class="card"><div class="ic">🧪</div><h4>Sensors and malware analysis</h4><p>Add a Pi or container as a Cowrie trap with FTP and web decoys. Attacker sessions are recorded and dropped files are analysed statically, never run.</p></div>
+    <div class="card"><div class="ic">🖥</div><h4>Pick the operating system</h4><p>When a scan can't tell Windows 11 from Server 2019, choose the real OS from a drop-down of Windows and Linux versions. Your choice sticks.</p></div>
     <div class="card"><div class="ic">✅</div><h4>Confirmed vulnerabilities</h4><p>Safe active checks prove flaws that version matching misses, like missing SMB patches on old Windows.</p></div>
     <div class="card"><div class="ic">🤖</div><h4>AI analyst (bring your own)</h4><p>Ask questions in plain language with Ollama, an OpenAI-compatible server or Anthropic. Read-only, grounded in your data.</p></div>
     <div class="card"><div class="ic">🔬</div><h4>OpenVAS scanning</h4><p>Install and run Greenbone's vulnerability scanner from Settings; findings merge into the Vulnerabilities tab.</p></div>
@@ -329,7 +337,7 @@
 
 <section id="themes"><div class="wrap">
   <p class="eyebrow">Make it yours</p>
-  <h2 class="title">Eight built-in themes</h2>
+  <h2 class="title">Nine built-in themes</h2>
   <p class="lead2">From a clean enterprise look to full 80s hacker. Switch in Settings → Appearance.</p>
   <div class="themes" style="margin-top:28px">
     <figure class="theme"><img src="images/network.png" alt="Midnight default theme"><figcaption>Midnight (default)</figcaption></figure>
@@ -340,6 +348,7 @@
     <figure class="theme"><img src="images/theme_ocean.png" alt="Deep Ocean theme"><figcaption>Deep Ocean</figcaption></figure>
     <figure class="theme"><img src="images/theme_frost.png" alt="Frost theme"><figcaption>Frost</figcaption></figure>
     <figure class="theme"><img src="images/theme_sand.png" alt="Sand theme"><figcaption>Sand</figcaption></figure>
+    <figure class="theme"><div class="noir-prev" role="img" aria-label="Crimson Noir theme: pure black with one red accent"><b>LANPULSE</b><span>24 devices · 6 open risks</span><i></i></div><figcaption>Crimson Noir</figcaption></figure>
   </div>
 </div></section>
 
