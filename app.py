@@ -54,12 +54,13 @@ import analyst
 from openvas import OpenVAS
 from services import ServiceMonitor
 from honeypot import Honeypot
+from honeyanalysis import HoneyAnalysis, MAX_SAMPLE, clean_base_url, cert_fingerprint, installer_script, install_command
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.25.62"
+VERSION = "1.26.0"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -719,11 +720,13 @@ class LanPulse:
         self.vulns = VulnScanner(self)
         self.services = ServiceMonitor(self)
         self.honeypot = Honeypot(self)
+        self.honeyan = HoneyAnalysis(self, self.honeypot)       # sessions and malware from optional Cowrie sensors; the built-in honeypot is untouched
         self.openvas = OpenVAS(self)
         self.topology = Topology(self, self.data_dir / "topology.json")
         self.snmp = snmpdisc.SnmpDiscovery()
         if args.demo:
             self.honeypot.seed_demo()
+            self.honeyan.seed_demo()
         self.discovery = Discovery(self)
         self.blocked_cache: tuple[float, list[str]] = (0.0, [])
         self.demo_blocked: list[str] = ["203.0.113.77"] if args.demo else []
@@ -1231,7 +1234,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     app = FastAPI(title="LanPulse", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
     secure_cookie = bool(nm.args.cert)
-    public = ("/login", "/static/", "/api/threats/ingest", "/api/honeypot/ingest", "/favicon.ico")
+    public = ("/login", "/static/", "/api/threats/ingest", "/api/honeypot/ingest", "/api/honeypot/sensor/installer", "/favicon.ico")
     def extra_hosts() -> set:          # read live, so changes in Settings > System apply straight away
         return {h.strip().lower() for h in (nm.settings.get("system", {}).get("allow_hosts")
                                            or getattr(nm.args, "allow_host", None) or []) if h.strip()}
@@ -1248,7 +1251,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not nm.auth.enabled and not host_ok(request.headers):
             return Response("LanPulse only answers to IP addresses and local names when no login is set. "
                             "Set a login, or add this name under Settings > System > Extra host names", 403, media_type="text/plain")
-        if request.method not in ("GET", "HEAD", "OPTIONS") and path not in ("/api/threats/ingest", "/api/honeypot/ingest") and not origin_ok(request.headers):
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not path.startswith(("/api/threats/ingest", "/api/honeypot/ingest")) and not origin_ok(request.headers):
             return JSONResponse({"error": "Request from another web site refused"}, 403)
         if not nm.auth.enabled or path.startswith(public) or nm.auth.verify(request.cookies.get("nm_session")):
             resp = await call_next(request)
@@ -2038,6 +2041,135 @@ def build_app(nm: LanPulse) -> FastAPI:
             return JSONResponse({"error": "Expected a JSON object"}, 400)
         ok, msg = await asyncio.to_thread(nm.honeypot.ingest, payload, key)
         return JSONResponse({"ok": True}) if ok else JSONResponse({"error": msg}, 403)
+
+    # ---- sophisticated honeypot sensors (Cowrie on a Raspberry Pi, Linux box or container): sessions, malware, analysis
+    async def read_capped(request: Request, limit: int):
+        """The request body, or None when it is larger than limit (checked while streaming, never buffered past it)."""
+        try:
+            if int(request.headers.get("content-length") or 0) > limit:
+                return None
+        except ValueError:
+            return None
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf += chunk
+            if len(buf) > limit:
+                return None
+        return bytes(buf)
+
+    def sensor_who(request: Request):
+        return nm.honeyan.auth(request.headers.get("X-LanPulse-Key", ""))
+
+    @app.get("/api/honeypot/sessions")
+    async def honeypot_sessions(hours: int = 168, limit: int = 100):
+        return await asyncio.to_thread(nm.honeyan.sessions, max(1, min(hours, 2160)), max(1, min(limit, 500)))
+
+    @app.get("/api/honeypot/session")
+    async def honeypot_session(id: str):
+        r = await asyncio.to_thread(nm.honeyan.session, id)
+        return r if r else JSONResponse({"error": "Session not found"}, 404)
+
+    @app.get("/api/honeypot/samples")
+    async def honeypot_samples(limit: int = 100):
+        return await asyncio.to_thread(nm.honeyan.samples, max(1, min(limit, 500)))
+
+    @app.get("/api/honeypot/sample")
+    async def honeypot_sample(sha: str):
+        r = await asyncio.to_thread(nm.honeyan.sample, sha)
+        return r if r else JSONResponse({"error": "File not found"}, 404)
+
+    @app.post("/api/honeypot/ingest/hello")
+    async def honeypot_hello(request: Request):
+        who = sensor_who(request)
+        if not who:
+            return JSONResponse({"error": "Wrong sensor key"}, 403)
+        await asyncio.to_thread(nm.honeyan.touch, who["id"], request.client.host if request.client else "")
+        return {"ok": True}
+
+    @app.post("/api/honeypot/ingest/session")
+    async def honeypot_ingest_session(request: Request):
+        who = sensor_who(request)
+        if not who:
+            return JSONResponse({"error": "Wrong sensor key"}, 403)
+        raw = await read_capped(request, 1_000_000)
+        if raw is None:
+            return JSONResponse({"error": "Too large"}, 413)
+        try:
+            p = json.loads(raw)
+        except ValueError:
+            p = None
+        if not isinstance(p, dict):
+            return JSONResponse({"error": "Expected a JSON object"}, 400)
+        if who["name"]:
+            p["sensor"] = who["name"]                      # a sensor can't pass itself off as another one
+        ok, msg = await asyncio.to_thread(nm.honeyan.add_session, p)
+        if not ok:
+            return JSONResponse({"error": msg}, 429 if msg == "rate limited" else 400)
+        await asyncio.to_thread(nm.honeyan.touch, who["id"], request.client.host if request.client else "", 1)
+        return {"ok": True}
+
+    @app.post("/api/honeypot/ingest/sample")
+    async def honeypot_ingest_sample(request: Request):
+        who = sensor_who(request)
+        if not who:
+            return JSONResponse({"error": "Wrong sensor key"}, 403)
+        data = await read_capped(request, MAX_SAMPLE)
+        if data is None:
+            return JSONResponse({"error": "File too large"}, 413)
+        h = request.headers
+        meta = {"ip": h.get("X-Src-Ip", ""), "url": urllib.parse.unquote(h.get("X-Url", ""))[:300],
+                "name": urllib.parse.unquote(h.get("X-Name", ""))[:120]}
+        ok, msg = await asyncio.to_thread(nm.honeyan.add_sample, data, meta)
+        if not ok:
+            return JSONResponse({"error": msg}, 429 if msg == "rate limited" else 400)
+        await asyncio.to_thread(nm.honeyan.touch, who["id"], request.client.host if request.client else "", 0, 1)
+        return {"ok": True}
+
+    # ---- Add sensor: per-sensor keys and the installer a sensor downloads
+    @app.get("/api/honeypot/sensors")
+    async def honeypot_sensors():
+        return {"sensors": await asyncio.to_thread(nm.honeyan.sensors)}
+
+    @app.post("/api/honeypot/sensors")
+    async def honeypot_sensor_add(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Expected a JSON object"}, 400)
+        url = clean_base_url(body.get("url"))
+        if not url:
+            return JSONResponse({"error": "The LanPulse address must look like https://192.168.0.208:8080"}, 400)
+        kind = "container" if body.get("kind") == "container" else "pi"
+        script = installer_script(kind, BASE / "tools" / "pi-honeypot")
+        if not script:
+            return JSONResponse({"error": "The sensor installer files are missing from this LanPulse install. Update LanPulse and try again."}, 500)
+        try:
+            s = await asyncio.to_thread(nm.honeyan.add_sensor, body.get("name"), kind)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        fp = cert_fingerprint(nm.args.cert) if nm.args.cert and url.startswith("https://") else ""
+        key = s.pop("key")                                 # shown once, here; only its hash is stored
+        return {"sensor": s, "command": install_command(url, key, kind, script, fp)}
+
+    @app.post("/api/honeypot/sensors/revoke")
+    async def honeypot_sensor_revoke(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        ok = isinstance(body, dict) and await asyncio.to_thread(nm.honeyan.revoke_sensor, str(body.get("id", "")))
+        return {"ok": True} if ok else JSONResponse({"error": "Sensor not found"}, 404)
+
+    @app.get("/api/honeypot/sensor/installer")
+    async def honeypot_sensor_installer(kind: str = "pi"):
+        """Public on purpose: it holds no secrets (the key is passed on the command line). The command shown in
+        the dashboard carries this file's SHA-256, and the sensor checks it before running anything."""
+        script = installer_script("container" if kind == "container" else "pi", BASE / "tools" / "pi-honeypot")
+        if not script:
+            return Response("Installer files are missing from this LanPulse install", 404, media_type="text/plain")
+        return Response(script.encode(), media_type="text/x-shellscript", headers={"Cache-Control": "no-store"})
 
     # ---- local threats
     @app.get("/api/local")

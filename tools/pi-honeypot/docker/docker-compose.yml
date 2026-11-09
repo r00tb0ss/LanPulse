@@ -1,0 +1,46 @@
+# LanPulse honeypot sensor in containers: Cowrie (SSH/Telnet honeypot) plus the forwarder that sends what it
+# catches to LanPulse. Works with Docker Compose and podman-compose, on a Raspberry Pi or any Linux host.
+#
+#   cp .env.example .env      # then fill in LANPULSE_URL and LANPULSE_KEY
+#   docker compose up -d
+#
+# Cowrie listens on host ports 2222 (SSH) and 2223 (Telnet). Forward 22 and 23 to these on your router.
+services:
+  cowrie:
+    image: cowrie/cowrie:latest
+    restart: unless-stopped
+    ports:
+      - "2222:2222"
+      - "2223:2223"
+    environment:
+      COWRIE_TELNET_ENABLED: "yes"
+      COWRIE_OUTPUT_JSONLOG_ENABLED: "yes"
+    volumes:
+      - cowrie-var:/cowrie/cowrie-git/var          # logs and every captured file
+    security_opt:
+      - no-new-privileges:true
+
+  forwarder:
+    image: python:3.12-slim
+    restart: unless-stopped
+    depends_on:
+      - cowrie
+    command: ["python", "-u", "/app/lanpulse-forwarder.py"]
+    env_file: .env
+    environment:
+      COWRIE_HOME: /cowrie/cowrie-git
+      STATE_FILE: /state/state.json
+    volumes:
+      - cowrie-var:/cowrie/cowrie-git/var:ro       # read-only: the forwarder can only look at what Cowrie wrote
+      - forwarder-state:/state
+      - ../lanpulse-forwarder.py:/app/lanpulse-forwarder.py:ro
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH                           # lets it read Cowrie's files whoever owns them; nothing else
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  cowrie-var:
+  forwarder-state:
