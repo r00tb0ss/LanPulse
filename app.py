@@ -390,7 +390,8 @@ def nmap_deep(ip: str, top_ports: int, thorough: bool = False) -> dict | None:
         if oc is not None:
             info["os_type"] = oc.get("type", "")
             info["os_family"] = oc.get("osfamily", "")
-        info["os_cpe"] = [c.text.strip() for c in om.findall("osclass/cpe") if c.text][:6]
+        if info["os_accuracy"] >= 85 and info["ports"]:       # a weak guess, or one made without an answering port, is not evidence
+            info["os_cpe"] = [c.text.strip() for c in om.findall("osclass/cpe") if c.text][:6]
     # Windows reports its own version through SMB/RPC services ("Microsoft Windows XP microsoft-ds")
     hints = {x.get("product", "") for x in host.findall("ports/port/service")
              if x.get("ostype") == "Windows" or "windows" in x.get("product", "").lower()}
@@ -1156,6 +1157,10 @@ class LanPulse:
                     for k in ("os_cpe", "os_hint"):
                         if info.get(k):
                             d[k] = info[k]
+                    if not info["ports"]:                # nothing answered: an earlier guess has no support left
+                        d["os_cpe"], d["os_hint"] = [], ""
+                        if not info["os"]:
+                            d["os"], d["os_type"], d["os_family"] = "", "", ""
                     if "vulners" in info:
                         d["vulners"] = info["vulners"]
                     if "probes" in info:                 # confirmed-vulnerable results from NSE checks (thorough scans)

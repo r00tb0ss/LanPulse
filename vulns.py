@@ -113,7 +113,10 @@ AMBIGUOUS = re.compile(r"\bor\s+(?:microsoft\s+)?(?:windows\s+)?(?:server\s+)?(?
 
 def windows_version(d: dict):
     """(label, NVD products) for an old Windows the scan identified, or None. Newer Windows (8, 10, 11,
-    Server 2012+) is left out: it gets monthly patches, and a scan can't tell which ones are installed."""
+    Server 2012+) is left out: it gets monthly patches, and a scan can't tell which ones are installed.
+    A device with no open ports gives nothing to go on (nmap's guess from a fully filtered host is noise), so None."""
+    if not d.get("ports"):
+        return None
     sources = [" | ".join(d.get("os_cpe") or []), d.get("os", "") if (d.get("os_accuracy") or 0) >= 85 else "",
                d.get("os_hint", "")]
     for text in sources:
