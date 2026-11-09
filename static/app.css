@@ -1209,6 +1209,32 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-d-actions{margin-top:12px;display:flex;gap:8px}
 #potDetail h5{margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 #potTimeline{margin-bottom:14px}
+.pot-tabs{display:inline-flex;gap:4px}
+.pot-tabs button{background:transparent;border:1px solid var(--line,#2a3858);color:var(--muted,#8b9bb6);padding:3px 12px;border-radius:999px;font:inherit;font-size:12px;cursor:pointer}
+.pot-tabs button.on{background:var(--accent,#2dd4bf);border-color:var(--accent,#2dd4bf);color:#06121f;font-weight:600}
+.pot-score{margin-left:auto;min-width:30px;text-align:center;font:600 11px var(--mono,monospace);padding:2px 7px;border-radius:999px;border:1px solid}
+.pot-score.lo{color:#8b9bb6;border-color:#35466b}.pot-score.mid{color:#fbbf24;border-color:#7a5c12}.pot-score.hi{color:#fda4af;border-color:#9f1239;background:rgba(244,63,94,.12)}
+.pot-tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.pot-note{font-size:12px;color:var(--muted,#8b9bb6);margin:6px 0 10px}
+.pot-notes{margin:8px 0;padding-left:18px;font-size:13px}
+.pot-hashes{display:grid;gap:4px;margin:10px 0;font-size:12px}.pot-hashes .mono{word-break:break-all}
+.pot-replay{background:#0a1122;border:1px solid var(--line,#2a3858);border-radius:8px;padding:8px 10px;max-height:320px;overflow:auto}
+.pot-cmd{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:3px 0;border-bottom:1px dashed #1b2742}
+.pot-cmd:last-child{border-bottom:0}.pot-cmd code{font:12px var(--mono,monospace);color:#bfe9d6;word-break:break-all}
+.pot-cred-chip.ok{border-color:#9f1239;color:#fda4af}
+.pot-strings{max-height:260px;overflow:auto;font:11px var(--mono,monospace);white-space:pre-wrap;word-break:break-all;background:#0a1122;padding:8px;border-radius:8px}
+#potMalDetail{margin-top:14px;border-top:1px solid var(--line,#2a3858);padding-top:12px}
+.pot-sensor-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
+.pot-sensor{align-items:center}.pot-sensor .pot-revoke{margin-left:auto}
+.pot-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#64748b;flex:none}
+.pot-dot.ok{background:#34d399;box-shadow:0 0 6px #34d399aa}.pot-dot.wait{background:#fbbf24}.pot-dot.bad{background:#f43f5e}
+#potSensorAdd{margin-top:14px;padding-top:12px;border-top:1px solid var(--line,#2a3858)}
+.pot-add-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px}
+.pot-add-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted,#8b9bb6)}
+.pot-add-form input,.pot-add-form select{font:inherit;font-size:14px;padding:7px 9px;border-radius:8px;border:1px solid var(--line,#2a3858);background:var(--panel2,#0e1626);color:inherit;min-width:0}
+.pot-cmdbox{width:100%;box-sizing:border-box;font-size:12px;padding:9px;border-radius:8px;border:1px solid var(--line,#2a3858);background:#070d18;color:#a5f3fc;resize:vertical;word-break:break-all}
+.pot-sensor-state{display:inline-flex;gap:6px;align-items:center;margin-left:8px}
+#potSensorAdd h5{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 
 /* honeypot custom settings */
 .pot-port-in{width:78px;padding:2px 6px;font:12px var(--mono);background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:6px}

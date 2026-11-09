@@ -12,6 +12,7 @@ async function loadHoneypot() {
   if (!r || view !== "honeypot") return;
   potData = r;
   renderHoneypot();
+  if (typeof loadMalware === "function") loadMalware();      // captured attacks and malware card (static/malwareview.js)
 }
 
 const devByIp = (ip) => [...devices.values()].find((d) => d.ip === ip);
