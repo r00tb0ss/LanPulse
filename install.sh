@@ -56,6 +56,11 @@ mkdir -p "$DEST/data"
 chmod 700 "$DEST/data"
 if [[ "$SRC" != "$DEST" ]]; then
   cp -r "$SRC"/*.py "$SRC"/*.sh "$SRC"/requirements.txt "$SRC"/LICENSE "$SRC"/THIRD-PARTY-NOTICES.md "$SRC"/static "$DEST"/
+  if [[ -d "$SRC/tools/pi-honeypot" ]]; then        # the honeypot sensor installers that Honeypot > Add sensor hands out
+    mkdir -p "$DEST/tools"
+    rm -rf "$DEST/tools/pi-honeypot"
+    cp -r "$SRC/tools/pi-honeypot" "$DEST/tools/"
+  fi
 fi
 
 echo "==> Downloading map and icon libraries (so the dashboard works without internet)"
