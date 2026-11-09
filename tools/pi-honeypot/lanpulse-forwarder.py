@@ -64,7 +64,7 @@ class Sessions:
             if len(self.open) >= MAX_OPEN:
                 self.open.pop(next(iter(self.open)))
             self.open[sid] = s = {"session": sid, "sensor": self.sensor, "ip": ev.get("src_ip", ""),
-                                  "port": ev.get("dst_port", 0), "proto": "telnet" if ev.get("protocol") == "telnet" else "ssh",
+                                  "port": ev.get("dst_port", 0), "proto": ev.get("protocol") if ev.get("protocol") in ("telnet", "ftp", "http") else "ssh",
                                   "start": parse_ts(ev.get("timestamp")), "end": parse_ts(ev.get("timestamp")),
                                   "client": "", "hassh": "", "logins": [], "commands": [], "files": [], "_seen": time.time()}
             return None
@@ -272,10 +272,14 @@ def main() -> int:
         return 2
     home = os.environ.get("COWRIE_HOME", "/home/cowrie/cowrie")
     log_path = os.path.join(home, "var/log/cowrie/cowrie.json")
-    st = State(os.environ.get("STATE_FILE", "/var/lib/lanpulse-forwarder/state.json"))
+    state_path = os.environ.get("STATE_FILE", "/var/lib/lanpulse-forwarder/state.json")
+    st = State(state_path)
+    trap_home = os.environ.get("TRAP_HOME", "")
+    trap_log = os.path.join(trap_home, "var/log/trap/trap.json") if trap_home else ""
+    trap_st = State(state_path + ".trap") if trap_home else None          # its own place in the log and its own outbox
     client = Client(url, key, os.environ.get("LANPULSE_FINGERPRINT", ""), os.environ.get("LANPULSE_INSECURE") == "1")
     sessions = Sessions(os.environ.get("SENSOR_NAME") or socket.gethostname())
-    print(f"forwarding {log_path} to {url}", flush=True)
+    print(f"forwarding {log_path}{' and ' + trap_log if trap_log else ''} to {url}", flush=True)
     last_save, last_hello = 0.0, 0.0
     while True:
         try:
