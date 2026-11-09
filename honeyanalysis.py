@@ -379,7 +379,11 @@ def sensor_options(raw, kind: str = "pi") -> list[str]:
         out.append(f"ssh_port={sp}")
     if telnet and tp is not None and tp != 2223:
         out.append(f"telnet_port={tp}")
-    ftp, web = on("ftp", False), on("http", False)
+    def off_by_default(key):
+        v = raw.get(key)
+        return False if v is None or v == "" else (v if isinstance(v, bool) else str(v).lower() in ("on", "yes", "true", "1"))
+
+    ftp, web = off_by_default("ftp"), off_by_default("http")
     fp = num("ftp_port", "The FTP port", 1024, 65515) if ftp else None            # FTP also uses the 20 ports after it for uploads
     hp = num("http_port", "The web port", 1024, 65535) if web else None
     if ftp:
