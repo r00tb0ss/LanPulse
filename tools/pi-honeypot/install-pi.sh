@@ -5,12 +5,22 @@
 # Sets up a Cowrie SSH/Telnet honeypot on a Raspberry Pi (Raspberry Pi OS / Debian / Ubuntu) and a small forwarder
 # that sends every attacker session and captured file to your LanPulse server.
 #
-#   sudo ./install-pi.sh https://192.168.0.208:8080 <sensor-key> [server-certificate-sha256]
+#   sudo ./install-pi.sh https://192.168.0.208:8080 <sensor-key> [server-certificate-sha256] [setting=value ...]
 #
-# The easy way is LanPulse > Honeypot > Add sensor, which gives you a ready-made one-line command with its own key.
-# To run this by hand use the key under LanPulse > Honeypot > Settings > "External-sensor key".
+# The sensor key comes from LanPulse > Honeypot > Add sensor (which also gives you a ready-made one-line command).
 # Cowrie listens on ports 2222 (SSH) and 2223 (Telnet). Your Pi's own SSH on port 22 is NOT touched; forward the
 # internet-facing ports 22/23 to 2222/2223 on your router instead (see README.md).
+#
+# Optional settings (the Customize section of Add sensor writes these into the command; all have a default):
+#   ssh=off  telnet=off            turn one of the decoys off
+#   ssh_port=N  telnet_port=N      ports to listen on, 1024-65535 (default 2222 and 2223)
+#   hostname=NAME                  name the attacker sees in the shell prompt (default svr04)
+#   profile=debian12|debian11|ubuntu2204   what uname and the SSH banner claim (default: Cowrie's own)
+#   login=any|random|weak          any = every login works; random = works after 2-5 tries; weak = only common passwords
+#   file_mb=N                      biggest file to keep, 1-5 MB
+#   mem_mb=N  cpu_pct=N            cap Cowrie's memory (64-4096 MB) and CPU (10-100 %)
+#   keep_days=N  disk_mb=N         delete captures older than N days (default 30); keep the captures under N MB
+# Running the command again with different settings changes them.
 set -euo pipefail
 
 # LanPulse fills this in when it serves this script (Honeypot > Add sensor); empty when run from a git checkout.
@@ -18,13 +28,56 @@ FORWARDER_B64=""
 
 URL="${1:-}"; KEY="${2:-}"; FP="${3:-}"
 [ "$(id -u)" = 0 ] || { echo "Run this with sudo." >&2; exit 1; }
-[ -n "$URL" ] && [ -n "$KEY" ] || { echo "Usage: sudo $0 https://<lanpulse-ip>:8080 <sensor-key> [cert-sha256]" >&2; exit 2; }
+[ -n "$URL" ] && [ -n "$KEY" ] || { echo "Usage: sudo $0 https://<lanpulse-ip>:8080 <sensor-key> [cert-sha256] [setting=value ...]" >&2; exit 2; }
 case "$URL" in http://*|https://*) ;; *) echo "The LanPulse address must start with http:// or https://" >&2; exit 2;; esac
 URL="${URL%/}"
+if [ "$#" -ge 3 ]; then shift 3; else shift "$#"; fi
+
+# ---- settings
+SSH_ON=yes; TELNET_ON=yes; SSH_PORT=2222; TELNET_PORT=2223; FAKE_HOST=svr04; PROFILE=default; LOGIN=default
+FILE_MB=""; MEM_MB=""; CPU_PCT=""; KEEP_DAYS=30; DISK_MB=""; OPTS_GIVEN=0
+bad() { echo "Unknown or invalid setting: $1" >&2; exit 2; }
+num() {                                   # name value min max: digits only, within range
+  case "$2" in ''|*[!0-9]*) bad "$1=$2";; esac
+  if [ "${#2}" -gt 6 ] || [ "$2" -lt "$3" ] || [ "$2" -gt "$4" ]; then bad "$1=$2 (use $3 to $4)"; fi
+}
+for kv in "$@"; do
+  OPTS_GIVEN=1
+  k="${kv%%=*}"; v="${kv#*=}"
+  case "$k" in
+    ssh)         case "$v" in on) SSH_ON=yes;; off) SSH_ON=no;; *) bad "$kv";; esac;;
+    telnet)      case "$v" in on) TELNET_ON=yes;; off) TELNET_ON=no;; *) bad "$kv";; esac;;
+    ssh_port)    num "$k" "$v" 1024 65535; SSH_PORT="$v";;
+    telnet_port) num "$k" "$v" 1024 65535; TELNET_PORT="$v";;
+    hostname)    case "$v" in ''|-*|*-|[0-9]*|*[!a-z0-9-]*) bad "$kv";; esac
+                 [ "${#v}" -le 32 ] || bad "$kv"; FAKE_HOST="$v";;
+    profile)     case "$v" in default|debian12|debian11|ubuntu2204) PROFILE="$v";; *) bad "$kv";; esac;;
+    login)       case "$v" in default|any|random|weak) LOGIN="$v";; *) bad "$kv";; esac;;
+    file_mb)     num "$k" "$v" 1 5; FILE_MB="$v";;
+    mem_mb)      num "$k" "$v" 64 4096; MEM_MB="$v";;
+    cpu_pct)     num "$k" "$v" 10 100; CPU_PCT="$v";;
+    keep_days)   num "$k" "$v" 1 365; KEEP_DAYS="$v";;
+    disk_mb)     num "$k" "$v" 100 100000; DISK_MB="$v";;
+    *)           bad "$kv";;
+  esac
+done
+if [ "$SSH_ON" = no ] && [ "$TELNET_ON" = no ]; then bad "ssh=off telnet=off (leave one on)"; fi
+if [ "$SSH_ON" = yes ] && [ "$TELNET_ON" = yes ] && [ "$SSH_PORT" = "$TELNET_PORT" ]; then bad "the SSH and Telnet ports must differ"; fi
+
+case "$PROFILE" in
+  debian12)   SSHV="SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u2"; KERNEL="6.1.0-18-amd64"; BUILD="#1 SMP PREEMPT_DYNAMIC Debian 6.1.76-1 (2024-02-01)";;
+  debian11)   SSHV="SSH-2.0-OpenSSH_8.4p1 Debian-5+deb11u3"; KERNEL="5.10.0-28-amd64"; BUILD="#1 SMP Debian 5.10.209-2 (2024-01-31)";;
+  ubuntu2204) SSHV="SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6"; KERNEL="5.15.0-91-generic"; BUILD="#101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023";;
+  *)          SSHV=""; KERNEL=""; BUILD="";;
+esac
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 COWRIE_USER=cowrie
 HOME_DIR="/home/$COWRIE_USER"
 COWRIE_DIR="$HOME_DIR/cowrie"
+CFG="$COWRIE_DIR/etc/cowrie.cfg"
+UDB="$COWRIE_DIR/etc/userdb.txt"
+MARK="# Written by the LanPulse installer"
 
 echo "==> Installing packages"
 export DEBIAN_FRONTEND=noninteractive
@@ -41,25 +94,64 @@ fi
 sudo -u "$COWRIE_USER" bash -c "cd '$COWRIE_DIR' && python3 -m venv cowrie-env && . cowrie-env/bin/activate \
   && python -m pip install --quiet --upgrade pip && python -m pip install --quiet -e ."
 
-if [ ! -f "$COWRIE_DIR/etc/cowrie.cfg" ]; then
+# The settings file is rewritten when it is missing, when we wrote it, or when you passed settings. A file you edited by
+# hand is kept as cowrie.cfg.bak first.
+REWRITE=0
+if [ ! -f "$CFG" ] || [ "$OPTS_GIVEN" = 1 ] || grep -q "^$MARK" "$CFG"; then REWRITE=1; fi
+if [ "$REWRITE" = 1 ]; then
   echo "==> Writing Cowrie settings"
-  cat > "$COWRIE_DIR/etc/cowrie.cfg" <<'CFG'
-# Only the settings that differ from Cowrie's defaults.
-[honeypot]
-hostname = svr04
+  if [ -f "$CFG" ] && ! grep -q "^$MARK" "$CFG"; then cp -p "$CFG" "$CFG.bak"; fi
+  {
+    echo "$MARK. Running the Add sensor command again rewrites this file."
+    echo "[honeypot]"
+    echo "hostname = $FAKE_HOST"
+    if [ -n "$FILE_MB" ]; then echo "download_limit_size = $((FILE_MB * 1048576))"; fi
+    if [ "$LOGIN" = random ]; then echo "auth_class = AuthRandom"; echo "auth_class_parameters = 2, 5, 10"; fi
+    if [ -n "$KERNEL" ]; then
+      echo "[shell]"
+      echo "kernel_version = $KERNEL"
+      echo "kernel_build_string = $BUILD"
+      echo "hardware_platform = x86_64"
+      echo "operating_system = GNU/Linux"
+    fi
+    echo "[ssh]"
+    echo "enabled = $SSH_ON"
+    if [ -n "$SSHV" ]; then echo "version = $SSHV"; fi
+    echo "listen_endpoints = tcp:$SSH_PORT:interface=0.0.0.0"
+    echo "[telnet]"
+    echo "enabled = $TELNET_ON"
+    echo "listen_endpoints = tcp:$TELNET_PORT:interface=0.0.0.0"
+    echo "[output_jsonlog]"
+    echo "enabled = true"
+  } > "$CFG"
+  chown "$COWRIE_USER:$COWRIE_USER" "$CFG"
 
-[ssh]
-enabled = true
-listen_endpoints = tcp:2222:interface=0.0.0.0
-
-[telnet]
-enabled = true
-listen_endpoints = tcp:2223:interface=0.0.0.0
-
-[output_jsonlog]
-enabled = true
-CFG
-  chown "$COWRIE_USER:$COWRIE_USER" "$COWRIE_DIR/etc/cowrie.cfg"
+  # Which logins work: Cowrie reads etc/userdb.txt ("name:x:password", * matches anything, ! says no).
+  if [ -f "$UDB" ] && ! grep -q '^# LanPulse' "$UDB"; then cp -p "$UDB" "$UDB.bak"; fi
+  case "$LOGIN" in
+    any)  printf '# LanPulse: every login works\n*:x:*\n' > "$UDB";;
+    weak) cat > "$UDB" <<'USERS'
+# LanPulse: only common default logins work
+root:x:root
+root:x:admin
+root:x:password
+root:x:123456
+root:x:toor
+admin:x:admin
+admin:x:password
+admin:x:1234
+user:x:user
+pi:x:raspberry
+ubnt:x:ubnt
+support:x:support
+guest:x:guest
+test:x:test
+ubuntu:x:ubuntu
+USERS
+          ;;
+    *)    if [ -f "$UDB" ] && grep -q '^# LanPulse' "$UDB"; then rm -f "$UDB"; fi;;
+  esac
+  if [ -f "$UDB" ]; then chown "$COWRIE_USER:$COWRIE_USER" "$UDB"; fi
 fi
 
 if [ -z "$FP" ] && [ "${URL#https://}" != "$URL" ]; then
@@ -96,6 +188,10 @@ ENV
 chmod 600 /etc/lanpulse-forwarder.env
 umask 022
 
+LIMITS=""
+if [ -n "$MEM_MB" ]; then LIMITS="${LIMITS}MemoryMax=${MEM_MB}M"$'\n'; fi
+if [ -n "$CPU_PCT" ]; then LIMITS="${LIMITS}CPUQuota=${CPU_PCT}%"$'\n'; fi
+
 cat > /etc/systemd/system/cowrie.service <<UNIT
 [Unit]
 Description=Cowrie SSH/Telnet honeypot
@@ -111,7 +207,7 @@ ExecStop=$COWRIE_DIR/cowrie-env/bin/cowrie stop
 Restart=on-failure
 NoNewPrivileges=yes
 PrivateTmp=yes
-
+${LIMITS}
 [Install]
 WantedBy=multi-user.target
 UNIT
@@ -138,25 +234,75 @@ ProtectHome=read-only
 WantedBy=multi-user.target
 UNIT
 
-# Captured files pile up on the SD card; keep a month.
-cat > /etc/cron.daily/cowrie-clean <<CRON
+# Captured files and logs pile up on the SD card: delete old ones every hour, and the oldest first when over the size limit.
+rm -f /etc/cron.daily/cowrie-clean            # what older versions of this installer used
+cat > /etc/lanpulse-cleanup.conf <<CONF
+COWRIE_VAR=$COWRIE_DIR/var
+KEEP_DAYS=$KEEP_DAYS
+CAP_MB=${DISK_MB:-0}
+CONF
+chmod 644 /etc/lanpulse-cleanup.conf
+cat > /usr/local/lib/lanpulse-forwarder/cowrie-clean.sh <<'CLEAN'
 #!/bin/sh
-find "$COWRIE_DIR/var/lib/cowrie/downloads" -type f -mtime +30 -delete 2>/dev/null
+# Deletes old Cowrie captures. Settings: /etc/lanpulse-cleanup.conf
+. /etc/lanpulse-cleanup.conf
+V="$COWRIE_VAR"
+[ -d "$V" ] || exit 0
+for d in "$V/lib/cowrie/downloads" "$V/lib/cowrie/tty"; do
+  [ -d "$d" ] && find "$d" -type f -mtime +"$KEEP_DAYS" -delete
+done
+[ -d "$V/log/cowrie" ] && find "$V/log/cowrie" -type f \( -name 'cowrie.json.*' -o -name 'cowrie.log.*' \) -mtime +"$KEEP_DAYS" -delete
+if [ "${CAP_MB:-0}" -gt 0 ]; then
+  n=0
+  while [ "$(du -sm "$V" | cut -f1)" -gt "$CAP_MB" ] && [ "$n" -lt 5000 ]; do
+    f=$(find "$V/lib/cowrie/downloads" "$V/lib/cowrie/tty" "$V/log/cowrie" -type f \
+          \( -path '*/downloads/*' -o -path '*/tty/*' -o -name 'cowrie.json.*' -o -name 'cowrie.log.*' \) \
+          -printf '%T@ %p\n' 2>/dev/null | sort -n | head -n 1 | cut -d' ' -f2-)
+    [ -n "$f" ] || break
+    rm -f -- "$f"; n=$((n + 1))
+  done
+fi
 exit 0
-CRON
-chmod 755 /etc/cron.daily/cowrie-clean
+CLEAN
+chmod 755 /usr/local/lib/lanpulse-forwarder/cowrie-clean.sh
+cat > /etc/systemd/system/cowrie-clean.service <<UNIT
+[Unit]
+Description=Delete old Cowrie honeypot captures
+
+[Service]
+Type=oneshot
+User=$COWRIE_USER
+ExecStart=/bin/sh /usr/local/lib/lanpulse-forwarder/cowrie-clean.sh
+NoNewPrivileges=yes
+UNIT
+cat > /etc/systemd/system/cowrie-clean.timer <<UNIT
+[Unit]
+Description=Delete old Cowrie honeypot captures every hour
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
+UNIT
 
 echo "==> Starting"
 systemctl daemon-reload
-systemctl enable --now cowrie.service lanpulse-forwarder.service
+systemctl enable cowrie.service lanpulse-forwarder.service cowrie-clean.timer >/dev/null 2>&1
+systemctl restart cowrie.service lanpulse-forwarder.service
+systemctl start cowrie-clean.timer
 sleep 3
 systemctl --no-pager --lines=0 status cowrie.service lanpulse-forwarder.service || true
 
+IP="$(hostname -I | awk '{print $1}')"
+echo
+echo "Done. This sensor looks like '$FAKE_HOST' and listens on:"
+if [ "$SSH_ON" = yes ]; then echo "  SSH    port $SSH_PORT    (test: ssh -p $SSH_PORT root@$IP)"; else echo "  SSH    off"; fi
+if [ "$TELNET_ON" = yes ]; then echo "  Telnet port $TELNET_PORT    (test: telnet $IP $TELNET_PORT)"; else echo "  Telnet off"; fi
 cat <<DONE
-
-Done. Test the honeypot from another computer:   ssh -p 2222 root@$(hostname -I | awk '{print $1}')   (any password)
-Then open LanPulse > Honeypot > Sessions: the session should appear within a few seconds.
+Then open LanPulse > Honeypot > Captured attacks and malware: the session should appear within a few seconds.
 If it does not, look at:   journalctl -u lanpulse-forwarder -n 30    and    journalctl -u cowrie -n 30
-Next: forward ports 22 and 23 from the internet to this Pi's 2222 and 2223 on your router, and read README.md first
+Next: forward ports 22 and 23 from the internet to the ports above on your router, and read README.md first
 (the Pi should sit on its own network so a break-in cannot reach the rest of your LAN).
 DONE

@@ -1235,6 +1235,13 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-cmdbox{width:100%;box-sizing:border-box;font-size:12px;padding:9px;border-radius:8px;border:1px solid var(--line,#2a3858);background:#070d18;color:#a5f3fc;resize:vertical;word-break:break-all}
 .pot-sensor-state{display:inline-flex;gap:6px;align-items:center;margin-left:8px}
 #potSensorAdd h5{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pot-adv{margin:6px 0 10px;border:1px solid var(--line,#2a3858);border-radius:10px;padding:2px 12px}
+.pot-adv summary{cursor:pointer;padding:9px 0;font-size:13px;color:var(--muted)}
+.pot-adv[open] summary{border-bottom:1px solid var(--line,#2a3858);margin-bottom:8px}
+.pot-adv h6{margin:12px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pot-adv .pot-add-form{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.pot-add-form label.pot-chk{flex-direction:row;align-items:center;gap:8px;font-size:14px;color:inherit}
+.pot-add-form label.pot-chk input{width:auto}
 
 /* honeypot custom settings */
 .pot-port-in{width:78px;padding:2px 6px;font:12px var(--mono);background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:6px}

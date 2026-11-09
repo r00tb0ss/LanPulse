@@ -54,13 +54,13 @@ import analyst
 from openvas import OpenVAS
 from services import ServiceMonitor
 from honeypot import Honeypot
-from honeyanalysis import HoneyAnalysis, MAX_SAMPLE, clean_base_url, cert_fingerprint, installer_script, install_command
+from honeyanalysis import HoneyAnalysis, MAX_SAMPLE, clean_base_url, cert_fingerprint, installer_script, install_command, sensor_options
 from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.26.1"
+VERSION = "1.27.0"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -2142,6 +2142,10 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not url:
             return JSONResponse({"error": "The LanPulse address must look like https://192.168.0.208:8080"}, 400)
         kind = "container" if body.get("kind") == "container" else "pi"
+        try:
+            opts = sensor_options(body.get("options"), kind)         # the Customize section; checked before any sensor is created
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, 400)
         script = installer_script(kind, BASE / "tools" / "pi-honeypot")
         if not script:
             return JSONResponse({"error": "The sensor installer files are missing from this LanPulse install. Update LanPulse and try again."}, 500)
@@ -2151,7 +2155,7 @@ def build_app(nm: LanPulse) -> FastAPI:
             return JSONResponse({"error": str(e)}, 400)
         fp = cert_fingerprint(nm.args.cert) if nm.args.cert and url.startswith("https://") else ""
         key = s.pop("key")                                 # shown once, here; only its hash is stored
-        return {"sensor": s, "command": install_command(url, key, kind, script, fp)}
+        return {"sensor": s, "options": opts, "command": install_command(url, key, kind, script, fp, opts)}
 
     @app.post("/api/honeypot/sensors/revoke")
     async def honeypot_sensor_revoke(request: Request):
