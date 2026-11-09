@@ -986,6 +986,21 @@ body[data-theme="sand"]{
 body[data-theme="sand"] .topbar{box-shadow:0 1px 3px rgba(60,40,20,.08)}
 body[data-theme="sand"] .brand i,body[data-theme="sand"] .brand b{color:var(--accent)}
 
+/* Crimson Noir — pure black, white text, one red accent, sharp square corners: a security-operations look */
+body[data-theme="noir"]{
+  --bg:#0a0a0b; --bg2:#0f0f11; --panel:#141416; --panel2:#1b1b1e; --border:#2c2c31; --border2:#3d3d44;
+  --text:#f2f2f3; --muted:#9a9aa1; --dim:#6a6a72; --accent:#ff3b4e; --accent2:#d92b3d;
+  --green:#46d68a; --red:#ff6b7a; --amber:#f5b942;
+  --topbar:linear-gradient(180deg,#121214,#0a0a0b); --map-area:#18181b; --map-border:#5a2a31;
+  --ctrl:#1b1b1e; --ctrl-solid:#1b1b1e; --glow:#220f12; --map-glow:#241215; --map-deep:#070708;
+  color-scheme:dark;
+}
+body[data-theme="noir"] .topbar{border-bottom:1px solid var(--accent2)}
+body[data-theme="noir"] .brand{letter-spacing:2px}
+body[data-theme="noir"] .brand i,body[data-theme="noir"] .brand b{color:var(--accent)}
+body[data-theme="noir"] .btn,body[data-theme="noir"] .chip,body[data-theme="noir"] .kpi,body[data-theme="noir"] .ai-chip,
+body[data-theme="noir"] input,body[data-theme="noir"] select,body[data-theme="noir"] textarea,body[data-theme="noir"] .theme-card{border-radius:2px}
+
 /* Light themes: the map stays dark, so the text laid over it must stay light; and the red "reached" tile must stay readable */
 body[data-theme="light"] .map-title,body[data-theme="sand"] .map-title{color:#e8edf6}
 body[data-theme="light"] .map-legend,body[data-theme="sand"] .map-legend,
