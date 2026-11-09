@@ -42,6 +42,8 @@ from datetime import datetime, timezone
 MB = 1024 * 1024
 LOG_ROTATE = 20 * MB
 SESSION_TIMEOUT = 120          # seconds one connection may last
+HTTP_LIMIT = 90                # hard limit for a whole web connection, so trickled bytes can't hold a slot
+FTP_LIMIT = 300                # the same for a whole FTP connection
 MAX_COMMANDS = 200
 MEM_BODY = 1 * MB              # request bodies up to this size are looked into (multipart forms); bigger ones go to disk whole
 SUSPICIOUS = re.compile(r"(\.\./|;|\||\$\(|\$\{|`|wget|curl|tftp|/bin/|cmd=|exec|eval\(|passwd|jndi|\.php|\.cgi|cgi-bin|\.env|\.git|"
@@ -53,6 +55,19 @@ INDEX = b"<html><head><title>It works!</title></head><body><h1>It works!</h1><p>
 
 def iso_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def watchdog(sock, seconds: float) -> threading.Timer:
+    """Cut the connection after `seconds` however slowly the other side trickles bytes (the socket timeout only covers one read)."""
+    def kill():
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+    t = threading.Timer(seconds, kill)
+    t.daemon = True
+    t.start()
+    return t
 
 
 def printable(s: str, limit: int) -> str:
@@ -254,11 +269,13 @@ class FtpHandler(socketserver.StreamRequestHandler):
         if not self.server.gate.enter(ip):
             return
         self.pasv = None
+        wd = watchdog(self.request, FTP_LIMIT)
         try:
             self.run(ip)
         except (OSError, ValueError):
             pass
         finally:
+            wd.cancel()
             self.close_pasv()
             self.server.gate.leave(ip)
 
@@ -450,11 +467,13 @@ class HttpHandler(socketserver.StreamRequestHandler):
         ip = self.client_address[0]
         if not self.server.gate.enter(ip):
             return
+        wd = watchdog(self.request, HTTP_LIMIT)
         try:
             self.run(ip)
         except (OSError, ValueError):
             pass
         finally:
+            wd.cancel()
             self.server.gate.leave(ip)
 
     def respond(self, code: int, text: str, body: bytes = b"", head_only: bool = False) -> None:
