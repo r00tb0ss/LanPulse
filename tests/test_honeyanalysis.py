@@ -376,6 +376,8 @@ class AddSensor(unittest.TestCase):
             self.assertIsNotNone(sc)
             self.assertIn(base64.b64encode(fwd).decode(), sc)
             self.assertNotIn('FORWARDER_B64=""', sc)
+            self.assertNotIn('TRAP_B64=""', sc)
+            self.assertIn(base64.b64encode(pathlib.Path(TOOLS, "lanpulse-trap.py").read_bytes()).decode(), sc)
             if shutil.which("bash"):
                 r = subprocess.run(["bash", "-n"], input=sc.encode(), capture_output=True)
                 self.assertEqual(r.returncode, 0, r.stderr)
@@ -423,6 +425,17 @@ class SensorOptions(unittest.TestCase):
         self.assertEqual(ha.sensor_options({"telnet": False, "telnet_port": "1"}), ["telnet=off"])     # port of a service that is off is ignored
         self.assertEqual(ha.sensor_options({"keep_days": 7, "disk_mb": 500, "mem_mb": 200}, "container"), ["mem_mb=200"])
 
+    def test_extra_services(self):
+        self.assertEqual(ha.sensor_options({"ftp": True, "http": True}), ["ftp=on", "http=on"])
+        self.assertEqual(ha.sensor_options({"ftp": True, "ftp_port": "3000", "http": True, "http_port": "3100"}),
+                         ["ftp=on", "ftp_port=3000", "http=on", "http_port=3100"])
+        self.assertEqual(ha.sensor_options({"ftp": False, "ftp_port": "1", "http": "", "http_port": "x"}), [])    # off: the port is ignored
+        for bad in ({"ftp": True, "ftp_port": "2222"}, {"ftp": True, "http": True, "http_port": "2130"}, {"ftp": True, "ftp_port": "65530"},
+                    {"http": True, "http_port": "2222"}, {"ftp": True, "ftp_port": "21"}, {"http": True, "http_port": "80"},
+                    {"ftp": True, "ftp_port": "2203", "ssh_port": "2222", "telnet_port": "2210"}):
+            with self.assertRaises(ValueError, msg=bad):
+                ha.sensor_options(bad)
+
     def test_bad_settings(self):
         for bad in ({"ssh": False, "telnet": False}, {"ssh_port": "80"}, {"ssh_port": "70000"}, {"ssh_port": "2300", "telnet_port": "2300"},
                     {"ssh_port": "22x"}, {"ssh_port": True}, {"hostname": "a;b"}, {"hostname": "1abc"}, {"hostname": "-a"}, {"hostname": "a" * 40},
@@ -460,6 +473,17 @@ class SensorOptions(unittest.TestCase):
                 r, _ = self._run(kind, bad)
                 self.assertEqual(r.returncode, 2, (kind, bad, r.stderr))
             r, _ = self._run(kind, ["ssh_port=2200", "login=weak", "hostname=web01", "profile=debian12", "file_mb=3", "mem_mb=256", "cpu_pct=50"])
+            self.assertEqual(r.returncode, 0, (kind, r.stderr))
+
+    def test_installers_check_the_extra_services(self):
+        for kind in ("pi", "container"):
+            r, _ = self._run(kind, ["ftp=on", "http=on", "ftp_port=3000", "http_port=3100"])
+            self.assertEqual(r.returncode, 0, (kind, r.stderr))
+            for bad in (["ftp=on", "ftp_port=2222"], ["ftp=on", "http=on", "http_port=2130"], ["ftp=on", "ftp_port=21"], ["ftp=maybe"],
+                        ["http=on", "http_port=2222"], ["ftp=on", "ftp_port=65530"]):
+                r, _ = self._run(kind, bad)
+                self.assertEqual(r.returncode, 2, (kind, bad, r.stderr))
+            r, _ = self._run(kind, ["ftp=on", "ftp_port=2200"])                      # 2200-2220 does not touch 2222
             self.assertEqual(r.returncode, 0, (kind, r.stderr))
 
     def test_pi_installer_writes_the_cowrie_settings(self):

@@ -88,6 +88,8 @@ and certificate fingerprint (use `''` for the fingerprint if you do not pin one)
 |---|---|---|
 | `ssh=off`, `telnet=off` | Turn one of the two decoys off (one must stay on). | both on |
 | `ssh_port=N`, `telnet_port=N` | Ports to listen on, 1024-65535. Forward 22 and 23 to these on your router. | 2222, 2223 |
+| `ftp=on`, `ftp_port=N` | Also run the FTP decoy (see below). It uses `ftp_port` and the 20 ports after it. | off, 2121 |
+| `http=on`, `http_port=N` | Also run the web decoy (see below). | off, 2180 |
 | `hostname=NAME` | The name in the attacker's shell prompt and `uname -a`. | `svr04` |
 | `profile=debian12` / `debian11` / `ubuntu2204` | Makes the SSH banner and `uname` claim that system. | Cowrie's own (old Debian) |
 | `login=any` | Every username and password gets in (most sessions, most captured malware). | Cowrie's default (almost any login) |
@@ -104,6 +106,35 @@ captures live in Docker volumes, so `keep_days` and `disk_mb` do not apply there
 
 The hostname and system are only what the attacker is told. They do not make the sensor safer or more dangerous;
 the advice in section 1 stays the same.
+
+## FTP and web decoys (optional)
+
+Cowrie covers SSH and Telnet. Turn on **FTP decoy** and/or **Web decoy** in Add sensor > Customize (or add `ftp=on` and
+`http=on` to the command) to also see what attackers upload over those protocols. They are one small Python program
+(`lanpulse-trap.py`, standard library only) that runs next to Cowrie as its own service (`lanpulse-trap`) or container.
+It writes its events in Cowrie's format, so sessions and captured files show up in the same place in LanPulse and get the
+same static analysis.
+
+- **FTP:** accepts any login, shows a small fake folder listing, and keeps every file that is uploaded. Active mode
+  (`PORT`/`EPRT`) is refused, so the sensor never connects out to an address an attacker names.
+- **Web:** answers every request with a plain "It works!" page, logs exploit attempts (paths, suspicious headers, login
+  forms, Basic auth) and keeps files sent with `PUT`, `POST` or a multipart upload form. Plain page loads from scanners are
+  answered but not recorded, so the list stays about real attacks.
+
+Safety limits: files are saved only under their SHA-256 name with mode 0600 and are never run, opened or served back;
+files above the size limit (5 MB at most) are refused; the decoys stop keeping files when their folder reaches 500 MB;
+the number of connections is capped, in total and per address; and at most 30 sessions per minute are reported. Ports
+below 1024 are not used, so nothing runs as root.
+
+On your router forward the same way as for SSH and Telnet:
+
+| Internet | To the sensor |
+|---|---|
+| TCP 21 (FTP) | port 2121, **and** 2122-2141 to the same port numbers (FTP uploads use them) |
+| TCP 80 (web) | port 2180 |
+
+If you chose other ports, forward to those (FTP: your port plus the 20 after it). A sensor needs SSH or Telnet on as
+well; FTP-only or web-only sensors are not supported.
 
 ## 3. Let the internet in
 

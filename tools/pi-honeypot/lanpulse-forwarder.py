@@ -15,6 +15,7 @@ Settings come from environment variables (the installer writes /etc/lanpulse-for
   LANPULSE_FINGERPRINT  optional SHA-256 of the server certificate to trust (LanPulse uses a self-signed one)
   LANPULSE_INSECURE     set to 1 to skip certificate checks (only on a network you trust)
   COWRIE_HOME           default /home/cowrie/cowrie
+  TRAP_HOME             set it to also forward the FTP/web decoys (lanpulse-trap.py); same folder layout as COWRIE_HOME
   SENSOR_NAME           default the Pi's host name
   STATE_FILE            default /var/lib/lanpulse-forwarder/state.json
 """
@@ -64,7 +65,7 @@ class Sessions:
             if len(self.open) >= MAX_OPEN:
                 self.open.pop(next(iter(self.open)))
             self.open[sid] = s = {"session": sid, "sensor": self.sensor, "ip": ev.get("src_ip", ""),
-                                  "port": ev.get("dst_port", 0), "proto": "telnet" if ev.get("protocol") == "telnet" else "ssh",
+                                  "port": ev.get("dst_port", 0), "proto": ev.get("protocol") if ev.get("protocol") in ("telnet", "ftp", "http") else "ssh",
                                   "start": parse_ts(ev.get("timestamp")), "end": parse_ts(ev.get("timestamp")),
                                   "client": "", "hassh": "", "logins": [], "commands": [], "files": [], "_seen": time.time()}
             return None
@@ -272,10 +273,14 @@ def main() -> int:
         return 2
     home = os.environ.get("COWRIE_HOME", "/home/cowrie/cowrie")
     log_path = os.path.join(home, "var/log/cowrie/cowrie.json")
-    st = State(os.environ.get("STATE_FILE", "/var/lib/lanpulse-forwarder/state.json"))
+    state_path = os.environ.get("STATE_FILE", "/var/lib/lanpulse-forwarder/state.json")
+    st = State(state_path)
+    trap_home = os.environ.get("TRAP_HOME", "")
+    trap_log = os.path.join(trap_home, "var/log/trap/trap.json") if trap_home else ""
+    trap_st = State(state_path + ".trap") if trap_home else None          # its own place in the log and its own outbox
     client = Client(url, key, os.environ.get("LANPULSE_FINGERPRINT", ""), os.environ.get("LANPULSE_INSECURE") == "1")
     sessions = Sessions(os.environ.get("SENSOR_NAME") or socket.gethostname())
-    print(f"forwarding {log_path} to {url}", flush=True)
+    print(f"forwarding {log_path}{' and ' + trap_log if trap_log else ''} to {url}", flush=True)
     last_save, last_hello = 0.0, 0.0
     while True:
         try:
@@ -293,8 +298,17 @@ def main() -> int:
                 queue_session(st, s)
             if st.d["outbox"]:
                 flush_outbox(client, st, home)
+            if trap_st is not None:
+                for ev in read_new(trap_log, trap_st):
+                    done = sessions.feed(ev)
+                    if done:
+                        queue_session(trap_st, done)
+                if trap_st.d["outbox"]:
+                    flush_outbox(client, trap_st, trap_home)
             if time.time() - last_save > 5:
                 st.save()
+                if trap_st is not None:
+                    trap_st.save()
                 last_save = time.time()
         except Exception as e:                            # never die: a honeypot sensor should keep running
             print("forwarder error:", repr(e), file=sys.stderr, flush=True)

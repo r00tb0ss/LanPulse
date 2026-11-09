@@ -307,17 +307,21 @@ def cert_fingerprint(cert_path) -> str:
 
 
 def installer_script(kind: str, tools_dir) -> str | None:
-    """The installer for this kind of sensor with the forwarder embedded, so one downloaded file is the whole install."""
+    """The installer for this kind of sensor with the forwarder and the FTP/web trap embedded, so one downloaded file is the
+    whole install."""
     import base64
     name = "install-container.sh" if kind == "container" else "install-pi.sh"
     try:
         script = pathlib.Path(tools_dir, name).read_text(encoding="utf-8")
-        fwd = pathlib.Path(tools_dir, "lanpulse-forwarder.py").read_bytes()
+        parts = [('FORWARDER_B64=""', pathlib.Path(tools_dir, "lanpulse-forwarder.py").read_bytes()),
+                 ('TRAP_B64=""', pathlib.Path(tools_dir, "lanpulse-trap.py").read_bytes())]
     except OSError:
         return None
-    if script.count('FORWARDER_B64=""') != 1:
-        return None
-    return script.replace('FORWARDER_B64=""', 'FORWARDER_B64="' + base64.b64encode(fwd).decode() + '"', 1)
+    for placeholder, data in parts:
+        if script.count(placeholder) != 1:
+            return None
+        script = script.replace(placeholder, placeholder[:-1] + base64.b64encode(data).decode() + '"', 1)
+    return script
 
 
 def install_command(url: str, key: str, kind: str, script: str, fingerprint: str, options=()) -> str:
@@ -375,6 +379,27 @@ def sensor_options(raw, kind: str = "pi") -> list[str]:
         out.append(f"ssh_port={sp}")
     if telnet and tp is not None and tp != 2223:
         out.append(f"telnet_port={tp}")
+    def off_by_default(key):
+        v = raw.get(key)
+        return False if v is None or v == "" else (v if isinstance(v, bool) else str(v).lower() in ("on", "yes", "true", "1"))
+
+    ftp, web = off_by_default("ftp"), off_by_default("http")
+    fp = num("ftp_port", "The FTP port", 1024, 65515) if ftp else None            # FTP also uses the 20 ports after it for uploads
+    hp = num("http_port", "The web port", 1024, 65535) if web else None
+    if ftp:
+        out.append("ftp=on")
+        if fp is not None and fp != 2121:
+            out.append(f"ftp_port={fp}")
+    if web:
+        out.append("http=on")
+        if hp is not None and hp != 2180:
+            out.append(f"http_port={hp}")
+    spans = [(n, a, b) for n, on_, a, b in (("SSH", ssh, sp or 2222, sp or 2222), ("Telnet", telnet, tp or 2223, tp or 2223),
+                                           ("FTP", ftp, fp or 2121, (fp or 2121) + 20), ("web", web, hp or 2180, hp or 2180)) if on_]
+    for i, (n1, a1, b1) in enumerate(spans):
+        for n2, a2, b2 in spans[i + 1:]:
+            if a1 <= b2 and a2 <= b1:
+                raise ValueError(f"The {n1} and {n2} ports overlap" + (" (FTP uses its port and the 20 after it)" if "FTP" in (n1, n2) else ""))
     if ssh and telnet and (sp or 2222) == (tp or 2223):
         raise ValueError("The SSH and Telnet ports must be different")
     host = str(raw.get("hostname") or "").strip().lower()
@@ -523,7 +548,8 @@ class HoneyAnalysis:
             return False, "bad ip"
         if not sid:
             return False, "bad session id"
-        proto = "telnet" if str(p.get("proto") or "").lower() == "telnet" else "ssh"
+        proto = str(p.get("proto") or "").lower()
+        proto = proto if proto in ("telnet", "ftp", "http") else "ssh"
         try:
             port = int(p.get("port") or 0)
             start = float(p.get("start") or time.time())

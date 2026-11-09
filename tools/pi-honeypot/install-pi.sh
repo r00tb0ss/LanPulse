@@ -14,6 +14,8 @@
 # Optional settings (the Customize section of Add sensor writes these into the command; all have a default):
 #   ssh=off  telnet=off            turn one of the decoys off
 #   ssh_port=N  telnet_port=N      ports to listen on, 1024-65535 (default 2222 and 2223)
+#   ftp=on  ftp_port=N             also run the FTP decoy that keeps uploaded files (default off; port 2121 and the 20 after it)
+#   http=on  http_port=N           also run the web decoy that logs exploit attempts and keeps uploads (default off; port 2180)
 #   hostname=NAME                  name the attacker sees in the shell prompt (default svr04)
 #   profile=debian12|debian11|ubuntu2204   what uname and the SSH banner claim (default: Cowrie's own)
 #   login=any|random|weak          any = every login works; random = works after 2-5 tries; weak = only common passwords
@@ -25,6 +27,7 @@ set -euo pipefail
 
 # LanPulse fills this in when it serves this script (Honeypot > Add sensor); empty when run from a git checkout.
 FORWARDER_B64=""
+TRAP_B64=""
 
 URL="${1:-}"; KEY="${2:-}"; FP="${3:-}"
 [ "$(id -u)" = 0 ] || { echo "Run this with sudo." >&2; exit 1; }
@@ -35,6 +38,7 @@ if [ "$#" -ge 3 ]; then shift 3; else shift "$#"; fi
 
 # ---- settings
 SSH_ON=yes; TELNET_ON=yes; SSH_PORT=2222; TELNET_PORT=2223; FAKE_HOST=svr04; PROFILE=default; LOGIN=default
+FTP_ON=no; HTTP_ON=no; FTP_PORT=2121; HTTP_PORT=2180
 FILE_MB=""; MEM_MB=""; CPU_PCT=""; KEEP_DAYS=30; DISK_MB=""; OPTS_GIVEN=0
 bad() { echo "Unknown or invalid setting: $1" >&2; exit 2; }
 num() {                                   # name value min max: digits only, within range
@@ -47,6 +51,10 @@ for kv in "$@"; do
   case "$k" in
     ssh)         case "$v" in on) SSH_ON=yes;; off) SSH_ON=no;; *) bad "$kv";; esac;;
     telnet)      case "$v" in on) TELNET_ON=yes;; off) TELNET_ON=no;; *) bad "$kv";; esac;;
+    ftp)         case "$v" in on) FTP_ON=yes;; off) FTP_ON=no;; *) bad "$kv";; esac;;
+    http)        case "$v" in on) HTTP_ON=yes;; off) HTTP_ON=no;; *) bad "$kv";; esac;;
+    ftp_port)    num "$k" "$v" 1024 65515; FTP_PORT="$v";;
+    http_port)   num "$k" "$v" 1024 65535; HTTP_PORT="$v";;
     ssh_port)    num "$k" "$v" 1024 65535; SSH_PORT="$v";;
     telnet_port) num "$k" "$v" 1024 65535; TELNET_PORT="$v";;
     hostname)    case "$v" in ''|-*|*-|[0-9]*|*[!a-z0-9-]*) bad "$kv";; esac
@@ -62,7 +70,16 @@ for kv in "$@"; do
   esac
 done
 if [ "$SSH_ON" = no ] && [ "$TELNET_ON" = no ]; then bad "ssh=off telnet=off (leave one on)"; fi
-if [ "$SSH_ON" = yes ] && [ "$TELNET_ON" = yes ] && [ "$SSH_PORT" = "$TELNET_PORT" ]; then bad "the SSH and Telnet ports must differ"; fi
+NAMES=(); LOS=(); HIS=()                  # no two decoys may share a port (FTP also uses the 20 ports after its own)
+if [ "$SSH_ON" = yes ]; then NAMES+=(SSH); LOS+=("$SSH_PORT"); HIS+=("$SSH_PORT"); fi
+if [ "$TELNET_ON" = yes ]; then NAMES+=(Telnet); LOS+=("$TELNET_PORT"); HIS+=("$TELNET_PORT"); fi
+if [ "$FTP_ON" = yes ]; then NAMES+=(FTP); LOS+=("$FTP_PORT"); HIS+=("$((FTP_PORT + 20))"); fi
+if [ "$HTTP_ON" = yes ]; then NAMES+=(web); LOS+=("$HTTP_PORT"); HIS+=("$HTTP_PORT"); fi
+for ((i = 0; i < ${#NAMES[@]}; i++)); do
+  for ((j = i + 1; j < ${#NAMES[@]}; j++)); do
+    if [ "${LOS[i]}" -le "${HIS[j]}" ] && [ "${LOS[j]}" -le "${HIS[i]}" ]; then bad "the ${NAMES[i]} and ${NAMES[j]} ports overlap"; fi
+  done
+done
 
 case "$PROFILE" in
   debian12)   SSHV="SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u2"; KERNEL="6.1.0-18-amd64"; BUILD="#1 SMP PREEMPT_DYNAMIC Debian 6.1.76-1 (2024-02-01)";;
@@ -177,6 +194,8 @@ elif [ -f "$HERE/lanpulse-forwarder.py" ]; then
 else
   echo "lanpulse-forwarder.py not found next to this script." >&2; exit 1
 fi
+TRAP_ON=no; TRAP_ENV_LINE=""
+if [ "$FTP_ON" = yes ] || [ "$HTTP_ON" = yes ]; then TRAP_ON=yes; TRAP_ENV_LINE="TRAP_HOME=$COWRIE_DIR"; fi
 umask 077
 cat > /etc/lanpulse-forwarder.env <<ENV
 LANPULSE_URL=$URL
@@ -184,9 +203,55 @@ LANPULSE_KEY=$KEY
 LANPULSE_FINGERPRINT=$FP
 COWRIE_HOME=$COWRIE_DIR
 SENSOR_NAME=$(hostname)
+${TRAP_ENV_LINE}
 ENV
 chmod 600 /etc/lanpulse-forwarder.env
 umask 022
+
+if [ "$TRAP_ON" = yes ]; then
+  echo "==> Installing the FTP/web decoys"
+  if [ -n "$TRAP_B64" ]; then
+    printf '%s' "$TRAP_B64" | base64 -d > /usr/local/lib/lanpulse-forwarder/lanpulse-trap.py
+  elif [ -f "$HERE/lanpulse-trap.py" ]; then
+    cp "$HERE/lanpulse-trap.py" /usr/local/lib/lanpulse-forwarder/lanpulse-trap.py
+  else
+    echo "lanpulse-trap.py not found next to this script." >&2; exit 1
+  fi
+  chmod 755 /usr/local/lib/lanpulse-forwarder/lanpulse-trap.py
+  FTP_P=0; HTTP_P=0
+  if [ "$FTP_ON" = yes ]; then FTP_P="$FTP_PORT"; fi
+  if [ "$HTTP_ON" = yes ]; then HTTP_P="$HTTP_PORT"; fi
+  cat > /etc/lanpulse-trap.env <<TENV
+TRAP_HOME=$COWRIE_DIR
+TRAP_FTP_PORT=$FTP_P
+TRAP_HTTP_PORT=$HTTP_P
+${FILE_MB:+TRAP_MAX_FILE_MB=$FILE_MB}
+TENV
+  cat > /etc/systemd/system/lanpulse-trap.service <<UNIT
+[Unit]
+Description=LanPulse FTP and web decoys
+After=network.target
+
+[Service]
+User=$COWRIE_USER
+EnvironmentFile=/etc/lanpulse-trap.env
+ExecStart=/usr/bin/python3 /usr/local/lib/lanpulse-forwarder/lanpulse-trap.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=$COWRIE_DIR/var
+MemoryMax=192M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+else
+  systemctl disable --now lanpulse-trap.service >/dev/null 2>&1 || true      # turned off again: stop and remove it
+  rm -f /etc/systemd/system/lanpulse-trap.service /etc/lanpulse-trap.env
+fi
 
 LIMITS=""
 if [ -n "$MEM_MB" ]; then LIMITS="${LIMITS}MemoryMax=${MEM_MB}M"$'\n'; fi
@@ -248,15 +313,17 @@ cat > /usr/local/lib/lanpulse-forwarder/cowrie-clean.sh <<'CLEAN'
 . /etc/lanpulse-cleanup.conf
 V="$COWRIE_VAR"
 [ -d "$V" ] || exit 0
-for d in "$V/lib/cowrie/downloads" "$V/lib/cowrie/tty"; do
+for d in "$V/lib/cowrie/downloads" "$V/lib/cowrie/tty" "$V/lib/trap/downloads"; do
   [ -d "$d" ] && find "$d" -type f -mtime +"$KEEP_DAYS" -delete
 done
-[ -d "$V/log/cowrie" ] && find "$V/log/cowrie" -type f \( -name 'cowrie.json.*' -o -name 'cowrie.log.*' \) -mtime +"$KEEP_DAYS" -delete
+for d in "$V/log/cowrie" "$V/log/trap"; do
+  [ -d "$d" ] && find "$d" -type f \( -name 'cowrie.json.*' -o -name 'cowrie.log.*' -o -name 'trap.json.*' \) -mtime +"$KEEP_DAYS" -delete
+done
 if [ "${CAP_MB:-0}" -gt 0 ]; then
   n=0
   while [ "$(du -sm "$V" | cut -f1)" -gt "$CAP_MB" ] && [ "$n" -lt 5000 ]; do
-    f=$(find "$V/lib/cowrie/downloads" "$V/lib/cowrie/tty" "$V/log/cowrie" -type f \
-          \( -path '*/downloads/*' -o -path '*/tty/*' -o -name 'cowrie.json.*' -o -name 'cowrie.log.*' \) \
+    f=$(find "$V/lib/cowrie/downloads" "$V/lib/cowrie/tty" "$V/lib/trap/downloads" "$V/log/cowrie" "$V/log/trap" -type f \
+          \( -path '*/downloads/*' -o -path '*/tty/*' -o -name 'cowrie.json.*' -o -name 'cowrie.log.*' -o -name 'trap.json.*' \) \
           -printf '%T@ %p\n' 2>/dev/null | sort -n | head -n 1 | cut -d' ' -f2-)
     [ -n "$f" ] || break
     rm -f -- "$f"; n=$((n + 1))
@@ -290,6 +357,10 @@ UNIT
 echo "==> Starting"
 systemctl daemon-reload
 systemctl enable cowrie.service lanpulse-forwarder.service cowrie-clean.timer >/dev/null 2>&1
+if [ "$TRAP_ON" = yes ]; then
+  systemctl enable lanpulse-trap.service >/dev/null 2>&1
+  systemctl restart lanpulse-trap.service
+fi
 systemctl restart cowrie.service lanpulse-forwarder.service
 systemctl start cowrie-clean.timer
 sleep 3
@@ -300,6 +371,8 @@ echo
 echo "Done. This sensor looks like '$FAKE_HOST' and listens on:"
 if [ "$SSH_ON" = yes ]; then echo "  SSH    port $SSH_PORT    (test: ssh -p $SSH_PORT root@$IP)"; else echo "  SSH    off"; fi
 if [ "$TELNET_ON" = yes ]; then echo "  Telnet port $TELNET_PORT    (test: telnet $IP $TELNET_PORT)"; else echo "  Telnet off"; fi
+if [ "$FTP_ON" = yes ]; then echo "  FTP    port $FTP_PORT, uploads use $((FTP_PORT + 1))-$((FTP_PORT + 20))    (test: ftp $IP $FTP_PORT)"; fi
+if [ "$HTTP_ON" = yes ]; then echo "  Web    port $HTTP_PORT    (test: curl http://$IP:$HTTP_PORT/)"; fi
 cat <<DONE
 Then open LanPulse > Honeypot > Captured attacks and malware: the session should appear within a few seconds.
 If it does not, look at:   journalctl -u lanpulse-forwarder -n 30    and    journalctl -u cowrie -n 30
