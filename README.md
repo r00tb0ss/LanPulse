@@ -27,7 +27,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 
 - **Live map** of every device on your LAN, updated every 10 seconds
 - **Device-type icons**: router, access point, PC, Mac, phone, tablet, printer, TV, camera, NAS, console, smart speaker, IoT, Raspberry Pi, server and more
-- **Device details**: IP, MAC, vendor, hostname, latency, OS guess, open ports (web ports are clickable), first/last seen and IP history
+- **Device details**: IP, MAC, vendor, hostname, latency, OS guess (or pick the OS yourself from a drop-down of Windows, Linux and more), open ports (web ports are clickable), first/last seen and IP history
 - **24-hour history** for each device: an uptime bar and a latency chart (kept for 7 days)
 - **Trusted devices**: anything new shows a red dashed ring until you trust it
 - **Watched devices**: get an alert when an important device goes offline or comes back
@@ -38,10 +38,11 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Research-scanner tagging**: Shodan, Censys, Shadowserver and others are verified by forward-confirmed reverse DNS (plus GreyNoise) and shown in grey
 - **IPS view**: what your UDM's intrusion prevention recognized (Mirai, router exploits, SSH scans...)
 - **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
+- **Honeypot sensors**: add a Raspberry Pi, Linux box or container running Cowrie (SSH/Telnet) with optional FTP and web decoys from a one-line command; every attacker session is recorded and every captured file is analysed statically (never run)
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
 - **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
 - **Guided setup** wizard on first run, and lateral-movement detection
-- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data
+- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data. It knows what LanPulse is and where each feature lives, and sees live honeypot, DNS, services, traffic and vulnerability data
 - **Daily summary** to any alert channel
 - **Device traffic on the attack map**: live arcs showing where each device connects (Google, Netflix, Amazon...), top destinations and busiest devices, and an alert when a device contacts an IP that attacked you
 - **Security warnings** for risky services: Telnet, VNC, FTP, exposed databases, Docker API, old SSH, HTTP-only admin pages
@@ -271,6 +272,13 @@ Old Windows is checked as an operating system too (Windows NT, 2000, XP, Server 
 updates are installed, so these list only flaws with a Metasploit module or on CISA's exploited list, marked
 "patch level unknown". Newer Windows is left out for the same reason: it is patched monthly.
 
+**Operating system labels.** nmap can only fingerprint a device from an answering port, so a PC that hides behind its
+firewall gets no OS guess rather than a wrong one. nmap's database also has no Windows 11 and often calls one "Windows
+Server 2019"; when that guess comes with signs of a PC (Windows' default DESKTOP-/LAPTOP- name, or port 7680) LanPulse
+shows "Windows 10 or 11" instead. If it is still wrong, open the device and choose the real system under **Customize >
+Operating system** (Windows 11 to XP and Server 2003-2022, Ubuntu, Debian, Raspberry Pi OS and other Linux, macOS, iOS,
+Android and more). What you pick is kept and is not overwritten by scans.
+
 ### Confirmed findings (active checks)
 
 Version matching can't see which patches are installed, so on **Thorough scans** LanPulse also runs nmap's safe
@@ -324,6 +332,13 @@ strings, addresses and wallets inside, and family hints. Captured files are neve
 and addresses are shown defanged. The built-in honeypot above keeps working with or without a sensor. Put the sensor on
 its own network away from your LAN; see [tools/pi-honeypot/README.md](tools/pi-honeypot/README.md).
 
+In **Add sensor > Customize** you choose the ports, the fake hostname and OS, which logins work, resource limits and how
+long data is kept, and you can switch on two more decoys that the sensor runs itself: an **FTP** server (default port
+2121) and a **web** server (default port 2180) that accept logins and uploads and keep what is sent, so you can see
+what attackers try to drop. They are small, read-only-by-design programs (no outbound connections, no shell, file and
+store size caps, hard time limits per connection) that write the same session records as Cowrie, so everything shows up
+in the same Sessions and Samples lists. Ports are 1024 or higher; forward the real port (21, 80) to them on your router.
+
 ![Honeypot](docs/images/honeypot.png)
 
 ## AI Security Analyst
@@ -338,9 +353,13 @@ The wand button in the top bar opens a chat that answers questions about your ne
 | OpenAI-compatible | `http://localhost:1234/v1` | LM Studio, vLLM, LocalAI, Groq, OpenRouter, OpenAI... needs an API key if hosted |
 | Anthropic | `https://api.anthropic.com` | Needs an API key; a network summary is sent to Anthropic |
 
-The analyst is strictly read-only: it sees a capped summary of what LanPulse already knows (risk profile, devices and
-ports, vulnerabilities, threats, recent events), cites it in answers, and can only explain; for fixes it gives steps for
-you to run. Device names and banners are treated as untrusted data. With a cloud provider, that summary is sent to
+The analyst is strictly read-only: it is given a built-in guide to everything LanPulse does (so "what can it do?" and
+"where do I find...?" questions work) plus a capped summary of what LanPulse already knows (risk profile, devices and
+ports, vulnerabilities, threats, recent events). Depending on your question it also gets the detail for that area:
+honeypot credentials, top sources, sensor sessions and captured samples; DNS; services; device traffic; inside-LAN
+threats; vulnerabilities. It cites what it was given and can only explain; for fixes it gives steps for you to run.
+With Ollama, LanPulse asks for a larger context window so none of this is silently cut off. The suggested questions are
+hidden until you tap **Show suggested questions**. Device names and banners are treated as untrusted data. With a cloud provider, that summary is sent to
 them with each question, and the panel says so. API keys are stored on the LanPulse box and masked in settings.
 
 ![AI Security Analyst](docs/images/analyst.png)
@@ -375,9 +394,10 @@ auto-refreshing. Press **Esc** to exit.
 
 ## Themes
 
-**Settings → Appearance** offers eight looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
+**Settings → Appearance** offers nine looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
 **Ember** (warm black, copper glow), **Deep Ocean** (sea-green depths, aqua), **80s Hacker** (green phosphor on black),
-**Midnight Synthwave** (neon magenta and cyan), **Frost** (cool slate, ice blue) and **Sand** (warm paper, terracotta).
+**Midnight Synthwave** (neon magenta and cyan), **Frost** (cool slate, ice blue), **Sand** (warm paper, terracotta) and
+**Crimson Noir** (pure black, white text, one red accent, square corners).
 The choice is saved in your browser.
 
 ## Red Team
