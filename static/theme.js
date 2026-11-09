@@ -13,6 +13,7 @@ const THEMES = [
   {id: "ocean", name: "Deep Ocean", sub: "sea-green depths, aqua", sw: ["#041a1f", "#22d3c5", "#4ade80"]},
   {id: "frost", name: "Frost", sub: "cool slate, ice blue", sw: ["#242933", "#88c0d0", "#a3be8c"]},
   {id: "sand", name: "Sand", sub: "warm paper, terracotta", sw: ["#f4efe6", "#c2562a", "#3f8a4f"]},
+  {id: "noir", name: "Crimson Noir", sub: "pure black, one red accent", sw: ["#0a0a0b", "#ff3b4e", "#f2f2f3"]},
 ];
 
 function currentTheme() {
