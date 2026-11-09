@@ -360,7 +360,8 @@ function pushArc(ev) {
   if (!tChart || !home || ev.lat == null || (hideScanners && isScanner(ev))) return;
   if (typeof showAttacks === "function" && !showAttacks()) return;
   arcs.push({at: Date.now(), coords: [[ev.lon, ev.lat], home],
-    lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : isReached(ev) ? "#f43f5e" : "#38bdf8"}});
+    lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : isReached(ev) ? "#f43f5e" : "#ef4444",
+      ...(typeof showTraffic === "function" && showTraffic() ? {} : {width: 1.9, opacity: 0.8})}});   // attacks alone: make them easy to follow
   if (arcs.length > 40) arcs = arcs.slice(-40);
   drawArcs();
 }
@@ -377,6 +378,17 @@ setInterval(() => {
   arcs = arcs.filter((a) => Date.now() - a.at < 7000);
   if (arcs.length !== before && view === "threats") drawArcs();
 }, 1000);
+// With only the Attacks layer on, keep the map alive on a quiet network: replay recent attacks, a few arcs at a time.
+// Real new attacks still draw the moment they arrive; this only fills the gaps.
+let replayIdx = 0;
+setInterval(() => {
+  if (view !== "threats" || !tChart || !tSummary || document.hidden) return;
+  if (typeof showTraffic === "function" && showTraffic()) return;
+  if (arcs.length >= 3) return;
+  const list = (tSummary.recent || []).filter((e) => e.lat != null && !(hideScanners && isScanner(e)));
+  if (!list.length) return;
+  pushArc(list[replayIdx++ % list.length]);
+}, 1500);
 
 /* ------------------------------------------------------------ map navigation */
 const REGIONS = {world: [[12, 22], 1.15], na: [[-98, 42], 3.2], sa: [[-60, -20], 3], eu: [[13, 51], 5], af: [[20, 2], 2.9],

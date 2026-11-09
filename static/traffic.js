@@ -70,7 +70,7 @@ function onFlows(msg) {
 function pushFlowArc(e) {
   const home = homeCoord();
   if (!tChart || !home || e.lat == null || !showTraffic()) return;
-  const color = e.bad ? "#f43f5e" : devColor(e.src);
+  const color = e.bad ? "#f43f5e" : "#38bdf8";      // data is blue, attacks are red
   flowArcs.push({at: Date.now(), coords: [home, [e.lon, e.lat]], lineStyle: {color, width: e.bad ? 2 : 1}});
   if (flowArcs.length > 30) flowArcs = flowArcs.slice(-30);
   drawFlowArcs();
