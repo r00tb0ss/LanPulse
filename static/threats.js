@@ -360,7 +360,7 @@ function pushArc(ev) {
   if (!tChart || !home || ev.lat == null || (hideScanners && isScanner(ev))) return;
   if (typeof showAttacks === "function" && !showAttacks()) return;
   arcs.push({at: Date.now(), coords: [[ev.lon, ev.lat], home],
-    lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : isReached(ev) ? "#f43f5e" : "#38bdf8",
+    lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : isReached(ev) ? "#f43f5e" : "#ef4444",
       ...(typeof showTraffic === "function" && showTraffic() ? {} : {width: 1.9, opacity: 0.8})}});   // attacks alone: make them easy to follow
   if (arcs.length > 40) arcs = arcs.slice(-40);
   drawArcs();
