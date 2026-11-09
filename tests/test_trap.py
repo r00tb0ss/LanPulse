@@ -201,6 +201,23 @@ class Web(Base):
         self.assertIn(hashlib.sha256(b"put-body").hexdigest(), shas)
         self.assertIn(hashlib.sha256(b"hello" + b"A" * 70000).hexdigest(), shas)
 
+    def test_trickled_headers_cannot_hold_a_slot(self):
+        old = trap.HTTP_LIMIT
+        trap.HTTP_LIMIT = 1
+        self.addCleanup(setattr, trap, "HTTP_LIMIT", old)
+        port = self.server()
+        sock = socket.create_connection(("127.0.0.1", port), timeout=5)
+        self.addCleanup(sock.close)
+        sock.sendall(b"GET / HTTP/1.1\r\n")
+        end = time.time() + 3
+        while time.time() < end:                                            # keeps trickling; the 1 s limit must still cut it off
+            try:
+                sock.sendall(b"X-a: b\r\n")
+            except OSError:
+                break
+            time.sleep(0.2)
+        self.assertEqual(self.gate.n, 0)
+
     def test_junk_and_oversized_bodies(self):
         self.store.max_file = 2000
         old = trap.MEM_BODY

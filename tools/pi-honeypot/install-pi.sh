@@ -218,6 +218,7 @@ if [ "$TRAP_ON" = yes ]; then
     echo "lanpulse-trap.py not found next to this script." >&2; exit 1
   fi
   chmod 755 /usr/local/lib/lanpulse-forwarder/lanpulse-trap.py
+  install -d -o "$COWRIE_USER" -g "$COWRIE_USER" "$COWRIE_DIR/var"      # the service may only write here, and it must exist to start
   FTP_P=0; HTTP_P=0
   if [ "$FTP_ON" = yes ]; then FTP_P="$FTP_PORT"; fi
   if [ "$HTTP_ON" = yes ]; then HTTP_P="$HTTP_PORT"; fi
