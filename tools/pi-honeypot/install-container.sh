@@ -4,9 +4,19 @@
 #
 # Runs a Cowrie SSH/Telnet honeypot and the LanPulse forwarder as containers (Docker or Podman with compose).
 #
-#   sudo ./install-container.sh https://192.168.0.208:8080 <sensor-key> [server-certificate-sha256]
+#   sudo ./install-container.sh https://192.168.0.208:8080 <sensor-key> [server-certificate-sha256] [setting=value ...]
 #
 # Everything goes in /opt/lanpulse-sensor. Cowrie listens on host ports 2222 (SSH) and 2223 (Telnet).
+#
+# Optional settings (the Customize section of Add sensor writes these into the command; all have a default):
+#   ssh=off  telnet=off            turn one of the decoys off
+#   ssh_port=N  telnet_port=N      host ports to listen on, 1024-65535 (default 2222 and 2223)
+#   hostname=NAME                  name the attacker sees in the shell prompt (default svr04)
+#   profile=debian12|debian11|ubuntu2204   what uname and the SSH banner claim (default: Cowrie's own)
+#   login=any|random|weak          any = every login works; random = works after 2-5 tries; weak = only common passwords
+#   file_mb=N                      biggest file to keep, 1-5 MB
+#   mem_mb=N  cpu_pct=N            cap Cowrie's memory (64-4096 MB) and CPU (10-100 %)
+# Running the command again with different settings changes them.
 set -euo pipefail
 
 # LanPulse fills these in when it serves this script (Honeypot > Add sensor); empty when run from a git checkout.
@@ -14,9 +24,47 @@ FORWARDER_B64=""
 
 URL="${1:-}"; KEY="${2:-}"; FP="${3:-}"
 [ "$(id -u)" = 0 ] || { echo "Run this with sudo." >&2; exit 1; }
-[ -n "$URL" ] && [ -n "$KEY" ] || { echo "Usage: sudo $0 https://<lanpulse-ip>:8080 <sensor-key> [cert-sha256]" >&2; exit 2; }
+[ -n "$URL" ] && [ -n "$KEY" ] || { echo "Usage: sudo $0 https://<lanpulse-ip>:8080 <sensor-key> [cert-sha256] [setting=value ...]" >&2; exit 2; }
 case "$URL" in http://*|https://*) ;; *) echo "The LanPulse address must start with http:// or https://" >&2; exit 2;; esac
 URL="${URL%/}"
+if [ "$#" -ge 3 ]; then shift 3; else shift "$#"; fi
+
+# ---- settings
+SSH_ON=yes; TELNET_ON=yes; SSH_PORT=2222; TELNET_PORT=2223; FAKE_HOST=svr04; PROFILE=default; LOGIN=default
+FILE_MB=""; MEM_MB=""; CPU_PCT=""
+bad() { echo "Unknown or invalid setting: $1" >&2; exit 2; }
+num() {                                   # name value min max: digits only, within range
+  case "$2" in ''|*[!0-9]*) bad "$1=$2";; esac
+  if [ "${#2}" -gt 6 ] || [ "$2" -lt "$3" ] || [ "$2" -gt "$4" ]; then bad "$1=$2 (use $3 to $4)"; fi
+}
+for kv in "$@"; do
+  k="${kv%%=*}"; v="${kv#*=}"
+  case "$k" in
+    ssh)         case "$v" in on) SSH_ON=yes;; off) SSH_ON=no;; *) bad "$kv";; esac;;
+    telnet)      case "$v" in on) TELNET_ON=yes;; off) TELNET_ON=no;; *) bad "$kv";; esac;;
+    ssh_port)    num "$k" "$v" 1024 65535; SSH_PORT="$v";;
+    telnet_port) num "$k" "$v" 1024 65535; TELNET_PORT="$v";;
+    hostname)    case "$v" in ''|-*|*-|[0-9]*|*[!a-z0-9-]*) bad "$kv";; esac
+                 [ "${#v}" -le 32 ] || bad "$kv"; FAKE_HOST="$v";;
+    profile)     case "$v" in default|debian12|debian11|ubuntu2204) PROFILE="$v";; *) bad "$kv";; esac;;
+    login)       case "$v" in default|any|random|weak) LOGIN="$v";; *) bad "$kv";; esac;;
+    file_mb)     num "$k" "$v" 1 5; FILE_MB="$v";;
+    mem_mb)      num "$k" "$v" 64 4096; MEM_MB="$v";;
+    cpu_pct)     num "$k" "$v" 10 100; CPU_PCT="$v";;
+    keep_days|disk_mb) ;;                 # captures live in Docker volumes; clean those up with docker if you need to
+    *)           bad "$kv";;
+  esac
+done
+if [ "$SSH_ON" = no ] && [ "$TELNET_ON" = no ]; then bad "ssh=off telnet=off (leave one on)"; fi
+if [ "$SSH_ON" = yes ] && [ "$TELNET_ON" = yes ] && [ "$SSH_PORT" = "$TELNET_PORT" ]; then bad "the SSH and Telnet ports must differ"; fi
+
+case "$PROFILE" in
+  debian12)   SSHV="SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u2"; KERNEL="6.1.0-18-amd64"; BUILD="#1 SMP PREEMPT_DYNAMIC Debian 6.1.76-1 (2024-02-01)";;
+  debian11)   SSHV="SSH-2.0-OpenSSH_8.4p1 Debian-5+deb11u3"; KERNEL="5.10.0-28-amd64"; BUILD="#1 SMP Debian 5.10.209-2 (2024-01-31)";;
+  ubuntu2204) SSHV="SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6"; KERNEL="5.15.0-91-generic"; BUILD="#101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023";;
+  *)          SSHV=""; KERNEL=""; BUILD="";;
+esac
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DIR=/opt/lanpulse-sensor
 
@@ -29,7 +77,7 @@ if [ -z "$FP" ] && [ "${URL#https://}" != "$URL" ]; then
   HOSTPORT="${URL#https://}"; HOSTPORT="${HOSTPORT%%/*}"
   case "$HOSTPORT" in *:*) ;; *) HOSTPORT="$HOSTPORT:443";; esac
   FP="$(openssl s_client -connect "$HOSTPORT" </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d ':' || true)"
-  [ -n "$FP" ] && echo "==> Trusting the LanPulse certificate with fingerprint: $FP"
+  if [ -n "$FP" ]; then echo "==> Trusting the LanPulse certificate with fingerprint: $FP"; fi
 fi
 
 install -d -m 0755 "$DIR"
@@ -51,22 +99,52 @@ SENSOR_NAME=$(hostname)
 ENV
 umask 022
 
-cat > "$DIR/docker-compose.yml" <<'YML'
+# Pieces of the compose file that depend on the settings.
+NL=$'\n'
+PORTS=""; COWENV=""; COWVOL=""; LIMITS=""
+if [ "$SSH_ON" = yes ]; then PORTS="${PORTS}      - \"$SSH_PORT:2222\"$NL"; fi
+if [ "$TELNET_ON" = yes ]; then PORTS="${PORTS}      - \"$TELNET_PORT:2223\"$NL"; fi
+COWENV="${COWENV}      COWRIE_SSH_ENABLED: \"$SSH_ON\"$NL      COWRIE_TELNET_ENABLED: \"$TELNET_ON\"$NL"
+COWENV="${COWENV}      COWRIE_HONEYPOT_HOSTNAME: \"$FAKE_HOST\"$NL"
+if [ -n "$FILE_MB" ]; then COWENV="${COWENV}      COWRIE_HONEYPOT_DOWNLOAD_LIMIT_SIZE: \"$((FILE_MB * 1048576))\"$NL"; fi
+if [ "$LOGIN" = random ]; then
+  COWENV="${COWENV}      COWRIE_HONEYPOT_AUTH_CLASS: \"AuthRandom\"$NL      COWRIE_HONEYPOT_AUTH_CLASS_PARAMETERS: \"2, 5, 10\"$NL"
+fi
+if [ -n "$KERNEL" ]; then
+  COWENV="${COWENV}      COWRIE_SHELL_KERNEL_VERSION: \"$KERNEL\"$NL      COWRIE_SHELL_KERNEL_BUILD_STRING: \"$BUILD\"$NL"
+  COWENV="${COWENV}      COWRIE_SHELL_HARDWARE_PLATFORM: \"x86_64\"$NL      COWRIE_SHELL_OPERATING_SYSTEM: \"GNU/Linux\"$NL"
+  COWENV="${COWENV}      COWRIE_SSH_VERSION: \"$SSHV\"$NL"
+fi
+if [ -n "$MEM_MB" ]; then LIMITS="${LIMITS}    mem_limit: ${MEM_MB}m$NL"; fi
+if [ -n "$CPU_PCT" ]; then LIMITS="${LIMITS}    cpus: \"$((CPU_PCT / 100)).$(printf '%02d' $((CPU_PCT % 100)))\"$NL"; fi
+
+# Which logins work: Cowrie reads etc/userdb.txt ("name:x:password", * matches anything).
+rm -f "$DIR/userdb.txt"
+case "$LOGIN" in
+  any)  printf '# LanPulse: every login works\n*:x:*\n' > "$DIR/userdb.txt";;
+  weak) { echo "# LanPulse: only common default logins work"
+          printf '%s\n' root:x:root root:x:admin root:x:password root:x:123456 root:x:toor admin:x:admin admin:x:password admin:x:1234 \
+            user:x:user pi:x:raspberry ubnt:x:ubnt support:x:support guest:x:guest test:x:test ubuntu:x:ubuntu
+        } > "$DIR/userdb.txt";;
+esac
+if [ -f "$DIR/userdb.txt" ]; then
+  chmod 644 "$DIR/userdb.txt"
+  COWVOL="      - ./userdb.txt:/cowrie/cowrie-git/etc/userdb.txt:ro$NL"
+fi
+
+cat > "$DIR/docker-compose.yml" <<YML
 services:
   cowrie:
     image: cowrie/cowrie:latest
     restart: unless-stopped
     ports:
-      - "2222:2222"
-      - "2223:2223"
-    environment:
-      COWRIE_TELNET_ENABLED: "yes"
-      COWRIE_OUTPUT_JSONLOG_ENABLED: "yes"
+${PORTS}    environment:
+${COWENV}      COWRIE_OUTPUT_JSONLOG_ENABLED: "yes"
     volumes:
       - cowrie-var:/cowrie/cowrie-git/var
-    security_opt:
+${COWVOL}    security_opt:
       - no-new-privileges:true
-
+${LIMITS}
   forwarder:
     image: python:3.12-slim
     restart: unless-stopped
@@ -97,10 +175,13 @@ echo "==> Starting the containers"
 cd "$DIR"
 $COMPOSE up -d
 
+IP="$(hostname -I | awk '{print $1}')"
+echo
+echo "Done. This sensor looks like '$FAKE_HOST' and listens on:"
+if [ "$SSH_ON" = yes ]; then echo "  SSH    port $SSH_PORT    (test: ssh -p $SSH_PORT root@$IP)"; else echo "  SSH    off"; fi
+if [ "$TELNET_ON" = yes ]; then echo "  Telnet port $TELNET_PORT    (test: telnet $IP $TELNET_PORT)"; else echo "  Telnet off"; fi
 cat <<DONE
-
-Done. Test from another computer:   ssh -p 2222 root@$(hostname -I | awk '{print $1}')   (any password)
 Logs:   cd $DIR && $COMPOSE logs -f        Stop:   cd $DIR && $COMPOSE down
-Next: forward ports 22 and 23 from the internet to this machine's 2222 and 2223 on your router, and keep this machine
+Next: forward ports 22 and 23 from the internet to the ports above on your router, and keep this machine
 off your main LAN (a container shares the host's kernel).
 DONE
