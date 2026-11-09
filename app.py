@@ -680,6 +680,21 @@ def wake_on_lan(mac: str, broadcast: str):
 
 
 # --------------------------------------------------------------------------- core
+# Operating systems you can pick for a device when the scan can't tell (Customize > Operating system).
+OS_GROUPS = {"Windows": ["Windows 11", "Windows 10", "Windows 8.1", "Windows 8", "Windows 7", "Windows Vista", "Windows XP", "Windows 2000", "Windows Server 2022", "Windows Server 2019", "Windows Server 2016", "Windows Server 2012 R2", "Windows Server 2012", "Windows Server 2008 R2", "Windows Server 2008", "Windows Server 2003"], "Linux": ["Ubuntu 24.04", "Ubuntu 22.04", "Ubuntu 20.04", "Ubuntu 18.04", "Debian 12", "Debian 11", "Debian 10", "Raspberry Pi OS", "Fedora", "Red Hat / CentOS / Rocky / Alma", "Arch Linux", "openSUSE / SUSE", "Alpine Linux", "Other Linux"], "Other": ["macOS", "iOS / iPadOS", "Android", "ChromeOS", "FreeBSD", "OpenWrt", "Other"]}
+OS_CHOICES = {label: (g if g != "Other" else label) for g, labels in OS_GROUPS.items() for label in labels}
+
+
+def apply_os_override(d: dict) -> None:
+    """A device whose OS you chose keeps it: scans can't overwrite what you told LanPulse."""
+    label = d.get("os_override")
+    if label not in OS_CHOICES:
+        return
+    d["os"], d["os_accuracy"], d["os_family"] = label, 100, OS_CHOICES[label]
+    d["os_type"] = "phone" if label in ("iOS / iPadOS", "Android") else "router" if label == "OpenWrt" else "general purpose"
+    d["os_cpe"], d["os_hint"] = [], label
+
+
 DEVICE_DEFAULTS = {"name": "", "notes": "", "type_override": "", "trusted": False, "watched": False,
                    "findings": [], "ports": [], "ip_history": [], "os": "", "os_accuracy": 0, "os_type": "",
                    "os_family": "", "deep_scanned_at": 0, "scanning": False, "hostname": "", "vendor": "",
@@ -1176,6 +1191,7 @@ class LanPulse:
                             tail = host_up[len(pre):]
                             if host_up.startswith(pre) and len(tail) == 7 and tail.isalnum():
                                 d["os"], d["os_type"], d["os_family"] = "Windows 10 or 11 (guessed from its default computer name)", "general purpose", "Windows"
+                    apply_os_override(d)                 # what you picked wins over any scan guess
                     if info["vendor"] and (not d.get("vendor") or d["vendor"].startswith("Private")):
                         d["vendor"] = info["vendor"]
                     self.reclassify(d)
@@ -1353,6 +1369,19 @@ def build_app(nm: LanPulse) -> FastAPI:
             if t != d.get("type_override", ""):
                 said.append(f"set its type to {t}" if t else "set its type back to auto-detect")
             d["type_override"] = t
+        if "os" in body:
+            o = "" if body["os"] in ("auto", "", None) else str(body["os"])[:40]
+            if o and o not in OS_CHOICES:
+                return JSONResponse({"error": "Unknown operating system"}, 400)
+            if o != d.get("os_override", ""):
+                d["os_override"] = o
+                if o:
+                    apply_os_override(d)
+                    nm.reclassify(d)
+                    said.append(f"set its operating system to {o}")
+                else:
+                    nm.enqueue(key)                 # scan again to get the detected OS back
+                    said.append("set its operating system back to auto-detect")
         words = {"trusted": ("marked it trusted", "marked it not trusted"), "watched": ("started watching it", "stopped watching it"),
                  "scans_ok": ("allowed it to scan the network", "stopped allowing it to scan"),
                  "thorough": ("turned on thorough scans", "turned off thorough scans")}

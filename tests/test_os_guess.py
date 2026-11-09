@@ -22,6 +22,34 @@ class NoPortsNoWindowsGuess(unittest.TestCase):
         self.assertEqual(vulns.windows_version(d)[0], "Windows XP")
 
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+class PickedOs(unittest.TestCase):
+    def test_a_picked_old_windows_is_honoured_even_without_ports(self):
+        d = {"os": "Windows XP", "os_accuracy": 100, "os_hint": "Windows XP", "os_override": "Windows XP", "ports": []}
+        self.assertEqual(vulns.windows_version(d)[0], "Windows XP")
+
+    def test_a_picked_new_windows_gets_no_old_windows_cves(self):
+        d = {"os": "Windows 11", "os_accuracy": 100, "os_hint": "Windows 11", "os_override": "Windows 11", "ports": [{"port": 445}]}
+        self.assertIsNone(vulns.windows_version(d))
+
+    def test_page_and_server_offer_the_same_systems(self):
+        import ast
+        app_src = open(os.path.join(ROOT, "app.py")).read()
+        start = app_src.index("OS_GROUPS = ") + len("OS_GROUPS = ")
+        groups = ast.literal_eval(app_src[start:app_src.index("\n", start)])
+        js = open(os.path.join(ROOT, "static", "app.js")).read()
+        for labels in groups.values():
+            for label in labels:
+                self.assertIn(json_quote(label), js, label)
+
+
+def json_quote(s):
+    import json
+    return json.dumps(s)
+
+
 class SilentHostGetsNoGuess(unittest.TestCase):
     def test_nmap_deep_drops_the_guess_when_no_port_answers(self):
         src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")).read()

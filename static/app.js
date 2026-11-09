@@ -369,6 +369,13 @@ function renderPanel(force) {
   const typeOpts = [`<option value="auto">Auto-detect (${esc(TYPES[d.type_auto]?.label || d.type_auto)})</option>`]
     .concat(Object.entries(TYPES).filter(([k]) => k !== "internet")
       .map(([k, v]) => `<option value="${k}" ${d.type_override === k ? "selected" : ""}>${esc(v.label)}</option>`)).join("");
+  const OS_PICK = {
+    Windows: ["Windows 11", "Windows 10", "Windows 8.1", "Windows 8", "Windows 7", "Windows Vista", "Windows XP", "Windows 2000", "Windows Server 2022", "Windows Server 2019", "Windows Server 2016", "Windows Server 2012 R2", "Windows Server 2012", "Windows Server 2008 R2", "Windows Server 2008", "Windows Server 2003"],
+    Linux: ["Ubuntu 24.04", "Ubuntu 22.04", "Ubuntu 20.04", "Ubuntu 18.04", "Debian 12", "Debian 11", "Debian 10", "Raspberry Pi OS", "Fedora", "Red Hat / CentOS / Rocky / Alma", "Arch Linux", "openSUSE / SUSE", "Alpine Linux", "Other Linux"],
+    Other: ["macOS", "iOS / iPadOS", "Android", "ChromeOS", "FreeBSD", "OpenWrt", "Other"],
+  };
+  const osOpts = `<option value="auto">Auto-detect${d.os_override ? "" : d.os ? ` (${esc(d.os)})` : ""}</option>`
+    + Object.entries(OS_PICK).map(([g, list]) => `<optgroup label="${g}">${list.map(o => `<option value="${esc(o)}" ${d.os_override === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</optgroup>`).join("");
 
   $("panelBody").innerHTML = `
     <div class="p-head" style="--c:${t.color}">
@@ -422,9 +429,10 @@ function renderPanel(force) {
       ${ports.length ? `<table class="ports"><tr><th>Port</th><th>Service</th><th>Product</th></tr>${portRows}</table>`
         : `<div class="muted">${d.deep_scanned_at ? "No open TCP ports found." : "Not scanned yet."}</div>`}
     </details>
-    <details class="p-sec fold" data-fold="customize" ${FOLD.customize ? "open" : ""}><summary><h4>Customize</h4><span class="hint muted">name, type, notes</span></summary><div class="form">
+    <details class="p-sec fold" data-fold="customize" ${FOLD.customize ? "open" : ""}><summary><h4>Customize</h4><span class="hint muted">name, type, OS, notes</span></summary><div class="form">
       <label for="eName">Display name</label><input id="eName" maxlength="64" placeholder="${esc(d.hostname || d.vendor || "e.g. Living room TV")}" value="${esc(d.name)}">
       <label for="eType">Device type</label><select id="eType">${typeOpts}</select>
+      <label for="eOs">Operating system</label><select id="eOs">${osOpts}</select>
       <label for="eNotes">Notes</label><textarea id="eNotes" maxlength="2000" placeholder="Location, owner, purpose…">${esc(d.notes)}</textarea>
       <div class="btns">
         <button class="btn primary" id="bSave"><i class="fa-solid fa-floppy-disk"></i>Save</button>
@@ -438,7 +446,7 @@ function renderPanel(force) {
     return r;
   };
   $("bSave").onclick = async () => {
-    if (await post({name: $("eName").value.trim(), type: $("eType").value, notes: $("eNotes").value})) {
+    if (await post({name: $("eName").value.trim(), type: $("eType").value, os: $("eOs").value, notes: $("eNotes").value})) {
       document.activeElement.blur(); toast("Saved");
     }
   };
