@@ -76,6 +76,35 @@ the one that lets it read Cowrie's files, and talks only to your LanPulse server
 
 (The Add sensor command for containers does the same thing in `/opt/lanpulse-sensor`.)
 
+## Customizing a sensor
+
+In **Honeypot > Captured attacks and malware > Sensors > Add sensor**, open **Customize (optional)** before you click
+Create. Whatever you set is written into the one-line command as `setting=value` words, so there is nothing else to
+do on the sensor. Leave a box empty to keep its default. If you install by hand, put the same words after the key
+and certificate fingerprint (use `''` for the fingerprint if you do not pin one):
+`sudo bash install-pi.sh https://192.168.0.208:8080 <key> '' ssh_port=2200 hostname=web01`.
+
+| Setting | What it does | Default |
+|---|---|---|
+| `ssh=off`, `telnet=off` | Turn one of the two decoys off (one must stay on). | both on |
+| `ssh_port=N`, `telnet_port=N` | Ports to listen on, 1024-65535. Forward 22 and 23 to these on your router. | 2222, 2223 |
+| `hostname=NAME` | The name in the attacker's shell prompt and `uname -a`. | `svr04` |
+| `profile=debian12` / `debian11` / `ubuntu2204` | Makes the SSH banner and `uname` claim that system. | Cowrie's own (old Debian) |
+| `login=any` | Every username and password gets in (most sessions, most captured malware). | Cowrie's default (almost any login) |
+| `login=random` | Logins fail for the first 2 to 5 tries, then work. Looks more like a real machine. | |
+| `login=weak` | Only common default logins work (`root/root`, `admin/admin`, `pi/raspberry`, ...). | |
+| `file_mb=N` | Biggest file kept, 1 to 5 MB (LanPulse stores nothing larger). | Cowrie's limit |
+| `mem_mb=N`, `cpu_pct=N` | Cap Cowrie's memory (64-4096 MB) and CPU (10-100 %). Useful on a small Pi. | no cap |
+| `keep_days=N` | Delete captured files, replay logs and old logs after N days (Pi install). | 30 |
+| `disk_mb=N` | Keep captures under N MB by deleting the oldest first (Pi install; checked every hour). | no cap |
+
+Run the command again with different settings to change them. The Pi install rewrites `cowrie.cfg` when you pass
+settings (a file you edited by hand is kept as `cowrie.cfg.bak`) and restarts Cowrie. On a container sensor the
+captures live in Docker volumes, so `keep_days` and `disk_mb` do not apply there.
+
+The hostname and system are only what the attacker is told. They do not make the sensor safer or more dangerous;
+the advice in section 1 stays the same.
+
 ## 3. Let the internet in
 
 On your router, forward **TCP 22 to the sensor's port 2222** and **TCP 23 to its port 2223**. (Move your own
