@@ -8,13 +8,24 @@
   };
   const open = () => $("aiDrawer").classList.contains("hidden") === false;
 
+  const SUGG_KEY = "lp_ai_sugg";           // suggested questions are hidden until asked for
+  const suggOpen = () => { try { return localStorage.getItem(SUGG_KEY) === "1"; } catch (e) { return false; } };
+  function renderSugg() {
+    const box = $("aiSugg");
+    if (!st || !st.enabled) { box.innerHTML = ""; return; }
+    const on = suggOpen();
+    box.innerHTML = `<button type="button" class="ai-chip" id="aiSuggTog">${on ? "Hide" : "Show"} suggested questions</button>`
+      + (on ? (st.suggested || []).map(q => `<button type="button" class="ai-chip ai-q">${esc(q)}</button>`).join("") : "");
+    $("aiSuggTog").onclick = () => { try { localStorage.setItem(SUGG_KEY, on ? "0" : "1"); } catch (e) { /* private mode */ } renderSugg(); };
+    box.querySelectorAll(".ai-q").forEach(b => b.onclick = () => ask(b.textContent));
+  }
+
   async function refresh() {
     st = await api("/api/ai", "GET");
     if (!st) return;
     $("aiSub").textContent = st.enabled ? `${st.model} · ${st.local ? "runs on your network" : "cloud provider"}`
                                         : "explains your network — never changes anything";
-    $("aiSugg").innerHTML = st.enabled ? (st.suggested || []).map(q => `<button type="button" class="ai-chip">${esc(q)}</button>`).join("") : "";
-    $("aiSugg").querySelectorAll(".ai-chip").forEach(b => b.onclick = () => ask(b.textContent));
+    renderSugg();
     if (!st.enabled) { showSetup(); if (!$("aiLog").children.length) note("The analyst is off. Choose a provider above to turn it on."); }
   }
 

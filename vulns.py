@@ -115,7 +115,7 @@ def windows_version(d: dict):
     """(label, NVD products) for an old Windows the scan identified, or None. Newer Windows (8, 10, 11,
     Server 2012+) is left out: it gets monthly patches, and a scan can't tell which ones are installed.
     A device with no open ports gives nothing to go on (nmap's guess from a fully filtered host is noise), so None."""
-    if not d.get("ports"):
+    if not d.get("ports") and not d.get("os_override"):     # an OS you picked yourself is not a guess
         return None
     sources = [" | ".join(d.get("os_cpe") or []), d.get("os", "") if (d.get("os_accuracy") or 0) >= 85 else "",
                d.get("os_hint", "")]
@@ -129,6 +129,24 @@ def windows_version(d: dict):
             if len({f[0].replace(" R2", "") for f in found}) == 1:
                 return found[0]
     return None
+
+
+SERVERISH = ("windows server 2016", "windows server 2019", "windows server 2022", "windows 10", "windows 11")
+
+
+def refine_windows_os(d: dict) -> None:
+    """nmap's database has no Windows 11 and files Windows 10/11 under "Server 2016/2019" or "Windows 10". When such a
+    guess comes with signs of a PC (Windows' default DESKTOP-/LAPTOP- name, or port 7680, the Windows Update
+    peer-to-peer port that only client Windows opens), say so instead of showing a server. Never touches an OS the
+    user picked."""
+    os_ = d.get("os") or ""
+    if d.get("os_override") or os_.startswith("Windows 10 or 11") or not any(s in os_.lower() for s in SERVERISH):
+        return
+    host = (d.get("hostname") or "").split(".")[0].upper()
+    named = any(host.startswith(p) and len(host) == len(p) + 7 and host[len(p):].isalnum() for p in ("DESKTOP-", "LAPTOP-"))
+    client_port = any(p.get("port") == 7680 for p in d.get("ports") or [])
+    if named or client_port:
+        d["os"] = f"Windows 10 or 11 (nmap guessed {os_[:50]}, which it can't tell apart)"
 
 
 def rank_key(f: dict):
