@@ -22,5 +22,12 @@ class NoPortsNoWindowsGuess(unittest.TestCase):
         self.assertEqual(vulns.windows_version(d)[0], "Windows XP")
 
 
+class SilentHostGetsNoGuess(unittest.TestCase):
+    def test_nmap_deep_drops_the_guess_when_no_port_answers(self):
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")).read()
+        self.assertIn('if not info["ports"]:            # nmap fingerprints', src)
+        self.assertIn('"DESKTOP-", "LAPTOP-"', src)
+
+
 if __name__ == "__main__":
     unittest.main()
