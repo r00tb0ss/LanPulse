@@ -313,6 +313,17 @@ ESP32 honeypot, can post events to `/api/honeypot/ingest` using the ingest key s
 The honeypot is low-interaction: it speaks just enough of each protocol to collect logins, never gives a shell or real
 access, caps its logging under floods and escapes everything it records.
 
+### Honeypot sensors: attacker sessions and malware analysis (optional)
+
+For a more realistic trap, add a **sensor**: a Raspberry Pi, any Linux box or a container running
+[Cowrie](https://github.com/cowrie/cowrie), a fake SSH/Telnet server that lets attackers "log in" and type commands.
+On the Honeypot tab open **Captured attacks and malware > Sensors > Add sensor**, pick the kind and paste the one-line
+command on the sensor. LanPulse then shows every attacker **session** (logins tried, a command-by-command replay, tags
+mapped to MITRE ATT&CK) and every **file** they drop, analysed statically: hashes, file type and CPU, entropy, readable
+strings, addresses and wallets inside, and family hints. Captured files are never run and never offered for download,
+and addresses are shown defanged. The built-in honeypot above keeps working with or without a sensor. Put the sensor on
+its own network away from your LAN; see [tools/pi-honeypot/README.md](tools/pi-honeypot/README.md).
+
 ![Honeypot](docs/images/honeypot.png)
 
 ## AI Security Analyst

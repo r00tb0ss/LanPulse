@@ -324,6 +324,7 @@ class Store(unittest.TestCase):
         a = self.h.add_sensor("pi", "container")
         self.assertEqual(a["kind"], "container")
         self.h.touch(a["id"], "10.0.0.9", sessions=1)
+        self.h.touch(a["id"], "10.0.0.10")                                        # a hello right after: ignored, no write
         row = self.h.sensors()[0]
         self.assertEqual((row["state"], row["sessions"], row["last_ip"]), ("connected", 1, "10.0.0.9"))
         self.h.db.execute("UPDATE sensors SET last_seen=?", (time.time() - 3600,))

@@ -350,6 +350,7 @@ class HoneyAnalysis:
         self.lock = threading.Lock()
         self._rate: dict[str, list[float]] = {"session": [], "sample": []}
         self._added = 0
+        self._touched: dict[str, float] = {}
         self.dir = d / ("demo-honeypot-samples" if self.demo else "honeypot-samples")
         try:
             self.dir.mkdir(mode=0o700, exist_ok=True)
@@ -416,6 +417,10 @@ class HoneyAnalysis:
         """Notes that a sensor spoke (also called by the periodic hello, so 'connected' shows before any attack)."""
         if not sid:
             return
+        now = time.time()
+        if not sessions and not files and now - self._touched.get(sid, 0) < 5:
+            return                                       # a chatty (or hijacked) sensor can't make LanPulse write constantly
+        self._touched[sid] = now
         with self.lock:
             self.db.execute("UPDATE sensors SET last_seen=?, last_ip=?, sessions=sessions+?, files=files+? WHERE id=?",
                             (time.time(), str(ip)[:45], sessions, files, sid))
