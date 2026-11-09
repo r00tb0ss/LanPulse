@@ -320,12 +320,83 @@ def installer_script(kind: str, tools_dir) -> str | None:
     return script.replace('FORWARDER_B64=""', 'FORWARDER_B64="' + base64.b64encode(fwd).decode() + '"', 1)
 
 
-def install_command(url: str, key: str, kind: str, script: str, fingerprint: str) -> str:
+def install_command(url: str, key: str, kind: str, script: str, fingerprint: str, options=()) -> str:
     """One line to paste on the sensor. It downloads the installer, checks it against the hash shown here, then runs it."""
     sha = hashlib.sha256(script.encode()).hexdigest()
     insecure = "k" if url.startswith("https://") else ""        # LanPulse's certificate is self-signed; the hash below is the check
     return ("f=$(mktemp) && curl -fsS" + insecure + " '" + url + "/api/honeypot/sensor/installer?kind=" + kind + "' -o \"$f\""
-            " && echo '" + sha + "  '\"$f\" | sha256sum -c - && sudo bash \"$f\" '" + url + "' '" + key + "' '" + fingerprint + "'")
+            " && echo '" + sha + "  '\"$f\" | sha256sum -c - && sudo bash \"$f\" '" + url + "' '" + key + "' '" + fingerprint + "'"
+            + "".join(" '" + o + "'" for o in options if SENSOR_WORD.match(o)))
+
+
+# What the Add sensor "Customize" section can change. Only values that differ from the defaults travel in the command, as
+# key=value words after the three usual arguments; the installers check them again before using them.
+SENSOR_PROFILES = ("default", "debian12", "debian11", "ubuntu2204")      # what `uname -a` and the SSH banner claim
+SENSOR_LOGINS = ("default", "any", "random", "weak")                      # which logins the honeypot lets in
+SENSOR_HOSTNAME = re.compile(r"^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$")
+SENSOR_WORD = re.compile(r"^[a-z0-9_]{1,16}=[a-z0-9_-]{1,32}$")          # the only shape that can reach the shell
+
+
+def sensor_options(raw, kind: str = "pi") -> list[str]:
+    """The Customize settings from the Add sensor form, checked and turned into key=value words for the installer.
+    Raises ValueError with a message for the person when a value is wrong. Nothing but [a-z0-9_=-] can come out, so the
+    words are safe in a shell command. Container sensors ignore the disk settings (their files live in Docker volumes)."""
+    if raw in (None, "", {}):
+        return []
+    if not isinstance(raw, dict):
+        raise ValueError("The sensor settings must be an object")
+
+    def num(key, label, lo, hi):
+        v = raw.get(key)
+        if v is None or v == "":
+            return None
+        if isinstance(v, bool) or not re.fullmatch(r"\d{1,6}", str(v).strip()):
+            raise ValueError(f"{label} must be a whole number from {lo} to {hi}")
+        n = int(str(v).strip())
+        if not lo <= n <= hi:
+            raise ValueError(f"{label} must be a whole number from {lo} to {hi}")
+        return n
+
+    def on(key):
+        v = raw.get(key)
+        return True if v is None or v == "" else (v if isinstance(v, bool) else str(v).lower() in ("on", "yes", "true", "1"))
+
+    out = []
+    ssh, telnet = on("ssh"), on("telnet")
+    if not ssh and not telnet:
+        raise ValueError("Turn on at least one of SSH and Telnet")
+    if not ssh:
+        out.append("ssh=off")
+    if not telnet:
+        out.append("telnet=off")
+    sp = num("ssh_port", "The SSH port", 1024, 65535) if ssh else None            # a port typed for a service that is off is ignored
+    tp = num("telnet_port", "The Telnet port", 1024, 65535) if telnet else None
+    if ssh and sp is not None and sp != 2222:
+        out.append(f"ssh_port={sp}")
+    if telnet and tp is not None and tp != 2223:
+        out.append(f"telnet_port={tp}")
+    if ssh and telnet and (sp or 2222) == (tp or 2223):
+        raise ValueError("The SSH and Telnet ports must be different")
+    host = str(raw.get("hostname") or "").strip().lower()
+    if host:
+        if not SENSOR_HOSTNAME.match(host):
+            raise ValueError("The hostname can use letters, digits and dashes, starts with a letter, and is up to 32 characters")
+        if host != "svr04":
+            out.append("hostname=" + host)
+    for key, allowed, label in (("profile", SENSOR_PROFILES, "system"), ("login", SENSOR_LOGINS, "login behavior")):
+        v = str(raw.get(key) or "").strip().lower()
+        if v and v not in allowed:
+            raise ValueError(f"Unknown {label}")
+        if v and v != "default":
+            out.append(f"{key}={v}")
+    for key, label, lo, hi, pi_only in (("file_mb", "The largest file to keep", 1, 5, False), ("mem_mb", "The memory limit", 64, 4096, False),
+                                        ("cpu_pct", "The CPU limit", 10, 100, False), ("keep_days", "Days to keep captures", 1, 365, True),
+                                        ("disk_mb", "The disk limit", 100, 100000, True)):
+        n = num(key, label, lo, hi)
+        if n is None or (pi_only and kind == "container") or (key == "keep_days" and n == 30):
+            continue
+        out.append(f"{key}={n}")
+    return out
 
 
 class HoneyAnalysis:

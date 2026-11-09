@@ -408,5 +408,95 @@ class AddSensor(unittest.TestCase):
         self.assertEqual(ha.cert_fingerprint("/nonexistent"), "")
 
 
+class SensorOptions(unittest.TestCase):
+    def test_defaults_add_nothing(self):
+        self.assertEqual(ha.sensor_options(None), [])
+        self.assertEqual(ha.sensor_options({}), [])
+        self.assertEqual(ha.sensor_options({"ssh": True, "telnet": True, "ssh_port": "2222", "telnet_port": 2223, "hostname": "svr04",
+                                            "profile": "default", "login": "", "keep_days": 30}), [])
+
+    def test_valid_settings(self):
+        got = ha.sensor_options({"ssh_port": "2200", "hostname": "Web01", "profile": "debian12", "login": "random", "file_mb": "3",
+                                 "mem_mb": 256, "cpu_pct": "50", "keep_days": 7, "disk_mb": 500})
+        self.assertEqual(got, ["ssh_port=2200", "hostname=web01", "profile=debian12", "login=random", "file_mb=3", "mem_mb=256",
+                               "cpu_pct=50", "keep_days=7", "disk_mb=500"])
+        self.assertEqual(ha.sensor_options({"telnet": False, "telnet_port": "1"}), ["telnet=off"])     # port of a service that is off is ignored
+        self.assertEqual(ha.sensor_options({"keep_days": 7, "disk_mb": 500, "mem_mb": 200}, "container"), ["mem_mb=200"])
+
+    def test_bad_settings(self):
+        for bad in ({"ssh": False, "telnet": False}, {"ssh_port": "80"}, {"ssh_port": "70000"}, {"ssh_port": "2300", "telnet_port": "2300"},
+                    {"ssh_port": "22x"}, {"ssh_port": True}, {"hostname": "a;b"}, {"hostname": "1abc"}, {"hostname": "-a"}, {"hostname": "a" * 40},
+                    {"profile": "windows"}, {"login": "x"}, {"file_mb": "9"}, {"mem_mb": "1"}, {"cpu_pct": "1e3"}, {"keep_days": "0"},
+                    {"disk_mb": "99"}, "root", ["ssh"]):
+            with self.assertRaises(ValueError, msg=bad):
+                ha.sensor_options(bad)
+
+    def test_only_safe_words_reach_the_command(self):
+        sc = ha.installer_script("pi", TOOLS)
+        cmd = ha.install_command("http://10.0.0.5:8080", "k", "pi", sc, "", ["ssh_port=2200", "x;rm -rf /=1", "a=$(id)", "login=any"])
+        self.assertTrue(cmd.endswith("'k' '' 'ssh_port=2200' 'login=any'"), cmd[-80:])
+        for o in ha.sensor_options({"hostname": "web01", "ssh_port": 2200, "telnet": False, "profile": "ubuntu2204"}):
+            self.assertRegex(o, ha.SENSOR_WORD)
+
+    def _slice(self, kind, start, end):
+        txt = pathlib.Path(TOOLS, "install-" + kind + ".sh").read_text()
+        a = txt.index(start)
+        return txt[a:txt.index(end, a)]
+
+    def _run(self, kind, args, tail=""):
+        if not shutil.which("bash"):
+            self.skipTest("no bash")
+        parse = self._slice(kind, 'if [ "$#" -ge 3 ]; then shift 3', 'HERE="$(cd')
+        script = "set -euo pipefail\nFP=\"\"\nURL=u\nKEY=k\n" + parse + tail
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        return subprocess.run(["bash", "-c", script, "x", "u", "k", "f"] + args, capture_output=True, text=True,
+                              env={"PATH": os.environ.get("PATH", ""), "T": d}), d
+
+    def test_installers_reject_bad_settings(self):
+        for kind in ("pi", "container"):
+            for bad in (["ssh_port=80"], ["hostname=a;b"], ["login=root"], ["ssh=off", "telnet=off"], ["bogus=1"], ["ssh_port=2300", "telnet_port=2300"],
+                        ["mem_mb=99999999999"], ["profile=$(id)"]):
+                r, _ = self._run(kind, bad)
+                self.assertEqual(r.returncode, 2, (kind, bad, r.stderr))
+            r, _ = self._run(kind, ["ssh_port=2200", "login=weak", "hostname=web01", "profile=debian12", "file_mb=3", "mem_mb=256", "cpu_pct=50"])
+            self.assertEqual(r.returncode, 0, (kind, r.stderr))
+
+    def test_pi_installer_writes_the_cowrie_settings(self):
+        tail = ('\nCOWRIE_DIR="$T"; CFG="$COWRIE_DIR/etc/cowrie.cfg"; UDB="$COWRIE_DIR/etc/userdb.txt"; MARK="# Written by the LanPulse installer"\n'
+                'COWRIE_USER=$(id -un); mkdir -p "$COWRIE_DIR/etc"\n'
+                + self._slice("pi", "# The settings file is rewritten", 'if [ -z "$FP" ]') + '\ncat "$CFG"\n')
+        r, d = self._run("pi", ["ssh_port=2200", "telnet=off", "hostname=web01", "profile=debian12", "login=random", "file_mb=3"], tail)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for line in ("hostname = web01", "download_limit_size = 3145728", "auth_class = AuthRandom", "kernel_version = 6.1.0-18-amd64",
+                     "listen_endpoints = tcp:2200:interface=0.0.0.0", "enabled = no", "version = SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u2"):
+            self.assertIn(line, r.stdout)
+        sections = [x for x in r.stdout.splitlines() if x.startswith("[")]
+        self.assertEqual(len(sections), len(set(sections)), sections)      # Cowrie refuses a settings file with a repeated section
+        r, d = self._run("pi", ["login=any"], tail)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(pathlib.Path(d, "etc", "userdb.txt").read_text().splitlines()[1], "*:x:*")
+        r, d = self._run("pi", [], tail)                                   # no settings: defaults, no userdb override
+        self.assertIn("hostname = svr04", r.stdout)
+        self.assertFalse(pathlib.Path(d, "etc", "userdb.txt").exists())
+
+    def test_container_installer_writes_valid_compose(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("no PyYAML")
+        tail = ('\nDIR="$T"\n' + self._slice("container", "# Pieces of the compose file", 'echo "==> Starting the containers"').replace("$(hostname)", "h"))
+        r, d = self._run("container", ["ssh_port=2200", "telnet=off", "hostname=web01", "profile=ubuntu2204", "login=weak", "file_mb=2",
+                                       "mem_mb=256", "cpu_pct=50"], tail)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        cow = yaml.safe_load(pathlib.Path(d, "docker-compose.yml").read_text())["services"]["cowrie"]
+        self.assertEqual(cow["ports"], ["2200:2222"])
+        self.assertEqual(cow["environment"]["COWRIE_TELNET_ENABLED"], "no")
+        self.assertEqual(cow["environment"]["COWRIE_HONEYPOT_HOSTNAME"], "web01")
+        self.assertEqual((cow["mem_limit"], cow["cpus"]), ("256m", "0.50"))
+        self.assertTrue(any(v.startswith("./userdb.txt:") for v in cow["volumes"]))
+        self.assertEqual(pathlib.Path(d, "userdb.txt").read_text().count("# LanPulse"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
