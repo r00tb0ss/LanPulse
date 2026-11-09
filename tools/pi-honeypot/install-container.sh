@@ -11,6 +11,8 @@
 # Optional settings (the Customize section of Add sensor writes these into the command; all have a default):
 #   ssh=off  telnet=off            turn one of the decoys off
 #   ssh_port=N  telnet_port=N      host ports to listen on, 1024-65535 (default 2222 and 2223)
+#   ftp=on  ftp_port=N             also run the FTP decoy that keeps uploaded files (default off; port 2121 and the 20 after it)
+#   http=on  http_port=N           also run the web decoy that logs exploit attempts and keeps uploads (default off; port 2180)
 #   hostname=NAME                  name the attacker sees in the shell prompt (default svr04)
 #   profile=debian12|debian11|ubuntu2204   what uname and the SSH banner claim (default: Cowrie's own)
 #   login=any|random|weak          any = every login works; random = works after 2-5 tries; weak = only common passwords
@@ -21,6 +23,7 @@ set -euo pipefail
 
 # LanPulse fills these in when it serves this script (Honeypot > Add sensor); empty when run from a git checkout.
 FORWARDER_B64=""
+TRAP_B64=""
 
 URL="${1:-}"; KEY="${2:-}"; FP="${3:-}"
 [ "$(id -u)" = 0 ] || { echo "Run this with sudo." >&2; exit 1; }
@@ -31,6 +34,7 @@ if [ "$#" -ge 3 ]; then shift 3; else shift "$#"; fi
 
 # ---- settings
 SSH_ON=yes; TELNET_ON=yes; SSH_PORT=2222; TELNET_PORT=2223; FAKE_HOST=svr04; PROFILE=default; LOGIN=default
+FTP_ON=no; HTTP_ON=no; FTP_PORT=2121; HTTP_PORT=2180
 FILE_MB=""; MEM_MB=""; CPU_PCT=""
 bad() { echo "Unknown or invalid setting: $1" >&2; exit 2; }
 num() {                                   # name value min max: digits only, within range
@@ -42,6 +46,10 @@ for kv in "$@"; do
   case "$k" in
     ssh)         case "$v" in on) SSH_ON=yes;; off) SSH_ON=no;; *) bad "$kv";; esac;;
     telnet)      case "$v" in on) TELNET_ON=yes;; off) TELNET_ON=no;; *) bad "$kv";; esac;;
+    ftp)         case "$v" in on) FTP_ON=yes;; off) FTP_ON=no;; *) bad "$kv";; esac;;
+    http)        case "$v" in on) HTTP_ON=yes;; off) HTTP_ON=no;; *) bad "$kv";; esac;;
+    ftp_port)    num "$k" "$v" 1024 65515; FTP_PORT="$v";;
+    http_port)   num "$k" "$v" 1024 65535; HTTP_PORT="$v";;
     ssh_port)    num "$k" "$v" 1024 65535; SSH_PORT="$v";;
     telnet_port) num "$k" "$v" 1024 65535; TELNET_PORT="$v";;
     hostname)    case "$v" in ''|-*|*-|[0-9]*|*[!a-z0-9-]*) bad "$kv";; esac
@@ -56,7 +64,16 @@ for kv in "$@"; do
   esac
 done
 if [ "$SSH_ON" = no ] && [ "$TELNET_ON" = no ]; then bad "ssh=off telnet=off (leave one on)"; fi
-if [ "$SSH_ON" = yes ] && [ "$TELNET_ON" = yes ] && [ "$SSH_PORT" = "$TELNET_PORT" ]; then bad "the SSH and Telnet ports must differ"; fi
+NAMES=(); LOS=(); HIS=()                  # no two decoys may share a port (FTP also uses the 20 ports after its own)
+if [ "$SSH_ON" = yes ]; then NAMES+=(SSH); LOS+=("$SSH_PORT"); HIS+=("$SSH_PORT"); fi
+if [ "$TELNET_ON" = yes ]; then NAMES+=(Telnet); LOS+=("$TELNET_PORT"); HIS+=("$TELNET_PORT"); fi
+if [ "$FTP_ON" = yes ]; then NAMES+=(FTP); LOS+=("$FTP_PORT"); HIS+=("$((FTP_PORT + 20))"); fi
+if [ "$HTTP_ON" = yes ]; then NAMES+=(web); LOS+=("$HTTP_PORT"); HIS+=("$HTTP_PORT"); fi
+for ((i = 0; i < ${#NAMES[@]}; i++)); do
+  for ((j = i + 1; j < ${#NAMES[@]}; j++)); do
+    if [ "${LOS[i]}" -le "${HIS[j]}" ] && [ "${LOS[j]}" -le "${HIS[i]}" ]; then bad "the ${NAMES[i]} and ${NAMES[j]} ports overlap"; fi
+  done
+done
 
 case "$PROFILE" in
   debian12)   SSHV="SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u2"; KERNEL="6.1.0-18-amd64"; BUILD="#1 SMP PREEMPT_DYNAMIC Debian 6.1.76-1 (2024-02-01)";;
@@ -89,6 +106,16 @@ else
   echo "lanpulse-forwarder.py not found next to this script." >&2; exit 1
 fi
 chmod 644 "$DIR/lanpulse-forwarder.py"
+if [ "$FTP_ON" = yes ] || [ "$HTTP_ON" = yes ]; then
+  if [ -n "$TRAP_B64" ]; then
+    printf '%s' "$TRAP_B64" | base64 -d > "$DIR/lanpulse-trap.py"
+  elif [ -f "$HERE/lanpulse-trap.py" ]; then
+    cp "$HERE/lanpulse-trap.py" "$DIR/lanpulse-trap.py"
+  else
+    echo "lanpulse-trap.py not found next to this script." >&2; exit 1
+  fi
+  chmod 644 "$DIR/lanpulse-trap.py"
+fi
 
 umask 077
 cat > "$DIR/.env" <<ENV
@@ -101,7 +128,7 @@ umask 022
 
 # Pieces of the compose file that depend on the settings.
 NL=$'\n'
-PORTS=""; COWENV=""; COWVOL=""; LIMITS=""
+PORTS=""; COWENV=""; COWVOL=""; LIMITS=""; TRAPSVC=""; FWDVOL=""; FWDENV=""; FWDDEP=""; TRAPVOL=""
 if [ "$SSH_ON" = yes ]; then PORTS="${PORTS}      - \"$SSH_PORT:2222\"$NL"; fi
 if [ "$TELNET_ON" = yes ]; then PORTS="${PORTS}      - \"$TELNET_PORT:2223\"$NL"; fi
 COWENV="${COWENV}      COWRIE_SSH_ENABLED: \"$SSH_ON\"$NL      COWRIE_TELNET_ENABLED: \"$TELNET_ON\"$NL"
@@ -117,6 +144,25 @@ if [ -n "$KERNEL" ]; then
 fi
 if [ -n "$MEM_MB" ]; then LIMITS="${LIMITS}    mem_limit: ${MEM_MB}m$NL"; fi
 if [ -n "$CPU_PCT" ]; then LIMITS="${LIMITS}    cpus: \"$((CPU_PCT / 100)).$(printf '%02d' $((CPU_PCT % 100)))\"$NL"; fi
+
+if [ "$FTP_ON" = yes ] || [ "$HTTP_ON" = yes ]; then
+  TRAPENV="      PYTHONDONTWRITEBYTECODE: \"1\"$NL      TRAP_HOME: \"/trap\"$NL"
+  TRAPPORTS=""
+  if [ "$FTP_ON" = yes ]; then
+    TRAPENV="${TRAPENV}      TRAP_FTP_PORT: \"$FTP_PORT\"$NL"
+    TRAPPORTS="${TRAPPORTS}      - \"$FTP_PORT:$FTP_PORT\"$NL      - \"$((FTP_PORT + 1))-$((FTP_PORT + 20)):$((FTP_PORT + 1))-$((FTP_PORT + 20))\"$NL"
+  fi
+  if [ "$HTTP_ON" = yes ]; then
+    TRAPENV="${TRAPENV}      TRAP_HTTP_PORT: \"$HTTP_PORT\"$NL"
+    TRAPPORTS="${TRAPPORTS}      - \"$HTTP_PORT:$HTTP_PORT\"$NL"
+  fi
+  if [ -n "$FILE_MB" ]; then TRAPENV="${TRAPENV}      TRAP_MAX_FILE_MB: \"$FILE_MB\"$NL"; fi
+  TRAPSVC="  trap:${NL}    image: python:3.12-slim${NL}    restart: unless-stopped${NL}    command: [\"python\", \"-u\", \"/app/lanpulse-trap.py\"]${NL}    ports:${NL}${TRAPPORTS}    environment:${NL}${TRAPENV}    volumes:${NL}      - trap-var:/trap/var${NL}      - ./lanpulse-trap.py:/app/lanpulse-trap.py:ro${NL}    read_only: true${NL}    cap_drop:${NL}      - ALL${NL}    security_opt:${NL}      - no-new-privileges:true${NL}    mem_limit: 192m${NL}${NL}"
+  FWDVOL="      - trap-var:/trap/var:ro$NL"
+  FWDENV="      TRAP_HOME: /trap$NL"
+  FWDDEP="      - trap$NL"
+  TRAPVOL="  trap-var:$NL"
+fi
 
 # Which logins work: Cowrie reads etc/userdb.txt ("name:x:password", * matches anything).
 rm -f "$DIR/userdb.txt"
@@ -145,19 +191,19 @@ ${COWENV}      COWRIE_OUTPUT_JSONLOG_ENABLED: "yes"
 ${COWVOL}    security_opt:
       - no-new-privileges:true
 ${LIMITS}
-  forwarder:
+${TRAPSVC}  forwarder:
     image: python:3.12-slim
     restart: unless-stopped
     depends_on:
       - cowrie
-    command: ["python", "-u", "/app/lanpulse-forwarder.py"]
+${FWDDEP}    command: ["python", "-u", "/app/lanpulse-forwarder.py"]
     env_file: .env
     environment:
       COWRIE_HOME: /cowrie/cowrie-git
-      STATE_FILE: /state/state.json
+${FWDENV}      STATE_FILE: /state/state.json
     volumes:
       - cowrie-var:/cowrie/cowrie-git/var:ro
-      - forwarder-state:/state
+${FWDVOL}      - forwarder-state:/state
       - ./lanpulse-forwarder.py:/app/lanpulse-forwarder.py:ro
     cap_drop:
       - ALL
@@ -168,7 +214,7 @@ ${LIMITS}
 
 volumes:
   cowrie-var:
-  forwarder-state:
+${TRAPVOL}  forwarder-state:
 YML
 
 echo "==> Starting the containers"
@@ -180,6 +226,8 @@ echo
 echo "Done. This sensor looks like '$FAKE_HOST' and listens on:"
 if [ "$SSH_ON" = yes ]; then echo "  SSH    port $SSH_PORT    (test: ssh -p $SSH_PORT root@$IP)"; else echo "  SSH    off"; fi
 if [ "$TELNET_ON" = yes ]; then echo "  Telnet port $TELNET_PORT    (test: telnet $IP $TELNET_PORT)"; else echo "  Telnet off"; fi
+if [ "$FTP_ON" = yes ]; then echo "  FTP    port $FTP_PORT, uploads use $((FTP_PORT + 1))-$((FTP_PORT + 20))    (test: ftp $IP $FTP_PORT)"; fi
+if [ "$HTTP_ON" = yes ]; then echo "  Web    port $HTTP_PORT    (test: curl http://$IP:$HTTP_PORT/)"; fi
 cat <<DONE
 Logs:   cd $DIR && $COMPOSE logs -f        Stop:   cd $DIR && $COMPOSE down
 Next: forward ports 22 and 23 from the internet to the ports above on your router, and keep this machine
