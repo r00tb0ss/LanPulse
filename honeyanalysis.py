@@ -19,6 +19,7 @@ import json
 import logging
 import math
 import os
+import pathlib
 import re
 import sqlite3
 import secrets
@@ -33,6 +34,9 @@ MAX_SAMPLES = 500                      # files kept; the least recently seen are
 MAX_STORE = 300 * 1024 * 1024          # total bytes of stored files
 MAX_LOGINS, MAX_CMDS, MAX_CMD_LEN, MAX_FILES = 200, 300, 1000, 20
 RETENTION_DAYS = 90
+MAX_SESSIONS = 20000                   # sessions kept; the oldest are dropped first
+MAX_SENSORS = 20
+RATE = {"session": 60, "sample": 30}  # most the sensor may send per minute; a hijacked sensor can't flood LanPulse
 
 # ------------------------------------------------------------------ small helpers
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -281,7 +285,49 @@ def analyze_sample(data: bytes) -> dict:
             "iocs": find_iocs(blob), "strings": strs[:150]}
 
 
-# ------------------------------------------------------------------ storage
+# ------------------------------------------------------------------ Add sensor: installer and one-line command
+BASE_URL = re.compile(r"^(https?)://([A-Za-z0-9.-]{1,253}|\[[0-9A-Fa-f:]{2,45}\])(:\d{1,5})?$")
+
+
+def clean_base_url(url: str) -> str | None:
+    """The address the sensor will use to reach LanPulse, or None when it is not a plain http(s)://host[:port]."""
+    url = str(url or "").strip().rstrip("/")
+    return url if BASE_URL.match(url) else None
+
+
+def cert_fingerprint(cert_path) -> str:
+    """SHA-256 of the first certificate in a PEM file (what a sensor pins), or '' when there is none."""
+    import ssl
+    try:
+        pem = pathlib.Path(cert_path).read_text(encoding="ascii", errors="ignore")
+        m = re.search(r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", pem, re.S)
+        return hashlib.sha256(ssl.PEM_cert_to_DER_cert(m.group(0))).hexdigest() if m else ""
+    except (OSError, ValueError):
+        return ""
+
+
+def installer_script(kind: str, tools_dir) -> str | None:
+    """The installer for this kind of sensor with the forwarder embedded, so one downloaded file is the whole install."""
+    import base64
+    name = "install-container.sh" if kind == "container" else "install-pi.sh"
+    try:
+        script = pathlib.Path(tools_dir, name).read_text(encoding="utf-8")
+        fwd = pathlib.Path(tools_dir, "lanpulse-forwarder.py").read_bytes()
+    except OSError:
+        return None
+    if script.count('FORWARDER_B64=""') != 1:
+        return None
+    return script.replace('FORWARDER_B64=""', 'FORWARDER_B64="' + base64.b64encode(fwd).decode() + '"', 1)
+
+
+def install_command(url: str, key: str, kind: str, script: str, fingerprint: str) -> str:
+    """One line to paste on the sensor. It downloads the installer, checks it against the hash shown here, then runs it."""
+    sha = hashlib.sha256(script.encode()).hexdigest()
+    insecure = "k" if url.startswith("https://") else ""        # LanPulse's certificate is self-signed; the hash below is the check
+    return ("f=$(mktemp) && curl -fsS" + insecure + " '" + url + "/api/honeypot/sensor/installer?kind=" + kind + "' -o \"$f\""
+            " && echo '" + sha + "  '\"$f\" | sha256sum -c - && sudo bash \"$f\" '" + url + "' '" + key + "' '" + fingerprint + "'")
+
+
 class HoneyAnalysis:
     def __init__(self, nm, hp):
         self.nm, self.hp = nm, hp
@@ -297,8 +343,13 @@ class HoneyAnalysis:
         self.db.execute("""CREATE TABLE IF NOT EXISTS samples (
             sha256 TEXT PRIMARY KEY, md5 TEXT, sha1 TEXT, size INTEGER, kind TEXT, type TEXT, entropy REAL,
             first_seen REAL, last_seen REAL, seen INTEGER, ips TEXT, urls TEXT, names TEXT, analysis TEXT, stored INTEGER)""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS sensors (
+            id TEXT PRIMARY KEY, name TEXT, kind TEXT, key_hash TEXT UNIQUE, created REAL, last_seen REAL,
+            last_ip TEXT, sessions INTEGER DEFAULT 0, files INTEGER DEFAULT 0)""")
         self.db.commit()
         self.lock = threading.Lock()
+        self._rate: dict[str, list[float]] = {"session": [], "sample": []}
+        self._added = 0
         self.dir = d / ("demo-honeypot-samples" if self.demo else "honeypot-samples")
         try:
             self.dir.mkdir(mode=0o700, exist_ok=True)
@@ -312,15 +363,82 @@ class HoneyAnalysis:
 
     # -------------------------------------------------------- auth
     def key_ok(self, key: str) -> bool:
+        return self.auth(key) is not None
+
+    def auth(self, key: str):
+        """Who is this key? A per-sensor key gives that sensor's row; the shared ingest key (older setups)
+        gives {"id": "", "name": ""}; anything else gives None."""
+        key = str(key or "")
+        if not key:
+            return None
+        h = hashlib.sha256(key.encode()).hexdigest()
+        with self.lock:
+            r = self.db.execute("SELECT id, name FROM sensors WHERE key_hash=?", (h,)).fetchone()
+        if r:
+            return {"id": r[0], "name": r[1]}
         want = self.hp.cfg.get("ingest_key")
-        return bool(want) and secrets.compare_digest(str(key).encode(), str(want).encode())
+        if want and secrets.compare_digest(key.encode(), str(want).encode()):
+            return {"id": "", "name": ""}
+        return None
+
+    # -------------------------------------------------------- sensors (Add sensor button)
+    def add_sensor(self, name: str, kind: str) -> dict:
+        """Makes a sensor with its own key. The key is shown once; only its hash is stored."""
+        name = re.sub(r"[^A-Za-z0-9 ._-]", "", str(name or ""))[:40].strip() or "sensor"
+        kind = kind if kind in ("pi", "container") else "pi"
+        with self.lock:
+            n = self.db.execute("SELECT COUNT(*) FROM sensors").fetchone()[0]
+            if n >= MAX_SENSORS:
+                raise ValueError("too many sensors; remove one first")
+            sid = secrets.token_hex(4)
+            key = "lps_" + secrets.token_urlsafe(24)
+            self.db.execute("INSERT INTO sensors (id, name, kind, key_hash, created) VALUES (?,?,?,?,?)",
+                            (sid, name, kind, hashlib.sha256(key.encode()).hexdigest(), time.time()))
+            self.db.commit()
+        return {"id": sid, "name": name, "kind": kind, "key": key}
+
+    def sensors(self) -> list[dict]:
+        with self.lock:
+            rows = self.db.execute("SELECT id, name, kind, created, last_seen, last_ip, sessions, files FROM sensors "
+                                   "ORDER BY created").fetchall()
+        now = time.time()
+        return [{"id": i, "name": n, "kind": k, "created": c, "last_seen": ls, "last_ip": lip or "", "sessions": ss or 0,
+                 "files": ff or 0, "state": ("waiting" if not ls else "connected" if now - ls < 300 else "silent")}
+                for i, n, k, c, ls, lip, ss, ff in rows]
+
+    def revoke_sensor(self, sid: str) -> bool:
+        with self.lock:
+            cur = self.db.execute("DELETE FROM sensors WHERE id=?", (str(sid)[:16],))
+            self.db.commit()
+            return cur.rowcount > 0
+
+    def touch(self, sid: str, ip: str = "", sessions: int = 0, files: int = 0):
+        """Notes that a sensor spoke (also called by the periodic hello, so 'connected' shows before any attack)."""
+        if not sid:
+            return
+        with self.lock:
+            self.db.execute("UPDATE sensors SET last_seen=?, last_ip=?, sessions=sessions+?, files=files+? WHERE id=?",
+                            (time.time(), str(ip)[:45], sessions, files, sid))
+            self.db.commit()
 
     # -------------------------------------------------------- ingest
+    def _allow(self, kind: str) -> bool:
+        now = time.time()
+        with self.lock:
+            q = [t for t in self._rate[kind] if now - t < 60]
+            ok = len(q) < RATE[kind]
+            if ok:
+                q.append(now)
+            self._rate[kind] = q
+        return ok
+
     @staticmethod
     def _clean_str(x, n) -> str:
         return "".join(c for c in str(x if x is not None else "")[:n] if c == "\t" or c >= " " and c != "\x7f")
 
     def add_session(self, p: dict, quiet: bool = False) -> tuple[bool, str]:
+        if not quiet and not self._allow("session"):
+            return False, "rate limited"
         sid = re.sub(r"[^A-Za-z0-9_-]", "", str(p.get("session") or ""))[:40]
         ip = str(p.get("ip") or "").strip()[:45]
         try:
@@ -362,6 +480,9 @@ class HoneyAnalysis:
                              self._clean_str(p.get("hassh"), 40), json.dumps(logins), json.dumps(cmds), json.dumps(files),
                              json.dumps(tags), score))
             self.db.commit()
+        self._added += 1
+        if self._added % 200 == 0:
+            self.prune()
         if not exists and not quiet:     # the first time we see a session it also becomes a headline hit for the dashboard
             first = next((x for x in logins), None)
             creds = f"{first['u']} / {first['p']}" if first else ""
@@ -381,6 +502,8 @@ class HoneyAnalysis:
             return False, "empty"
         if len(data) > MAX_SAMPLE:
             return False, "too large"
+        if not quiet and not self._allow("sample"):
+            return False, "rate limited"
         a = analyze_sample(data)
         sha = a["sha256"]
         ip = str(meta.get("ip") or "")[:45]
@@ -391,18 +514,17 @@ class HoneyAnalysis:
         url = self._clean_str(meta.get("url"), 300)
         name = self._clean_str(meta.get("name"), 120)
         now = time.time()
-        stored = 0
         path = self.dir / sha
         try:
             if not path.exists():
-                tmp = self.dir / (sha + ".tmp")
+                tmp = self.dir / (sha + "." + secrets.token_hex(6) + ".tmp")     # unique: two uploads of one file can overlap
                 fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
                 os.replace(tmp, path)
-            stored = 1
         except OSError:
             log.warning("could not store a captured file", exc_info=True)
+        stored = 1 if path.exists() else 0
         with self.lock:
             row = self.db.execute("SELECT seen, ips, urls, names, first_seen FROM samples WHERE sha256=?", (sha,)).fetchone()
             if row:
@@ -453,6 +575,8 @@ class HoneyAnalysis:
         cut = time.time() - int(self.hp.cfg.get("retention_days") or RETENTION_DAYS) * 86400
         with self.lock:
             self.db.execute("DELETE FROM sessions WHERE start < ?", (cut,))
+            self.db.execute("DELETE FROM sessions WHERE id IN (SELECT id FROM sessions ORDER BY start DESC LIMIT -1 OFFSET ?)",
+                            (MAX_SESSIONS,))
             self.db.commit()
 
     # -------------------------------------------------------- views
@@ -528,6 +652,13 @@ class HoneyAnalysis:
 
     # -------------------------------------------------------- demo
     def seed_demo(self):
+        with self.lock:
+            if not self.db.execute("SELECT COUNT(*) FROM sensors").fetchone()[0]:
+                self.db.execute("INSERT INTO sensors (id, name, kind, key_hash, created, last_seen, last_ip, sessions, files) "
+                                "VALUES ('demo0001','pi-cowrie','pi',?,?,?,?,2,2)",
+                                (hashlib.sha256(secrets.token_bytes(16)).hexdigest(), time.time() - 5 * 86400, time.time() - 40,
+                                 "10.20.30.4"))
+                self.db.commit()
         with self.lock:
             if self.db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]:
                 return
