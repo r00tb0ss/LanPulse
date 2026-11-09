@@ -71,7 +71,7 @@ function pushFlowArc(e) {
   const home = homeCoord();
   if (!tChart || !home || e.lat == null || !showTraffic()) return;
   const color = e.bad ? "#f43f5e" : "#38bdf8";      // data is blue, attacks are red
-  flowArcs.push({at: Date.now(), coords: [home, [e.lon, e.lat]], lineStyle: {color, width: e.bad ? 2 : 1}});
+  flowArcs.push({at: Date.now(), coords: [home, [e.lon, e.lat]], lineStyle: {color, width: e.bad ? 2 : 1.5, opacity: 0.75}});
   if (flowArcs.length > 30) flowArcs = flowArcs.slice(-30);
   drawFlowArcs();
 }
@@ -90,6 +90,16 @@ setInterval(() => {
   flowArcs = flowArcs.filter((a) => Date.now() - a.at < 6000);
   if (flowArcs.length !== n && view === "threats") drawFlowArcs();
 }, 1000);
+
+// Same idea as the attack replay: on a quiet network, keep a few blue arcs moving by replaying recent connections.
+let flowReplayIdx = 0;
+setInterval(() => {
+  if (view !== "threats" || !tChart || !flowSummary || document.hidden || !showTraffic()) return;
+  if (flowArcs.length >= 3) return;
+  const list = (flowSummary.recent || []).filter((e) => e.lat != null);
+  if (!list.length) return;
+  pushFlowArc(list[flowReplayIdx++ % list.length]);
+}, 1500);
 
 function updateTrafficLayer() {
   if (!tChart) return;

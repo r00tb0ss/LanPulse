@@ -361,7 +361,7 @@ function pushArc(ev) {
   if (typeof showAttacks === "function" && !showAttacks()) return;
   arcs.push({at: Date.now(), coords: [[ev.lon, ev.lat], home],
     lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : isReached(ev) ? "#f43f5e" : "#ef4444",
-      ...(typeof showTraffic === "function" && showTraffic() ? {} : {width: 1.9, opacity: 0.8})}});   // attacks alone: make them easy to follow
+      width: 1.8, opacity: 0.8}});   // easy to follow, alone or beside the traffic arcs
   if (arcs.length > 40) arcs = arcs.slice(-40);
   drawArcs();
 }
@@ -383,7 +383,7 @@ setInterval(() => {
 let replayIdx = 0;
 setInterval(() => {
   if (view !== "threats" || !tChart || !tSummary || document.hidden) return;
-  if (typeof showTraffic === "function" && showTraffic()) return;
+  if (typeof showAttacks === "function" && !showAttacks()) return;
   if (arcs.length >= 3) return;
   const list = (tSummary.recent || []).filter((e) => e.lat != null && !(hideScanners && isScanner(e)));
   if (!list.length) return;
