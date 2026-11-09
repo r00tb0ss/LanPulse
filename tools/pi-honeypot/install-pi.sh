@@ -7,7 +7,8 @@
 #
 #   sudo ./install-pi.sh https://192.168.0.208:8080 <sensor-key> [server-certificate-sha256]
 #
-# The sensor key comes from LanPulse > Honeypot > Add sensor (which also gives you a ready-made one-line command).
+# The easy way is LanPulse > Honeypot > Add sensor, which gives you a ready-made one-line command with its own key.
+# To run this by hand use the key under LanPulse > Honeypot > Settings > "External-sensor key".
 # Cowrie listens on ports 2222 (SSH) and 2223 (Telnet). Your Pi's own SSH on port 22 is NOT touched; forward the
 # internet-facing ports 22/23 to 2222/2223 on your router instead (see README.md).
 set -euo pipefail

@@ -33,7 +33,8 @@ Manual: **A** installs straight onto a Raspberry Pi; **B** runs in containers on
 
 ### A. Raspberry Pi (no containers)
 
-1. In LanPulse use **Add sensor** and copy the sensor key it shows (it is shown once).
+1. In LanPulse open **Honeypot > Settings**, set an **External-sensor key**, and save. (This shared key is what the manual
+   routes use; sensors made with Add sensor each get their own key instead.)
 2. On the Pi (Raspberry Pi OS or Ubuntu, network access to GitHub and your LanPulse box):
 
    ```
@@ -56,7 +57,7 @@ Needs Docker with the Compose plugin (or `podman-compose`) and network access to
 the host. Check that `docker pull cowrie/cowrie` works on your CPU first (64-bit Raspberry Pi OS and x86 are the
 usual cases).
 
-1. In LanPulse use **Add sensor** and copy the sensor key it shows (it is shown once).
+1. In LanPulse open **Honeypot > Settings**, set an **External-sensor key**, and save.
 2. On the sensor machine:
 
    ```
