@@ -131,6 +131,24 @@ def windows_version(d: dict):
     return None
 
 
+SERVERISH = ("windows server 2016", "windows server 2019", "windows server 2022", "windows 10", "windows 11")
+
+
+def refine_windows_os(d: dict) -> None:
+    """nmap's database has no Windows 11 and files Windows 10/11 under "Server 2016/2019" or "Windows 10". When such a
+    guess comes with signs of a PC (Windows' default DESKTOP-/LAPTOP- name, or port 7680, the Windows Update
+    peer-to-peer port that only client Windows opens), say so instead of showing a server. Never touches an OS the
+    user picked."""
+    os_ = d.get("os") or ""
+    if d.get("os_override") or os_.startswith("Windows 10 or 11") or not any(s in os_.lower() for s in SERVERISH):
+        return
+    host = (d.get("hostname") or "").split(".")[0].upper()
+    named = any(host.startswith(p) and len(host) == len(p) + 7 and host[len(p):].isalnum() for p in ("DESKTOP-", "LAPTOP-"))
+    client_port = any(p.get("port") == 7680 for p in d.get("ports") or [])
+    if named or client_port:
+        d["os"] = f"Windows 10 or 11 (nmap guessed {os_[:50]}, which it can't tell apart)"
+
+
 def rank_key(f: dict):
     """Worst first: confirmed by an active check, then actively exploited, then a Metasploit module exists (exact
     version before unknown), then a public exploit, then severity."""

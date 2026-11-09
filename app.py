@@ -854,6 +854,9 @@ class LanPulse:
         d["is_self"] = bool(d.get("mac")) and d["mac"] == self.net.get("my_mac")
         if d["is_self"] or d["is_gateway"]:
             d["trusted"] = True
+        from vulns import refine_windows_os
+        refine_windows_os(d)
+        apply_os_override(d)
         d["type_auto"] = classify(d)
         d["type"] = d.get("type_override") or d["type_auto"]
         d["findings"] = findings(d)

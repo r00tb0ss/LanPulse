@@ -25,6 +25,28 @@ class NoPortsNoWindowsGuess(unittest.TestCase):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+class WindowsClientVsServer(unittest.TestCase):
+    def test_server_2019_guess_with_the_windows_update_port_is_a_pc(self):
+        d = {"os": "Microsoft Windows Server 2019", "ports": [{"port": 445}, {"port": 7680}], "hostname": ""}
+        vulns.refine_windows_os(d)
+        self.assertTrue(d["os"].startswith("Windows 10 or 11"))
+
+    def test_default_computer_name_means_a_pc(self):
+        d = {"os": "Microsoft Windows 10 1903", "ports": [{"port": 445}], "hostname": "DESKTOP-FED6KG4"}
+        vulns.refine_windows_os(d)
+        self.assertTrue(d["os"].startswith("Windows 10 or 11"))
+
+    def test_a_real_looking_server_stays_a_server(self):
+        d = {"os": "Microsoft Windows Server 2019", "ports": [{"port": 445}, {"port": 3389}, {"port": 53}], "hostname": "dc01"}
+        vulns.refine_windows_os(d)
+        self.assertEqual(d["os"], "Microsoft Windows Server 2019")
+
+    def test_picked_os_is_not_touched(self):
+        d = {"os": "Windows Server 2019", "os_override": "Windows Server 2019", "ports": [{"port": 7680}]}
+        vulns.refine_windows_os(d)
+        self.assertEqual(d["os"], "Windows Server 2019")
+
+
 class PickedOs(unittest.TestCase):
     def test_a_picked_old_windows_is_honoured_even_without_ports(self):
         d = {"os": "Windows XP", "os_accuracy": 100, "os_hint": "Windows XP", "os_override": "Windows XP", "ports": []}
