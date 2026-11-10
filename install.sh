@@ -279,16 +279,32 @@ state installing "Installing the update. LanPulse will restart in a minute or tw
 (
   set -e
   echo "== LanPulse update \$(date) =="
-  echo "-- backing up the current version"
-  tar -czf "\$D/previous.tgz" -C / --exclude=opt/lanpulse/data --exclude=opt/lanpulse/venv opt/lanpulse
+# Create the rollback archive separately and verify it before replacing the
+# last known-good archive or touching the installed application.
+PREVIOUS_TMP="\$D/previous.tgz.tmp.\$\$"
+rm -f "\$PREVIOUS_TMP"
+echo "-- creating and verifying the rollback archive"
+if ! tar -czf "\$PREVIOUS_TMP" -C / --exclude=opt/lanpulse/data --exclude=opt/lanpulse/venv opt/lanpulse >> "\$LOG" 2>&1 \
+  || ! tar -tzf "\$PREVIOUS_TMP" >/dev/null 2>> "\$LOG" \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'opt/lanpulse/app.py'; then
+  rm -f "\$PREVIOUS_TMP"
+  state failed "Could not create and verify the rollback archive. No application files were changed."
+  exit 1
+fi
+if ! mv -f "\$PREVIOUS_TMP" "\$D/previous.tgz"; then
+  rm -f "\$PREVIOUS_TMP"
+  state failed "Could not save the verified rollback archive. No application files were changed."
+  exit 1
+fi
+(
+  set -e
   echo "-- unpacking"
   unzip -q "\$D/incoming.zip" -d "\$W"
   test -f "\$W/lanpulse/install.sh"
   test -f "\$W/lanpulse/app.py"
   echo "-- installing"
   cd "\$W/lanpulse"
-  bash ./install.sh --upgrade
-) > "\$LOG" 2>&1
+  bash ./install.sh --upgrade) > "\$LOG" 2>&1
 if [[ \$? -eq 0 ]] && systemctl is-active --quiet lanpulse; then
   rm -f "\$D/incoming.zip"
   state done "Update installed."
