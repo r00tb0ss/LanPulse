@@ -2,6 +2,7 @@ import sys
 import tarfile
 import tempfile
 import sqlite3
+import socket
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -67,6 +68,26 @@ class BackupTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "verification failed"):
                 backup.restore_backup(corrupt, self.data)
         self.assertIn("8080", (self.data / "settings.json").read_text())
+
+    def test_backup_skips_openvas_runtime_pid_and_socket(self):
+        runtime_dir = self.data / "openvas" / "gvmd"
+        runtime_dir.mkdir(parents=True)
+        pid_file = runtime_dir / "gvmd.pid"
+        pid_file.write_text("1234\\n")
+        pid_file.chmod(0o600)
+        socket_file = runtime_dir / "gvmd.sock"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as runtime_socket:
+            runtime_socket.bind(str(socket_file))
+        persistent = runtime_dir / "config.txt"
+        persistent.write_text("persistent scanner configuration")
+
+        archive = backup.create_backup(self.data, self.destination)
+        with tarfile.open(archive, "r:gz") as tar:
+            names = set(tar.getnames())
+
+        self.assertNotIn("lanpulse-data/openvas/gvmd/gvmd.pid", names)
+        self.assertNotIn("lanpulse-data/openvas/gvmd/gvmd.sock", names)
+        self.assertIn("lanpulse-data/openvas/gvmd/config.txt", names)
 
     def test_backup_must_be_outside_data(self):
         with self.assertRaisesRegex(ValueError, "outside"):
