@@ -109,18 +109,18 @@ class PostureHistory:
         self.db.execute("CREATE TABLE IF NOT EXISTS posture (day TEXT PRIMARY KEY, score INT, grade TEXT, t REAL)")
         self.db.commit()
         self.lock = threading.Lock()
-
-    _last = (None, None)      # (day, score) last written, to avoid rewriting the same row repeatedly (SD-card friendly)
+        self._last = (None, None)  # (day, score) last successfully written by this instance
 
     def record(self, score: int, grade: str):
         day = time.strftime("%Y-%m-%d")
-        if self._last == (day, score):
-            return
-        self._last = (day, score)
         with self.lock:
+            if self._last == (day, score):
+                return
             self.db.execute("INSERT OR REPLACE INTO posture VALUES (?,?,?,?)", (day, score, grade, time.time()))
             self.db.execute("DELETE FROM posture WHERE day < ?", (time.strftime("%Y-%m-%d", time.localtime(time.time() - 365 * 86400)),))
             self.db.commit()
+            # Remember only a successful write, so a transient database error can be retried.
+            self._last = (day, score)
 
     def history(self, days: int = 30) -> list[dict]:
         with self.lock:
