@@ -100,7 +100,7 @@ class UpdaterRollbackSafety(unittest.TestCase):
         self.assertIn(')\n}\nmain "\\$@"; exit', source)
 
     def test_installer_never_disables_hardening_after_start_failure(self):
-        startup = INSTALL.split("systemctl daemon-reload\\nsystemctl enable lanpulse.service", 1)[1]
+        startup = INSTALL.split("systemctl enable lanpulse.service", 1)[1]
         startup = startup.split("# ---- in-dashboard updates", 1)[0]
         self.assertIn("if ! systemctl restart lanpulse.service; then", startup)
         self.assertIn("The hardening configuration has been preserved.", startup)
