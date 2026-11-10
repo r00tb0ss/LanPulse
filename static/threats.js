@@ -696,15 +696,24 @@ function renderIpPanel(d) {
 
     <div class="p-sec"><h4>What it tried</h4>
       <div class="chips-wrap">${d.ports.map((p) => `<span class="pchip">${esc(p.service)} :${p.port ?? "—"}<b>×${fmtN(p.count)}</b></span>`).join("") || '<span class="muted">—</span>'}</div>
-      ${d.credentials.length ? `<h4 style="margin-top:14px">Logins and requests captured</h4><table class="ev-table">${d.credentials.map((c) =>
-        `<tr><td style="font-family:var(--mono)">${esc(c.text)}</td><td class="muted" style="text-align:right">×${c.count}</td></tr>`).join("")}</table>` : ""}
+      ${(() => {            // one list: service, what it sent or tried, and how many times (identical lines are added up)
+        const seen = new Map();
+        for (const h of (d.honeypot ? d.honeypot.hits : [])) {
+          const text = h.creds || h.data || "connected, sent nothing";
+          const k = `${h.service}|${h.port}|${text}`;
+          const r = seen.get(k) || { svc: `${h.service} :${h.port}`, text, n: 0 };
+          r.n++; seen.set(k, r);
+        }
+        const rows = [...seen.values()];
+        const have = new Set(rows.flatMap((r) => [r.text, r.text.slice(0, 120)]));
+        for (const c of d.credentials) if (!have.has(c.text)) rows.push({ svc: "", text: c.text, n: c.count });
+        if (!rows.length) return "";
+        return `<table class="ev-table" style="margin-top:10px">${rows.slice(0, 12).map((r) =>
+          `<tr><td style="white-space:nowrap">${esc(r.svc)}</td><td style="font-family:var(--mono);word-break:break-word">${esc(r.text)}</td><td class="muted" style="text-align:right">×${fmtN(r.n)}</td></tr>`).join("")}</table>`
+          + (d.honeypot ? `<p class="muted" style="font-size:12px;margin:8px 0 0">Hits on your honeypot only touched a decoy, nothing real. The Honeypot tab has the full list.</p>` : "");
+      })()}
     </div>
 
-    ${d.honeypot ? `<div class="p-sec"><h4>Hit your honeypot <span class="muted">${fmtN(d.honeypot.total)}×</span></h4>
-      <div class="chips-wrap">${d.honeypot.services.map((x) => `<span class="pchip">${esc(x.label)}<b>×${fmtN(x.count)}</b></span>`).join("")}</div>
-      <table class="ev-table" style="margin-top:10px">${d.honeypot.hits.slice(0, 15).map((h) => `<tr><td class="muted">${esc(ago(h.t))}</td>
-        <td>${esc(h.service)} :${h.port}</td><td style="font-family:var(--mono)">${esc(h.creds || h.data || "connected, sent nothing")}</td></tr>`).join("")}</table>
-      <p class="muted" style="font-size:12px;margin:8px 0 0">These only touched a decoy, nothing real. The Honeypot tab has the full list.</p></div>` : ""}
     ${(d.signatures || []).length ? `<div class="p-sec"><h4>IPS detections</h4>${d.signatures.map((g) =>
       `<div class="finding"><span class="sev high">IPS</span><span>${esc(g.name)}</span><span class="port">×${fmtN(g.count)}</span></div>`).join("")}</div>` : ""}
     <div class="p-sec"><h4>Targets in your network</h4>
