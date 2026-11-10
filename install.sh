@@ -208,7 +208,8 @@ EOF
 
 # ---- sandbox: LanPulse needs root-level network access (raw packets, port 514, OS detection), but nothing else.
 # This keeps the rest of the system read-only to it and drops every other root power.
-mkdir -p /etc/systemd/system/lanpulse.service.d "$DEST/data/home"
+mkdir -p /etc/systemd/system/lanpulse.service.d "$DEST/data/home" /var/backups/lanpulse
+chmod 700 /var/backups/lanpulse
 cat > /etc/systemd/system/lanpulse.service.d/hardening.conf <<HARDEN
 [Service]
 Environment=HOME=$DEST/data/home

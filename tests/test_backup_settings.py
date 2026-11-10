@@ -10,6 +10,20 @@ import backup_ui
 
 
 class BackupSettingsHelpers(unittest.TestCase):
+    def test_backup_directory_can_be_configured_with_absolute_path(self):
+        configured = backup_ui.configured_backup_dir({"LANPULSE_BACKUP_DIR": "/mnt/private/backups"})
+        self.assertEqual(configured, Path("/mnt/private/backups"))
+
+    def test_backup_directory_rejects_relative_environment_path(self):
+        with self.assertRaises(ValueError):
+            backup_ui.configured_backup_dir({"LANPULSE_BACKUP_DIR": "relative/backups"})
+
+    def test_backup_directory_keeps_default_when_unset(self):
+        self.assertEqual(
+            backup_ui.configured_backup_dir({}),
+            Path("/var/backups/lanpulse"),
+        )
+
     def test_lists_only_regular_lanpulse_archives(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -16,7 +16,7 @@ import tempfile
 from urllib.parse import quote
 
 DEFAULT_DATA_DIR = Path("/opt/lanpulse/data")
-DEFAULT_BACKUP_DIR = Path("/var/backups/lanpulse")
+DEFAULT_BACKUP_DIR = Path(os.environ.get("LANPULSE_BACKUP_DIR", "/var/backups/lanpulse")).expanduser()
 FORMAT_VERSION = 1
 
 def stamp():
