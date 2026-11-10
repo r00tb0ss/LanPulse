@@ -213,10 +213,11 @@ chmod 700 /var/backups/lanpulse
 cat > /etc/systemd/system/lanpulse.service.d/hardening.conf <<HARDEN
 [Service]
 Environment=HOME=$DEST/data/home
+Environment=LANPULSE_BACKUP_DIR=/var/backups/lanpulse
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=$DEST/data -/var/lib/samba -/var/cache/samba -/run/samba
+ReadWritePaths=$DEST/data /var/backups/lanpulse -/var/lib/samba -/var/cache/samba -/run/samba
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
