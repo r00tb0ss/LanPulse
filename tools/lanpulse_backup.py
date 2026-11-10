@@ -36,7 +36,7 @@ def sqlite_snapshot(source, target):
             src.backup(dst, pages=256, sleep=0.05)
 
 def copy_tree(data_dir, snapshot):
-    records = []
+    files, directories = [], []
     for source in sorted(data_dir.rglob("*")):
         rel = source.relative_to(data_dir)
         target = snapshot / rel
@@ -46,6 +46,7 @@ def copy_tree(data_dir, snapshot):
         if source.is_dir():
             target.mkdir(parents=True, exist_ok=True)
             os.chmod(target, info.st_mode & 0o777)
+            directories.append({"path": rel.as_posix(), "mode": info.st_mode & 0o777})
             continue
         if not source.is_file():
             raise ValueError(f"Refusing non-regular file: {rel}")
@@ -55,9 +56,9 @@ def copy_tree(data_dir, snapshot):
         else:
             shutil.copyfile(source, target)
         os.chmod(target, info.st_mode & 0o777)
-        records.append({"path": rel.as_posix(), "size": target.stat().st_size,
-                        "sha256": sha256(target), "mode": info.st_mode & 0o777})
-    return records
+        files.append({"path": rel.as_posix(), "size": target.stat().st_size,
+                      "sha256": sha256(target), "mode": info.st_mode & 0o777})
+    return files, directories
 
 def create_backup(data_dir, backup_dir):
     data_dir = Path(data_dir).resolve()
@@ -73,9 +74,10 @@ def create_backup(data_dir, backup_dir):
     with tempfile.TemporaryDirectory(prefix="lanpulse-backup-") as temp:
         root = Path(temp) / "lanpulse-data"
         root.mkdir(mode=0o700)
-        records = copy_tree(data_dir, root)
+        files, directories = copy_tree(data_dir, root)
         manifest = {"format_version": FORMAT_VERSION, "created_utc": created,
-                    "source_data_dir": str(data_dir), "files": records}
+                    "source_data_dir": str(data_dir), "data_dir_mode": data_dir.stat().st_mode & 0o777,
+                    "directories": directories, "files": files}
         (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         os.chmod(root / "manifest.json", 0o600)
         with tarfile.open(archive, "w:gz") as tar:
@@ -147,6 +149,27 @@ def restore_backup(archive, data_dir):
             if path.stat().st_size != item.get("size") or sha256(path) != item.get("sha256"):
                 raise ValueError(f"Backup verification failed: {relative}")
             os.chmod(path, int(item.get("mode", 0o600)) & 0o777)
+
+        # New archives record every subdirectory; older v1 archives remain readable.
+        if "directories" in manifest:
+            directory_records = manifest["directories"]
+            if not isinstance(directory_records, list):
+                raise ValueError("Invalid directory permissions in backup manifest")
+            expected_dirs = {}
+            for item in directory_records:
+                relative = item.get("path")
+                rel = PurePosixPath(relative or "")
+                if not relative or rel.is_absolute() or ".." in rel.parts or relative in expected_dirs:
+                    raise ValueError(f"Unsafe or duplicate directory path: {relative}")
+                expected_dirs[relative] = int(item.get("mode", 0o700)) & 0o777
+            actual_dirs = {p.relative_to(stage).as_posix() for p in stage.rglob("*") if p.is_dir()}
+            if actual_dirs != set(expected_dirs):
+                raise ValueError("Archive directories do not match manifest")
+            for relative in sorted(expected_dirs, key=lambda value: value.count("/"), reverse=True):
+                os.chmod(stage.joinpath(*PurePosixPath(relative).parts), expected_dirs[relative])
+        root_mode = int(manifest.get("data_dir_mode", 0o700)) & 0o777
+        os.chmod(stage, root_mode)
+
         previous = data_dir.with_name(data_dir.name + ".pre-restore-" + stamp())
         had_previous = data_dir.exists()
         if had_previous:
