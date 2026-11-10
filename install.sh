@@ -320,10 +320,15 @@ if (
   state done "Update installed."
 else
   echo "-- update failed: restoring the previous version" >> "\$LOG"
-  tar -xzf "\$D/previous.tgz" -C / >> "\$LOG" 2>&1
-  systemctl daemon-reload >> "\$LOG" 2>&1
-  systemctl restart lanpulse >> "\$LOG" 2>&1
-  state failed "The update failed, so the previous version was restored. See the log below."
+  if tar -xzf "\$D/previous.tgz" -C / >> "\$LOG" 2>&1 \
+    && tar -dzf "\$D/previous.tgz" -C / >> "\$LOG" 2>&1 \
+    && systemctl daemon-reload >> "\$LOG" 2>&1 \
+    && systemctl restart lanpulse >> "\$LOG" 2>&1 \
+    && systemctl is-active --quiet lanpulse; then
+    state failed "The update failed. The previous version was restored and verified; see the log below."
+  else
+    state failed "The update failed and automatic rollback could not be verified. LanPulse may be unavailable; inspect the log and service status."
+  fi
 fi
 )
 }
