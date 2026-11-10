@@ -320,6 +320,7 @@ else
   state failed "The update failed, so the previous version was restored. See the log below."
 fi
 )
+}
 main "\$@"; exit
 UPD
 if ! bash -n /usr/local/sbin/lanpulse-update.new; then

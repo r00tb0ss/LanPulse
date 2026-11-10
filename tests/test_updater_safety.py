@@ -70,7 +70,7 @@ class UpdaterRollbackSafety(unittest.TestCase):
             source,
         )
         self.assertIn('state failed "The update failed, so the previous version was restored.', source)
-        self.assertIn(')\nmain "\\$@"; exit', source)
+        self.assertIn(')\n}\nmain "\\$@"; exit', source)
 
 
 if __name__ == "__main__":
