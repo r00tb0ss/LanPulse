@@ -237,15 +237,19 @@ CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 HARDEN
 
 systemctl daemon-reload
-systemctl enable --now lanpulse.service >/dev/null 2>&1
-systemctl restart lanpulse.service
+systemctl enable lanpulse.service >/dev/null 2>&1
+if ! systemctl restart lanpulse.service; then
+  echo "ERROR: LanPulse failed to start with systemd hardening enabled."
+  echo "       The hardening configuration has been preserved."
+  echo "       Inspect: sudo journalctl -u lanpulse -n 50"
+  exit 1
+fi
 sleep 6
 if ! systemctl is-active --quiet lanpulse.service; then
-  echo "    LanPulse didn't start inside the sandbox on this system, so it's running without it."
-  echo "    (Details: sudo journalctl -u lanpulse -n 50)"
-  mv /etc/systemd/system/lanpulse.service.d/hardening.conf /etc/systemd/system/lanpulse.service.d/hardening.conf.off
-  systemctl daemon-reload
-  systemctl restart lanpulse.service
+  echo "ERROR: LanPulse is not active with systemd hardening enabled."
+  echo "       The hardening configuration has been preserved."
+  echo "       Inspect: sudo journalctl -u lanpulse -n 50"
+  exit 1
 fi
 
 # ---- in-dashboard updates (Settings > Update)
