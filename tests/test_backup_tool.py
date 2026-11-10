@@ -34,6 +34,18 @@ class BackupTests(unittest.TestCase):
         with sqlite3.connect(self.data / "history.db") as db:
             self.assertEqual(db.execute("SELECT id FROM devices").fetchone()[0], "device-1")
 
+    def test_restore_preserves_restricted_directory_permissions(self):
+        private = self.data / "private"
+        private.mkdir()
+        (private / "secret.txt").write_text("sensitive")
+        private.chmod(0o700)
+        archive = backup.create_backup(self.data, self.destination)
+        private.chmod(0o755)
+        with patch.object(backup, "service_active", return_value=False):
+            backup.restore_backup(archive, self.data)
+        self.assertEqual((self.data / "private").stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.data / "private" / "secret.txt").read_text(), "sensitive")
+
     def test_refuses_restore_while_service_is_active(self):
         archive = backup.create_backup(self.data, self.destination)
         with patch.object(backup, "service_active", return_value=True):
