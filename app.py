@@ -60,7 +60,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.30.3"
+VERSION = "1.31.0"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -1885,6 +1885,12 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.get("/api/services/{cid}/history")
     async def services_history(cid: str, hours: int = 24):
         return await asyncio.to_thread(nm.services.history, cid[:16], max(1, min(720, hours)))
+
+    # ---- health board (is each part LanPulse relies on alive)
+    @app.get("/api/health")
+    async def health_get():
+        import health
+        return await asyncio.to_thread(health.build, nm)
 
     # ---- Settings > System (network, scanning, web server)
     def running_system() -> dict:
