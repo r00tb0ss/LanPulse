@@ -230,6 +230,74 @@ def analyze_commands(cmds: list[str]) -> dict:
     score = min(100, sum(TAG_INFO[t]["weight"] for t in tags))
     return {"commands": rows, "tags": sorted(tags, key=lambda t: -TAG_INFO[t]["weight"]), "iocs": iocs, "score": score}
 
+_AI_TARGET_RE = re.compile(
+    r"ignore (?:all )?(?:previous|prior) instructions|system prompt|developer message|"
+    r"jailbreak|prompt injection|tool call|function call|chat/completions|"
+    r"\b(?:ollama|llama\.cpp|openai|anthropic)\b",
+    re.I,
+)
+
+
+def analyze_attack_intelligence(commands: list[str], logins: list[dict] | None = None,
+                                files: list[dict] | None = None, duration: float = 0) -> dict:
+    """Estimate automation/adaptation signals; this is not proof that an attacker used AI."""
+    cmds = [str(c)[:MAX_CMD_LEN] for c in (commands or [])[:MAX_CMDS]]
+    logins = (logins or [])[:MAX_LOGINS]
+    files = (files or [])[:MAX_FILES]
+    tags = {tag for cmd in cmds for tag in classify_command(cmd)}
+    stages = {
+        "reconnaissance": bool(tags & {"recon", "recon-network"}),
+        "delivery": bool(tags & {"download", "pipe-to-shell"}),
+        "execution": bool(tags & {"make-executable", "run-dropped-file", "reverse-shell"}),
+        "persistence": bool(tags & {"persistence-cron", "persistence-startup", "ssh-key-plant", "account-change"}),
+        "evasion": bool(tags & {"disable-defenses", "cover-tracks", "deletes-files"}),
+    }
+    stage_count = sum(stages.values())
+    normalized = [re.sub(r"\s+", " ", c.strip().lower()) for c in cmds if c.strip()]
+    repeated = len(normalized) - len(set(normalized))
+    ai_probe = any(_AI_TARGET_RE.search(c) for c in cmds)
+    successful = any(isinstance(x, dict) and x.get("ok") for x in logins)
+    evidence, score = [], 0
+
+    if repeated:
+        score += min(25, repeated * 10)
+        evidence.append(f"{repeated} repeated command(s), consistent with scripted retries")
+    if len(cmds) >= 6 and duration > 0 and len(cmds) / max(float(duration), 1.0) >= 1.5:
+        score += 20
+        evidence.append("high average command volume for the session duration")
+    if len(logins) >= 8:
+        score += 15
+        evidence.append(f"{len(logins)} login attempts in one session")
+    if stage_count >= 3:
+        score += 20
+        evidence.append(f"activity spans {stage_count} attack stages")
+    if len(files):
+        score += 10
+        evidence.append(f"{len(files)} captured file(s) transferred")
+    if ai_probe:
+        score += 35
+        evidence.append("commands contain explicit LLM or prompt-injection terminology")
+    score = min(100, score)
+
+    if ai_probe and stage_count >= 2:
+        classification = "potentially AI-assisted"
+        confidence = "low"
+        evidence.append("AI-related text and multi-stage activity coincide; attribution remains uncertain")
+    elif score >= 45:
+        classification = "automated"
+        confidence = "moderate" if repeated or len(logins) >= 8 else "low"
+    elif not evidence and len(cmds) <= 5:
+        classification = "human-operated / inconclusive"
+        confidence = "low"
+        evidence.append("too little behavioral evidence to distinguish a person from automation")
+    else:
+        classification = "unknown"
+        confidence = "low"
+
+    return {"classification": classification, "score": score, "confidence": confidence,
+            "evidence": evidence, "stages": [name for name, present in stages.items() if present],
+            "ai_probe": ai_probe, "note": "Behavioral estimate only; a session cannot prove AI use."}
+
 
 # ------------------------------------------------------------------ what a captured file is
 # (label, pattern over the file's printable strings). These are hints, not a verdict.
@@ -709,6 +777,8 @@ class HoneyAnalysis:
         cmds = json.loads(cmds or "[]")
         ca = analyze_commands(cmds)
         files = json.loads(files or "[]")
+        logins_data = json.loads(logins or "[]")
+        intelligence = analyze_attack_intelligence(cmds, logins_data, files, max(0, end - start))
         for f in files:
             with self.lock:
                 s = self.db.execute("SELECT type, size FROM samples WHERE sha256=?", (f["sha256"],)).fetchone()
@@ -717,7 +787,8 @@ class HoneyAnalysis:
             f["url_defanged"] = defang(f["url"]) if f.get("url") else ""
         return {"id": sid, "sensor": sensor, "ip": ip, "port": port, "proto": proto, "start": start,
                 "duration": round(max(0, end - start), 1), "client": client, "hassh": hassh,
-                "logins": json.loads(logins or "[]"), "commands": ca["commands"], "iocs": ca["iocs"],
+                "logins": logins_data, "commands": ca["commands"], "iocs": ca["iocs"],
+                "ai_attack_intelligence": intelligence,
                 "files": files, "tags": json.loads(tags or "[]"), "score": score, "tag_info": TAG_INFO,
                 **{k: v for k, v in self.hp._geo(ip).items() if k in ("iso", "country", "city", "org", "asn")}}
 
