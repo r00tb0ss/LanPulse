@@ -90,14 +90,23 @@ class UpdaterRollbackSafety(unittest.TestCase):
         self.assertIn("Environment=LANPULSE_BACKUP_DIR=/var/backups/lanpulse", hardening)
         self.assertIn("ReadWritePaths=$DEST/data /var/backups/lanpulse", hardening)
 
-    def test_update_failure_enters_rollback_branch(self):
+    def test_update_failure_verifies_rollback_files_and_service(self):
         source = updater_source()
         self.assertIn(
             ') > "\\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then',
             source,
         )
-        self.assertIn('state failed "The update failed, so the previous version was restored.', source)
-        self.assertIn(')\n}\nmain "\\$@"; exit', source)
+        restore = source.index(r'tar -xzf "\$D/previous.tgz"')
+        compare = source.index(r'tar -dzf "\$D/previous.tgz"', restore)
+        reload = source.index("systemctl daemon-reload", compare)
+        restart = source.index("systemctl restart lanpulse", reload)
+        active = source.index("systemctl is-active --quiet lanpulse", restart)
+        self.assertLess(restore, compare)
+        self.assertLess(compare, reload)
+        self.assertLess(reload, restart)
+        self.assertLess(restart, active)
+        self.assertIn("The previous version was restored and verified", source)
+        self.assertIn("automatic rollback could not be verified", source)
 
     def test_installer_never_disables_hardening_after_start_failure(self):
         startup = INSTALL.split("systemctl enable lanpulse.service", 1)[1]
