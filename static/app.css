@@ -1198,6 +1198,30 @@ html[data-pretheme="sand"]{background:#f4efe6}
 @keyframes tpflow-dn{to{stroke-dashoffset:-16}}
 #topoSvg .tp-flow{animation:tpflow 1s linear infinite}
 #topoSvg .tp-flow.dn{animation-name:tpflow-dn}
+/* health board (Services tab) */
+.h-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.h-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.h-head h3{margin:0 0 2px;font-size:15px}.h-head .muted{font-size:12px}
+.h-overall{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600;border:1px solid var(--border)}
+.h-overall.ok{color:#86efac;background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.35)}
+.h-overall.warn{color:#fcd34d;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.35)}
+.h-overall.bad{color:#fda4af;background:rgba(244,63,94,.1);border-color:rgba(244,63,94,.4)}
+.h-overall.off{color:var(--muted)}
+.h-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.h-tile{display:flex;gap:12px;padding:12px;background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--dim);border-radius:10px;min-width:0}
+.h-tile.ok{border-left-color:#22c55e}.h-tile.warn{border-left-color:#f59e0b}.h-tile.bad{border-left-color:#f43f5e}
+.h-ic{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:rgba(148,163,184,.12);color:var(--muted)}
+.h-tile.ok .h-ic{background:rgba(34,197,94,.12);color:#86efac}.h-tile.warn .h-ic{background:rgba(245,158,11,.12);color:#fcd34d}.h-tile.bad .h-ic{background:rgba(244,63,94,.14);color:#fda4af}
+.h-body{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.h-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.h-row b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
+.h-pill{flex:none;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+.h-pill.ok{background:rgba(34,197,94,.15);color:#86efac}.h-pill.warn{background:rgba(245,158,11,.15);color:#fcd34d}.h-pill.bad{background:rgba(244,63,94,.18);color:#fda4af}
+.h-detail{font-size:12.5px;color:var(--text);line-height:1.4;word-break:break-word}
+.h-hint{font-size:12px;color:var(--muted);line-height:1.4}
+.h-last{font:11px var(--mono);color:var(--dim)}
+.h-off{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px}
+.h-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px dashed var(--border2,var(--border));border-radius:999px;color:var(--muted)}
 #topoSvg .tp-chip{touch-action:none}
 /* device panel: sections that fold */
 .fold>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;list-style:none}
