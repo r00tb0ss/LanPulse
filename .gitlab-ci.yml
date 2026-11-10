@@ -10,9 +10,50 @@ checks:
     - python -m compileall -q .
     - for f in static/*.js; do node --check "$f"; done
     - |
-      for f in $(grep -oP '(src|href)="/static/\K[^"?]+' static/index.html | grep -v '^vendor/'); do
-        [ -e "static/$f" ] || { echo "static/index.html references missing static/$f"; exit 1; }
-      done
+      python - <<'PY'
+      from html.parser import HTMLParser
+      from pathlib import Path
+      from urllib.parse import unquote, urlsplit
+
+      class LocalAssets(HTMLParser):
+          def __init__(self):
+              super().__init__()
+              self.refs = []
+
+          def handle_starttag(self, tag, attrs):
+              for key, value in attrs:
+                  if key in ("src", "href") and value:
+                      self.refs.append(value)
+
+      failures = []
+      checks = (
+          (Path("static/index.html"), Path("static"), "/static/", "vendor/"),
+          (Path("docs/index.html"), Path("docs"), "", ""),
+      )
+      for html_file, root, prefix, excluded in checks:
+          parser = LocalAssets()
+          parser.feed(html_file.read_text(encoding="utf-8"))
+          for ref in parser.refs:
+              url = urlsplit(ref)
+              if url.scheme or url.netloc or not url.path:
+                  continue
+              if prefix:
+                  if not url.path.startswith(prefix):
+                      continue
+                  relative = url.path[len(prefix):]
+                  if relative.startswith(excluded):
+                      continue
+              else:
+                  if url.path.startswith("/"):
+                      continue
+                  relative = url.path
+              target = (root / unquote(relative)).resolve()
+              if not target.is_relative_to(root.resolve()) or not target.is_file():
+                  failures.append(f"{html_file} references missing asset: {ref}")
+      if failures:
+          raise SystemExit("\n".join(failures))
+      print("Website and app page asset references are valid.")
+      PY
     - python -m unittest discover -s tests
     - VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py); test -f "docs/releases/$VER.md"
 
