@@ -9,6 +9,10 @@ checks:
   script:
     - python -m compileall -q .
     - for f in static/*.js; do node --check "$f"; done
+    - |
+      for f in $(grep -oP '(src|href)="/static/\K[^"?]+' static/index.html | grep -v '^vendor/'); do
+        [ -e "static/$f" ] || { echo "static/index.html references missing static/$f"; exit 1; }
+      done
     - python -m unittest discover -s tests
     - VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py); test -f "docs/releases/$VER.md"
 
