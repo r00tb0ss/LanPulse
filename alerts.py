@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import ipaddress
 import json
 import logging
@@ -52,6 +53,7 @@ DEFAULT_SETTINGS = {
     "unifi": {"host": "", "api_key": "", "username": "", "password": "", "site": "default",
               "group": "LanPulse Blocklist", "verify_tls": False},
     "snmp": {"enabled": False, "community": "", "hosts": []},
+    "quiet": {"until": 0},         # quiet mode: no alert messages are sent until this time (epoch seconds)
     "layout": {},
     "dns": {"enabled": False, "url": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
     "vulns": {"enabled": True, "nvd_key": ""},
@@ -552,6 +554,40 @@ def send_one(settings: dict, name: str, title: str, msg: str, priority: int = 3,
         return str(e) or e.__class__.__name__
 
 
+MUTED = {"count": 0}            # alerts held back since quiet mode was last changed
+
+
+def quiet_left(settings: dict, now: float | None = None) -> float:
+    """Seconds of quiet mode left, 0 when alerts are on."""
+    try:
+        until = float((settings.get("quiet") or {}).get("until") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, until - (now if now is not None else time.time()))
+
+
+def quiet_until(body: dict, now: float) -> float:
+    """Turn a request from the dashboard into an end time. {off: true} ends quiet mode, {morning: true} lasts until the
+    next 8 AM, {minutes: n} lasts n minutes (at most a week)."""
+    if body.get("off"):
+        return 0.0
+    if body.get("morning"):
+        t = datetime.datetime.fromtimestamp(now)
+        nxt = t.replace(hour=8, minute=0, second=0, microsecond=0)
+        if nxt <= t:
+            nxt += datetime.timedelta(days=1)
+        return nxt.timestamp()
+    try:
+        minutes = int(body.get("minutes"))
+    except (TypeError, ValueError):
+        return 0.0
+    return now + max(1, min(minutes, 7 * 1440)) * 60
+
+
 def send_all(settings: dict, title: str, msg: str, priority: int = 3, event=None) -> dict:
+    # Quiet mode holds alerts back. The daily summary is not an alert, so it still goes out.
+    if quiet_left(settings) > 0 and (event or {}).get("rule") != "summary":
+        MUTED["count"] += 1
+        return {}
     return {name: send_one(settings, name, title, msg, priority, event)
             for name, c in settings["channels"].items() if c.get("enabled")}

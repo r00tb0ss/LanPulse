@@ -60,7 +60,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 
-VERSION = "1.31.0"
+VERSION = "1.32.0"
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -1885,6 +1885,24 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.get("/api/services/{cid}/history")
     async def services_history(cid: str, hours: int = 24):
         return await asyncio.to_thread(nm.services.history, cid[:16], max(1, min(720, hours)))
+
+    # ---- quiet mode (alert messages are held back for a while; everything is still recorded and shown)
+    def quiet_view() -> dict:
+        left = alerts.quiet_left(nm.settings)
+        return {"active": left > 0, "until": nm.settings.get("quiet", {}).get("until", 0) if left > 0 else 0,
+                "muted": alerts.MUTED["count"]}
+
+    @app.get("/api/quiet")
+    async def quiet_get():
+        return quiet_view()
+
+    @app.post("/api/quiet")
+    async def quiet_set(request: Request):
+        body = await request.json()
+        nm.settings["quiet"] = {"until": alerts.quiet_until(body if isinstance(body, dict) else {}, time.time())}
+        alerts.MUTED["count"] = 0
+        nm.save_settings()
+        return quiet_view()
 
     # ---- health board (is each part LanPulse relies on alive)
     @app.get("/api/health")

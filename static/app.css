@@ -1198,6 +1198,17 @@ html[data-pretheme="sand"]{background:#f4efe6}
 @keyframes tpflow-dn{to{stroke-dashoffset:-16}}
 #topoSvg .tp-flow{animation:tpflow 1s linear infinite}
 #topoSvg .tp-flow.dn{animation-name:tpflow-dn}
+/* quiet mode */
+.icon-btn.quiet-on{color:#fcd34d;background:rgba(245,158,11,.14)}
+.q-pop{position:fixed;top:54px;right:12px;z-index:70;width:min(300px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:16px;box-shadow:0 14px 36px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:10px}
+.q-pop.hidden{display:none}
+.q-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}.q-title i{color:#fcd34d}
+.q-sub{margin:0;font-size:12.5px;color:var(--muted);line-height:1.45}.q-sub b{color:var(--text)}
+.q-wide{width:100%;justify-content:center}
+.q-or{font-size:11px;color:var(--dim);text-align:center;text-transform:uppercase;letter-spacing:.5px}
+.q-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.q-opts .btn{justify-content:center;padding:10px 6px;min-height:44px}
+.q-note{margin:0;font-size:11.5px;color:var(--dim);line-height:1.45}
 /* health board (Services tab) */
 .h-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px}
 .h-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
