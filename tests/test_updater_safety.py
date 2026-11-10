@@ -96,8 +96,8 @@ class UpdaterRollbackSafety(unittest.TestCase):
             ') > "\\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then',
             source,
         )
-        restore = source.index('tar -xzf "\\\\$D/previous.tgz"')
-        compare = source.index('tar -dzf "\\\\$D/previous.tgz"', restore)
+        restore = source.index(r'tar -xzf "\$D/previous.tgz"')
+        compare = source.index(r'tar -dzf "\$D/previous.tgz"', restore)
         reload = source.index("systemctl daemon-reload", compare)
         restart = source.index("systemctl restart lanpulse", reload)
         active = source.index("systemctl is-active --quiet lanpulse", restart)
