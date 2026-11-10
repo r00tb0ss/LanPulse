@@ -167,6 +167,14 @@ def parse_filterlog(line: str) -> dict | None:
         return None
 
 
+def merge_counted(items: list[dict], limit: int = 20) -> list[dict]:
+    """Add up [{text, count}] rows that say the same thing, keeping the order they first appeared in."""
+    merged: dict[str, int] = {}
+    for it in items:
+        merged[it["text"]] = merged.get(it["text"], 0) + int(it.get("count") or 1)
+    return [{"text": t, "count": n} for t, n in merged.items()][:limit]
+
+
 def parse_json(obj: dict, default_action: str | None = "logged") -> dict | None:
     """A JSON event. From the ingest API (honeypots, scripts) a missing action means "logged" (a honeypot hit).
     Inside router logs, JSON lines are only events if they say what happened or that they come from a honeypot."""
@@ -850,7 +858,7 @@ class ThreatMonitor:
             for h in hp["hits"]:
                 if h["data"] and not h["creds"]:
                     out["credentials"].append({"text": h["data"][:120], "count": 1})
-            out["credentials"] = out["credentials"][:20]
+            out["credentials"] = merge_counted(out["credentials"])     # 16 identical lines become one line with x16
             if not rows:                                   # only the honeypot has seen it
                 out["count"] = hp["total"]
                 out["first"], out["last"] = hp["first"], hp["last"]
