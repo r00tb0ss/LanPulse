@@ -63,6 +63,12 @@ class UpdaterRollbackSafety(unittest.TestCase):
         )
         self.assertLess(syntax_check, replace_updater)
 
+    def test_systemd_backup_directory_is_configured_and_writable(self):
+        hardening = INSTALL.split("cat > /etc/systemd/system/lanpulse.service.d/hardening.conf <<HARDEN", 1)[1]
+        hardening = hardening.split("\\nHARDEN", 1)[0]
+        self.assertIn("Environment=LANPULSE_BACKUP_DIR=/var/backups/lanpulse", hardening)
+        self.assertIn("ReadWritePaths=$DEST/data /var/backups/lanpulse", hardening)
+
     def test_update_failure_enters_rollback_branch(self):
         source = updater_source()
         self.assertIn(
