@@ -309,8 +309,8 @@ fi
   test -f "\$W/lanpulse/app.py"
   echo "-- installing"
   cd "\$W/lanpulse"
-  bash ./install.sh --upgrade) > "\$LOG" 2>&1
-if [[ \$? -eq 0 ]] && systemctl is-active --quiet lanpulse; then
+  bash ./install.sh --upgrade
+) > "\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then
   rm -f "\$D/incoming.zip"
   state done "Update installed."
 else
@@ -319,9 +319,14 @@ else
   systemctl restart lanpulse >> "\$LOG" 2>&1
   state failed "The update failed, so the previous version was restored. See the log below."
 fi
-}
+)
 main "\$@"; exit
 UPD
+if ! bash -n /usr/local/sbin/lanpulse-update.new; then
+  echo "ERROR: generated LanPulse updater has invalid shell syntax; keeping the existing updater unchanged." >&2
+  rm -f /usr/local/sbin/lanpulse-update.new
+  exit 1
+fi
 chmod 755 /usr/local/sbin/lanpulse-update.new
 mv -f /usr/local/sbin/lanpulse-update.new /usr/local/sbin/lanpulse-update
 mkdir -p /etc/lanpulse
