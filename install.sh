@@ -301,7 +301,7 @@ if ! mv -f "\$PREVIOUS_TMP" "\$D/previous.tgz"; then
   state failed "Could not save the verified rollback archive. No application files were changed."
   exit 1
 fi
-(
+if (
   set -e
   echo "-- unpacking"
   unzip -q "\$D/incoming.zip" -d "\$W"
