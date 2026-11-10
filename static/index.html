@@ -47,11 +47,13 @@
   <div class="scanstate hide-sm"><span class="pulse" id="pulse"></span><span id="mLast">waiting…</span></div>
   <span class="conn" id="conn" title="Live connection"><i class="fa-solid fa-circle"></i> <span class="conn-txt">Connecting</span></span>
   <a class="icon-btn hide-sm" id="btnExport" href="/api/export.csv" title="Export devices (CSV)"><i class="fa-solid fa-file-arrow-down"></i></a>
+  <button class="icon-btn" id="btnQuiet" title="Mute alerts for a while" aria-haspopup="true"><i class="fa-solid fa-bell"></i></button>
   <button class="icon-btn ai-btn" id="btnAi" title="Ask the AI security analyst"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
   <button class="icon-btn" id="btnNoc" title="Wall-display mode (operations center)"><i class="fa-solid fa-display"></i></button>
   <button class="icon-btn" id="btnSettings" title="Settings &amp; alerts"><i class="fa-solid fa-gear"></i></button>
   <a class="icon-btn hidden" id="btnLogout" href="/logout" title="Sign out"><i class="fa-solid fa-right-from-bracket"></i></a>
 </header>
+<div class="q-pop hidden" id="quietPop" role="dialog" aria-label="Quiet mode"></div>
 
 <div class="stage">
 <div class="layout" id="netView">
@@ -375,6 +377,7 @@
 <script src="/static/vulnview.js"></script>
 <script src="/static/svcview.js"></script>
 <script src="/static/healthview.js"></script>
+<script src="/static/quiet.js"></script>
 <script src="/static/redteamview.js"></script>
 <script src="/static/honeypotview.js"></script>
 <script src="/static/malwareview.js"></script>
