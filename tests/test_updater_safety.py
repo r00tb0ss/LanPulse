@@ -54,7 +54,7 @@ class UpdaterRollbackSafety(unittest.TestCase):
 
     def test_rollback_reloads_restored_systemd_configuration(self):
         source = updater_source()
-        restore = source.index('tar -xzf "\\\\$D/previous.tgz"')
+        restore = source.index('tar -xzf "\\$D/previous.tgz"')
         reload = source.index("systemctl daemon-reload", restore)
         restart = source.index("systemctl restart lanpulse", reload)
         self.assertLess(restore, reload)
