@@ -66,11 +66,11 @@ class UpdaterRollbackSafety(unittest.TestCase):
     def test_update_failure_enters_rollback_branch(self):
         source = updater_source()
         self.assertIn(
-            ') > "\\\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then',
+            ') > "\\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then',
             source,
         )
         self.assertIn('state failed "The update failed, so the previous version was restored.', source)
-        self.assertIn(')\nmain "\\\$@"; exit', source)
+        self.assertIn(')\nmain "\\$@"; exit', source)
 
 
 if __name__ == "__main__":
