@@ -43,6 +43,14 @@ def copy_tree(data_dir, snapshot):
         info = source.lstat()
         if source.is_symlink():
             raise ValueError(f"Refusing symbolic link: {rel}")
+        # These OpenVAS files are runtime state, not backup data. The PID file
+        # is owned by gvmd and unreadable to the hardened LanPulse service;
+        # the Unix socket cannot be meaningfully restored from an archive.
+        relative = rel.as_posix()
+        if relative == "openvas/gvmd/gvmd.pid" and source.is_file():
+            continue
+        if relative == "openvas/gvmd/gvmd.sock" and source.is_socket():
+            continue
         if source.is_dir():
             target.mkdir(parents=True, exist_ok=True)
             os.chmod(target, info.st_mode & 0o777)
