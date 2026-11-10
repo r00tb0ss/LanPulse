@@ -511,6 +511,10 @@ class SensorOptions(unittest.TestCase):
             r, _ = self._run(kind, ["ftp=on", "ftp_port=2200"])                      # 2200-2220 does not touch 2222
             self.assertEqual(r.returncode, 0, (kind, r.stderr))
 
+    def test_pi_installer_sets_cowrie_virtualenv_path(self):
+        script = pathlib.Path(TOOLS, "install-pi.sh").read_text()
+        self.assertIn('Environment="PATH=$COWRIE_DIR/cowrie-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"', script)
+
     def test_pi_installer_writes_the_cowrie_settings(self):
         tail = ('\nCOWRIE_DIR="$T"; CFG="$COWRIE_DIR/etc/cowrie.cfg"; UDB="$COWRIE_DIR/etc/userdb.txt"; MARK="# Written by the LanPulse installer"\n'
                 'COWRIE_USER=$(id -un); mkdir -p "$COWRIE_DIR/etc"\n'
