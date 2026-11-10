@@ -39,6 +39,19 @@ class UpdaterRollbackSafety(unittest.TestCase):
         self.assertLess(stop, unpack)
         self.assertIn('rm -f "\$PREVIOUS_TMP"', source[:failure])
 
+    def test_rollback_archive_includes_python_environment_and_service_configuration(self):
+        source = updater_source()
+        archive_command = source[source.index("tar -czf"):source.index("then", source.index("tar -czf"))]
+        self.assertIn("--exclude=opt/lanpulse/data", archive_command)
+        self.assertNotIn("--exclude=opt/lanpulse/venv", archive_command)
+        self.assertIn("opt/lanpulse etc/default/lanpulse", archive_command)
+        self.assertIn("etc/systemd/system/lanpulse.service", archive_command)
+        self.assertIn("etc/systemd/system/lanpulse.service.d", archive_command)
+        self.assertIn("grep -q '^opt/lanpulse/venv/'", archive_command)
+        self.assertIn("grep -qx 'etc/default/lanpulse'", archive_command)
+        self.assertIn("grep -qx 'etc/systemd/system/lanpulse.service'", archive_command)
+        self.assertIn("grep -qx 'etc/systemd/system/lanpulse.service.d/hardening.conf'", archive_command)
+
     def test_previous_archive_is_not_written_directly(self):
         source = updater_source()
         self.assertNotIn('tar -czf "\$D/previous.tgz"', source)

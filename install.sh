@@ -290,9 +290,13 @@ state installing "Installing the update. LanPulse will restart in a minute or tw
 PREVIOUS_TMP="\$D/previous.tgz.tmp.\$\$"
 rm -f "\$PREVIOUS_TMP"
 echo "-- creating and verifying the rollback archive"
-if ! tar -czf "\$PREVIOUS_TMP" -C / --exclude=opt/lanpulse/data --exclude=opt/lanpulse/venv opt/lanpulse >> "\$LOG" 2>&1 \
+if ! tar -czf "\$PREVIOUS_TMP" -C / --exclude=opt/lanpulse/data opt/lanpulse etc/default/lanpulse etc/systemd/system/lanpulse.service etc/systemd/system/lanpulse.service.d >> "\$LOG" 2>&1 \
   || ! tar -tzf "\$PREVIOUS_TMP" >/dev/null 2>> "\$LOG" \
-  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'opt/lanpulse/app.py'; then
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'opt/lanpulse/app.py' \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -q '^opt/lanpulse/venv/' \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'etc/default/lanpulse' \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'etc/systemd/system/lanpulse.service' \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'etc/systemd/system/lanpulse.service.d/hardening.conf'; then
   rm -f "\$PREVIOUS_TMP"
   state failed "Could not create and verify the rollback archive. No application files were changed."
   exit 1
