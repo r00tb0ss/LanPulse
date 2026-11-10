@@ -321,6 +321,7 @@ if (
 else
   echo "-- update failed: restoring the previous version" >> "\$LOG"
   tar -xzf "\$D/previous.tgz" -C / >> "\$LOG" 2>&1
+  systemctl daemon-reload >> "\$LOG" 2>&1
   systemctl restart lanpulse >> "\$LOG" 2>&1
   state failed "The update failed, so the previous version was restored. See the log below."
 fi

@@ -52,6 +52,14 @@ class UpdaterRollbackSafety(unittest.TestCase):
         self.assertIn("grep -qx 'etc/systemd/system/lanpulse.service'", archive_command)
         self.assertIn("grep -qx 'etc/systemd/system/lanpulse.service.d/hardening.conf'", archive_command)
 
+    def test_rollback_reloads_restored_systemd_configuration(self):
+        source = updater_source()
+        restore = source.index('tar -xzf "\\\\$D/previous.tgz"')
+        reload = source.index("systemctl daemon-reload", restore)
+        restart = source.index("systemctl restart lanpulse", reload)
+        self.assertLess(restore, reload)
+        self.assertLess(reload, restart)
+
     def test_previous_archive_is_not_written_directly(self):
         source = updater_source()
         self.assertNotIn('tar -czf "\$D/previous.tgz"', source)
