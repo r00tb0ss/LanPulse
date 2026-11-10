@@ -639,6 +639,8 @@ function renderSettings() {
     renderUnifiSettings(body);
   } else if (setTab === "scanner") {
     renderScanner(body);
+  } else if (setTab === "backup") {
+    renderBackupSettings(body);
   } else if (setTab === "update") {
     renderUpdate(body);
   } else if (setTab === "system") {
@@ -668,6 +670,46 @@ function renderSettings() {
   }
   const save = $("bSaveSet");
   if (save) save.onclick = () => saveSettings();
+}
+
+function renderBackupSettings(body) {
+  body.innerHTML = `<p class="hint">Create a protected copy of LanPulse data. Backups include settings, history and credentials, so keep downloaded copies private.</p>
+    <div class="chan">
+      <div class="chan-head"><i class="fa-solid fa-database ci"></i><div class="txt"><b>Create a backup</b><small>Save a verified backup without stopping LanPulse.</small></div></div>
+      <div class="chan-fields">
+        <label class="full">Backup location<input value="/var/backups/lanpulse" readonly></label>
+        <div class="full btns"><button class="btn primary" id="bBackupNow"><i class="fa-solid fa-box-archive"></i>Create backup now</button><span class="test-res" id="backupResult"></span></div>
+      </div>
+    </div>
+    <div class="chan">
+      <div class="chan-head"><i class="fa-solid fa-clock-rotate-left ci"></i><div class="txt"><b>Saved backups</b><small>Download a copy to keep somewhere safe.</small></div>
+        <button class="btn sm" id="bBackupRefresh" title="Refresh backup list"><i class="fa-solid fa-rotate"></i></button></div>
+      <div id="backupList" style="padding:0 12px 12px"><p class="hint">Loading backups…</p></div>
+    </div>
+    <p class="hint">Downloading requires a dashboard login. Restoring remains a maintenance operation and is done with the documented command-line procedure.</p>`;
+  const list = $("backupList");
+  const refresh = async () => {
+    list.innerHTML = '<p class="hint">Loading backups…</p>';
+    const result = await api("/api/backups", "GET");
+    if (!result) { list.innerHTML = '<p class="hint">Could not load backups.</p>'; return; }
+    if (!result.backups || !result.backups.length) { list.innerHTML = '<p class="hint">No backups yet. Select “Create backup now” to make the first one.</p>'; return; }
+    list.innerHTML = result.backups.map((item) => {
+      const size = item.size >= 1048576 ? (item.size / 1048576).toFixed(1) + " MB" : (item.size / 1024).toFixed(0) + " KB";
+      const action = meta.auth ? `<a class="btn sm" href="/api/backups/${encodeURIComponent(item.name)}"><i class="fa-solid fa-download"></i>Download</a>` : '<span class="test-res">Set a login to download</span>';
+      return `<div class="rule"><div class="txt"><b>${esc(item.name)}</b><small>${esc(item.created)} · ${size}</small></div>${action}</div>`;
+    }).join("");
+  };
+  $("bBackupRefresh").onclick = refresh;
+  $("bBackupNow").onclick = async () => {
+    const button = $("bBackupNow"), status = $("backupResult");
+    button.disabled = true; status.className = "test-res"; status.textContent = "Creating and verifying backup…";
+    const result = await api("/api/backups", "POST", null, true);
+    button.disabled = false;
+    if (result && result.ok) { status.className = "test-res ok"; status.textContent = "Backup created successfully."; }
+    else { status.className = "test-res bad"; status.textContent = result?.error || "Backup failed. Check the service log."; }
+    await refresh();
+  };
+  refresh();
 }
 
 function collectSettings() {

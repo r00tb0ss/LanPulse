@@ -56,6 +56,10 @@ mkdir -p "$DEST/data"
 chmod 700 "$DEST/data"
 if [[ "$SRC" != "$DEST" ]]; then
   cp -r "$SRC"/*.py "$SRC"/*.sh "$SRC"/requirements.txt "$SRC"/LICENSE "$SRC"/THIRD-PARTY-NOTICES.md "$SRC"/static "$DEST"/
+  if [[ -f "$SRC/tools/lanpulse_backup.py" ]]; then
+    mkdir -p "$DEST/tools"
+    cp "$SRC/tools/lanpulse_backup.py" "$DEST/tools/"
+  fi
   if [[ -d "$SRC/tools/pi-honeypot" ]]; then        # the honeypot sensor installers that Honeypot > Add sensor hands out
     mkdir -p "$DEST/tools"
     rm -rf "$DEST/tools/pi-honeypot"

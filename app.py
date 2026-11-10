@@ -28,6 +28,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -59,8 +60,10 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
+from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
 VERSION = "1.33.1"
+
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)
@@ -1502,6 +1505,45 @@ def build_app(nm: LanPulse) -> FastAPI:
         nm.save_settings()
         await asyncio.to_thread(nm.threats.clean_noise)     # drop stored late replies if the filter is on
         return alerts.masked(nm.settings)
+
+    @app.get("/api/backups")
+    async def get_backups():
+        return {"backups": list_backup_archives()}
+
+    @app.post("/api/backups")
+    async def create_backup():
+        if nm.args.demo:
+            return JSONResponse({"error": "Backups are unavailable in demo mode."}, 400)
+        if not IS_ROOT:
+            return JSONResponse({"error": "LanPulse must run with administrator rights to back up its data."}, 403)
+        tool = BASE / "tools" / "lanpulse_backup.py"
+        if not tool.is_file():
+            return JSONResponse({"error": "The backup utility is missing. Update or reinstall LanPulse."}, 503)
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run, [sys.executable, str(tool), "backup"],
+                capture_output=True, text=True, timeout=600, check=False)
+        except subprocess.TimeoutExpired:
+            return JSONResponse({"error": "The backup took too long. Check the LanPulse service log."}, 504)
+        except OSError as exc:
+            log.exception("Could not start LanPulse backup")
+            return JSONResponse({"error": f"Could not start backup: {exc}"}, 500)
+        if result.returncode:
+            detail = (result.stderr or result.stdout or "Unknown backup error").strip()[-1200:]
+            log.error("LanPulse backup failed: %s", detail)
+            return JSONResponse({"error": detail}, 500)
+        backups = list_backup_archives()
+        return {"ok": True, "backups": backups}
+
+    @app.get("/api/backups/{name}")
+    async def download_backup(name: str):
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a dashboard login in Settings > Login before downloading backups. They may contain credentials and network history."}, 403)
+        try:
+            archive = backup_archive_path(name)
+        except ValueError:
+            return JSONResponse({"error": "Backup not found."}, 404)
+        return FileResponse(archive, media_type="application/gzip", filename=archive.name)
 
     @app.post("/api/settings/test/{channel}")
     async def test_channel(channel: str):
