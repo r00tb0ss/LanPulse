@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LanPulse — real-time LAN security dashboard</title>
-<meta name="description" content="LanPulse is a self-hosted, real-time map of your home or lab network: live device and traffic map, attack map, built-in honeypot, vulnerability scanning with OpenVAS, DNS and service monitoring, red-team tooling, attacker OSINT, compromised-device detection and a network security score.">
+<meta name="description" content="LanPulse is a self-hosted, real-time map of your home or lab network: live device and traffic map, attack map, built-in honeypot with behavioral attack intelligence, vulnerability scanning with OpenVAS, DNS and service monitoring, verified data backup and restore, red-team tooling, attacker OSINT, compromised-device detection and a network security score.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -238,6 +238,7 @@
         <li>Internal vs. external sources, with an instant alert for internal ones.</li>
         <li>Accepts events from external sensors such as an ESP32. Low-interaction only — it never gives a shell.</li>
         <li><b>Add a sensor</b> (Raspberry Pi, Linux box or container) with one command: a Cowrie SSH/Telnet trap plus optional <b>FTP and web decoys</b> that keep what attackers upload. Every session is replayed command by command, and every captured file is analysed statically — never run.</li>
+        <li><b>AI Attack Intelligence</b> — detailed Cowrie sessions get a separate behavioral assessment with classification, intelligence score, confidence and visible evidence. It distinguishes automation from potentially AI-assisted behavior conservatively; it does not alter the existing danger score or auto-block. Command/session telemetry is required.</li>
       </ul>
     </div>
     <figure class="shot"><img src="images/honeypot.png" alt="Honeypot view showing hits from inside the network, decoys hit and credentials tried"></figure>
@@ -309,6 +310,7 @@
     <div class="card"><div class="ic">🕑</div><h4>Per-device timeline</h4><p>Every change on a device — ports opened, software updated, vulnerabilities found, threats seen — in one history.</p></div>
     <div class="card"><div class="ic">🔔</div><h4>Alerts anywhere</h4><p>ntfy, Telegram, email, Discord/webhook and IRC — with a daily summary.</p></div>
     <div class="card"><div class="ic">🔄</div><h4>One-click updates</h4><p>Update from the dashboard; the previous version is backed up and restored automatically if anything fails.</p></div>
+    <div class="card"><div class="ic">💾</div><h4>Manual data backup &amp; restore</h4><p>Create a verified, private backup of network history, settings and databases. Restore checks archive integrity, requires LanPulse to be stopped, and keeps the previous data directory instead of deleting it. Optional and manually run; no scheduled backups.</p></div>
     <div class="card"><div class="ic">🔒</div><h4>Hardened by design</h4><p>Login-protected, DNS-rebinding and CSRF guards, a systemd sandbox, and no exposed shell.</p></div>
   </div>
 </div></section>

@@ -39,6 +39,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **IPS view**: what your UDM's intrusion prevention recognized (Mirai, router exploits, SSH scans...)
 - **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
 - **Honeypot sensors**: add a Raspberry Pi, Linux box or container running Cowrie (SSH/Telnet) with optional FTP and web decoys from a one-line command; every attacker session is recorded and every captured file is analysed statically (never run)
+- **AI Attack Intelligence**: adds a separate behavioral assessment to detailed honeypot sessions, distinguishing automated activity from potentially AI-assisted behavior, with a score, confidence and evidence. It is deliberately conservative and does not claim AI use from a connection or a few commands; it does not change the existing danger score or automatically block anyone. Requires command/session telemetry such as Cowrie.
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
 - **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
 - **Guided setup** wizard on first run, and lateral-movement detection
@@ -226,7 +227,7 @@ sudo /opt/lanpulse/venv/bin/python /opt/lanpulse/app.py --data-dir /opt/lanpulse
 
 ## Backups and restore
 
-The updater can roll back application files after a failed update, but that is not a backup of your network history and settings. See [Manual data backup and restore](docs/backup-restore.md) for the optional standalone backup tool. It does not change the dashboard or run automatically.
+The updater can roll back application files after a failed update, but that is not a backup of your network history and settings. The optional [manual backup and restore tool](docs/backup-restore.md) creates a verified archive of LanPulse data, including consistent SQLite snapshots. Restore requires a maintenance window, verifies the archive before replacing data, and preserves the previous data directory. It does not change the dashboard or run automatically.
 
 ## Try it without scanning
 
