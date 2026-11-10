@@ -16,7 +16,7 @@ class PostureHistoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             h = PostureHistory(str(Path(d) / "posture.db"))
             h.db.execute("""
-                CREATE TRIGGER reject_cleanup BEFORE DELETE ON posture
+                CREATE TRIGGER reject_insert BEFORE INSERT ON posture
                 BEGIN SELECT RAISE(ABORT, 'temporary write failure'); END
             """)
             h.db.commit()
@@ -24,9 +24,9 @@ class PostureHistoryTests(unittest.TestCase):
             with self.assertRaises(sqlite3.IntegrityError):
                 h.record(82, "B")
 
-            # Simulate recovery from the failed transaction before retrying.
+            # Remove the simulated fault and retry the same score.
             h.db.rollback()
-            h.db.execute("DROP TRIGGER reject_cleanup")
+            h.db.execute("DROP TRIGGER reject_insert")
             h.db.commit()
             h.record(82, "B")
 
