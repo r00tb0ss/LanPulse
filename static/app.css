@@ -227,7 +227,7 @@ a.icon-btn{text-decoration:none}
 .modal-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap;position:sticky;bottom:0;
   margin:0 -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--bg2);border-top:1px solid var(--border)}
 @media (max-width:560px){.chan-fields{grid-template-columns:1fr}.actions{grid-template-columns:1fr 1fr}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){*:not(.tp-flow):not(.tp-pulse){animation:none!important;transition:none!important}}   /* the map's traffic dots are the point of the map, so they keep moving */
 
 /* ---- v1.2 threats view ---- */
 :root{--threat:#f43f5e;--blocked:var(--accent);--home:#22c55e}
@@ -1207,7 +1207,6 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .fold>summary::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);opacity:.5;margin:-3px 2px 0 0;flex:none;transition:transform .15s}
 .fold[open]>summary::after{transform:rotate(-135deg);margin-top:3px}
 .fold[open]>summary{margin-bottom:8px}
-@media (prefers-reduced-motion:reduce){#topoSvg .tp-pulse,#topoSvg .tp-flow{animation:none}}
 
 /* honeypot details */
 .pot-geo{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
