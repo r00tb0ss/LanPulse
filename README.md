@@ -224,6 +224,10 @@ Change the login from the command line:
 sudo /opt/lanpulse/venv/bin/python /opt/lanpulse/app.py --data-dir /opt/lanpulse/data --set-password
 ```
 
+## Backups and restore
+
+The updater can roll back application files after a failed update, but that is not a backup of your network history and settings. See [Manual data backup and restore](docs/backup-restore.md) for the optional standalone backup tool. It does not change the dashboard or run automatically.
+
 ## Try it without scanning
 
 ```bash
