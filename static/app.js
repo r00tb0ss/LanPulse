@@ -677,7 +677,7 @@ function renderBackupSettings(body) {
     <div class="chan">
       <div class="chan-head"><i class="fa-solid fa-database ci"></i><div class="txt"><b>Create a backup</b><small>Save a verified backup without stopping LanPulse.</small></div></div>
       <div class="chan-fields">
-        <label class="full">Backup location<input value="/var/backups/lanpulse" readonly></label>
+        <label class="full">Backup location<input id="backupLocation" value="" readonly></label>
         <div class="full btns"><button class="btn primary" id="bBackupNow"><i class="fa-solid fa-box-archive"></i>Create backup now</button><span class="test-res" id="backupResult"></span></div>
       </div>
     </div>
@@ -692,6 +692,8 @@ function renderBackupSettings(body) {
     list.innerHTML = '<p class="hint">Loading backups…</p>';
     const result = await api("/api/backups", "GET");
     if (!result) { list.innerHTML = '<p class="hint">Could not load backups.</p>'; return; }
+    const locationField = $("backupLocation");
+    if (locationField && result.location) locationField.value = result.location;
     if (!result.backups || !result.backups.length) { list.innerHTML = '<p class="hint">No backups yet. Select “Create backup now” to make the first one.</p>'; return; }
     list.innerHTML = result.backups.map((item) => {
       const size = item.size >= 1048576 ? (item.size / 1048576).toFixed(1) + " MB" : (item.size / 1024).toFixed(0) + " KB";

@@ -1,11 +1,21 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 The LanPulse authors
 """Safe listing and filename validation for Settings > Backup."""
+import os
 from pathlib import Path
 import re
 import time
 
-BACKUP_DIR = Path("/var/backups/lanpulse")
+def configured_backup_dir(environ=None) -> Path:
+    """Return the configured backup directory (absolute paths only)."""
+    environ = os.environ if environ is None else environ
+    path = Path(environ.get("LANPULSE_BACKUP_DIR", "/var/backups/lanpulse")).expanduser()
+    if not path.is_absolute():
+        raise ValueError("LANPULSE_BACKUP_DIR must be an absolute path")
+    return path
+
+
+BACKUP_DIR = configured_backup_dir()
 BACKUP_NAME_RE = re.compile(r"lanpulse-\d{8}T\d{12}Z\.tar\.gz\Z")
 
 

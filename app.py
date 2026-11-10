@@ -1508,7 +1508,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.get("/api/backups")
     async def get_backups():
-        return {"backups": list_backup_archives()}
+        return {"backups": list_backup_archives(), "location": str(BACKUP_DIR)}
 
     @app.post("/api/backups")
     async def create_backup():
