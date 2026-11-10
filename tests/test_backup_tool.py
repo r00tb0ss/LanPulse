@@ -1,0 +1,64 @@
+import sys
+import tarfile
+import tempfile
+import sqlite3
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+import lanpulse_backup as backup
+
+class BackupTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.data = self.root / "data"
+        self.data.mkdir()
+        self.destination = self.root / "backups"
+        (self.data / "settings.json").write_text('{"port":8080}\n')
+        with sqlite3.connect(self.data / "history.db") as db:
+            db.execute("CREATE TABLE devices (id TEXT PRIMARY KEY)")
+            db.execute("INSERT INTO devices VALUES ('device-1')")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_round_trip_preserves_previous_data(self):
+        archive = backup.create_backup(self.data, self.destination)
+        (self.data / "settings.json").write_text('{"port":9999}\n')
+        with patch.object(backup, "service_active", return_value=False):
+            previous = backup.restore_backup(archive, self.data)
+        self.assertIn("8080", (self.data / "settings.json").read_text())
+        self.assertIn("9999", (previous / "settings.json").read_text())
+        with sqlite3.connect(self.data / "history.db") as db:
+            self.assertEqual(db.execute("SELECT id FROM devices").fetchone()[0], "device-1")
+
+    def test_refuses_restore_while_service_is_active(self):
+        archive = backup.create_backup(self.data, self.destination)
+        with patch.object(backup, "service_active", return_value=True):
+            with self.assertRaisesRegex(RuntimeError, "Stop it first"):
+                backup.restore_backup(archive, self.data)
+        self.assertIn("8080", (self.data / "settings.json").read_text())
+
+    def test_rejects_tampered_backup(self):
+        archive = backup.create_backup(self.data, self.destination)
+        with tempfile.TemporaryDirectory() as temp:
+            with tarfile.open(archive, "r:gz") as tar:
+                tar.extractall(temp)
+            payload = Path(temp) / "lanpulse-data" / "settings.json"
+            payload.write_text('{"tampered":true}\n')
+            corrupt = self.destination / "corrupt.tar.gz"
+            with tarfile.open(corrupt, "w:gz") as tar:
+                tar.add(Path(temp) / "lanpulse-data", arcname="lanpulse-data")
+        with patch.object(backup, "service_active", return_value=False):
+            with self.assertRaisesRegex(ValueError, "verification failed"):
+                backup.restore_backup(corrupt, self.data)
+        self.assertIn("8080", (self.data / "settings.json").read_text())
+
+    def test_backup_must_be_outside_data(self):
+        with self.assertRaisesRegex(ValueError, "outside"):
+            backup.create_backup(self.data, self.data / "backups")
+
+if __name__ == "__main__":
+    unittest.main()
