@@ -35,7 +35,7 @@ class BackupSettingsHelpers(unittest.TestCase):
             self.assertEqual(backup_ui.backup_archive_path(good.name, root), good)
             for invalid in ("../secret.tar.gz", "other.tar.gz", good.name + "/.."):
                 with self.assertRaises(ValueError):
-                    app.backup_archive_path(invalid, root)
+                    backup_ui.backup_archive_path(invalid, root)
 
     def test_download_path_rejects_symlinks(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -48,7 +48,7 @@ class BackupSettingsHelpers(unittest.TestCase):
             except OSError:
                 self.skipTest("Symlinks are unavailable on this platform")
             with self.assertRaises(ValueError):
-                app.backup_archive_path(link.name, root)
+                backup_ui.backup_archive_path(link.name, root)
 
 
 if __name__ == "__main__":

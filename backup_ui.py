@@ -6,7 +6,7 @@ import re
 import time
 
 BACKUP_DIR = Path("/var/backups/lanpulse")
-BACKUP_NAME_RE = re.compile(r"lanpulse-\\d{8}T\\d{12}Z\\.tar\\.gz\\Z")
+BACKUP_NAME_RE = re.compile(r"lanpulse-\d{8}T\d{12}Z\.tar\.gz\Z")
 
 
 def list_backup_archives(directory: Path = BACKUP_DIR) -> list[dict]:
