@@ -60,41 +60,10 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
+from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
 VERSION = "1.33.1"
 
-BACKUP_DIR = Path("/var/backups/lanpulse")
-BACKUP_NAME_RE = re.compile(r"lanpulse-\\d{8}T\\d{12}Z\\.tar\\.gz\\Z")
-
-
-def list_backup_archives(directory: Path = BACKUP_DIR) -> list[dict]:
-    """List only regular LanPulse backup archives; never follow symlinks."""
-    try:
-        entries = list(Path(directory).iterdir())
-    except FileNotFoundError:
-        return []
-    backups = []
-    for path in entries:
-        if not BACKUP_NAME_RE.fullmatch(path.name) or path.is_symlink() or not path.is_file():
-            continue
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-        backups.append({"name": path.name, "size": stat.st_size,
-                        "created": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))})
-    return sorted(backups, key=lambda item: item["name"], reverse=True)
-
-
-def backup_archive_path(name: str, directory: Path = BACKUP_DIR) -> Path:
-    """Resolve a backup download by its generated filename only."""
-    if not BACKUP_NAME_RE.fullmatch(str(name)):
-        raise ValueError("Invalid backup filename")
-    root = Path(directory).resolve()
-    path = root / name
-    if path.is_symlink() or not path.is_file() or path.resolve().parent != root:
-        raise ValueError("Backup not found")
-    return path
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
 STARTED = time.time()   # when this process started (used to spot an update status that never finished)

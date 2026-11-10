@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import app
+import backup_ui
 
 
 class BackupSettingsHelpers(unittest.TestCase):
@@ -22,7 +22,7 @@ class BackupSettingsHelpers(unittest.TestCase):
             except OSError:
                 pass
 
-            backups = app.list_backup_archives(root)
+            backups = backup_ui.list_backup_archives(root)
             self.assertEqual([item["name"] for item in backups], [good.name])
             self.assertEqual(backups[0]["size"], 6)
             self.assertTrue(backups[0]["created"])
@@ -32,7 +32,7 @@ class BackupSettingsHelpers(unittest.TestCase):
             root = Path(temp)
             good = root / "lanpulse-20261110T182337123456Z.tar.gz"
             good.write_bytes(b"backup")
-            self.assertEqual(app.backup_archive_path(good.name, root), good)
+            self.assertEqual(backup_ui.backup_archive_path(good.name, root), good)
             for invalid in ("../secret.tar.gz", "other.tar.gz", good.name + "/.."):
                 with self.assertRaises(ValueError):
                     app.backup_archive_path(invalid, root)
