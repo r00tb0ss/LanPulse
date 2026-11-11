@@ -36,6 +36,22 @@ class ReviewFixTests(unittest.TestCase):
             self.assertTrue(a.check("admin", "secret"))
             self.assertFalse(a.check("admin", "wrong"))
 
+    def test_network_health_refreshes_on_live_data(self):
+        root = Path(__file__).resolve().parent.parent
+        app = (root / "static" / "app.js").read_text()
+        threats = (root / "static" / "threats.js").read_text()
+
+        helper = app.split("function refreshNetworkHealth() {", 1)[1].split("\\n}", 1)[0]
+        self.assertIn('typeof renderHealth === "function"', helper)
+        self.assertIn("catch (e)", helper)
+
+        snapshot = app.split("function applySnapshot(s) {", 1)[1].split("\\n}", 1)[0]
+        self.assertIn("refreshNetworkHealth();", snapshot)
+
+        summary = threats.split("function renderThreats(s, full) {", 1)[1].split("\\n}", 1)[0]
+        self.assertIn("refreshNetworkHealth();", summary)
+        self.assertLess(summary.index("refreshNetworkHealth();"), summary.index('if (view !== "threats") return;'))
+
     def test_history_query_while_recording(self):
         with tempfile.TemporaryDirectory() as d:
             h = history.History(str(Path(d) / "h.db"))
