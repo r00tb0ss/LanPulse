@@ -275,7 +275,12 @@
   <div class="pot-listeners" id="potListeners"></div>
   <div class="t-card" id="potTimeline"></div>
   <div class="t-card hidden" id="potDetail"></div>
-  <div class="t-card" id="potMalware"><h4><span>Captured attacks and malware</span><span class="pot-tabs" id="potMalTabs"><button data-t="sessions">Sessions</button><button data-t="samples">Samples</button><button data-t="sensors">Sensors</button></span></h4><div id="potMalBody"></div><div class="hidden" id="potSensorAdd"></div><div class="hidden" id="potMalDetail"></div></div>
+  <div class="t-card" id="potMalware"><h4><span>Captured attacks and malware</span><span class="pot-tabs" id="potMalTabs"><button data-t="sessions">Sessions</button><button data-t="sensors">Sensors</button></span></h4><div id="potMalBody"></div><div class="hidden" id="potSensorAdd"></div><div class="hidden" id="potMalDetail"></div></div>
+  <div class="t-card" id="potHashIntel">
+    <h4><span>Hash intelligence</span><span class="pot-tabs" id="potHashTabs"><button data-hash-tab="files" class="on">Captured files</button><button data-hash-tab="hassh">SSH fingerprints</button></span></h4>
+    <p class="muted pot-hash-note">Hashes identify observed files; HASSH groups SSH client handshakes. Neither alone proves who operated a source or whether a file is malicious.</p>
+    <div id="potHashBody"></div>
+  </div>
   <div class="v-grid two">
     <div class="t-card wide"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4><div class="pot-hits" id="potHits"></div></div>
     <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap any address for details</span></h4><div class="rank" id="potAttackers"></div></div>

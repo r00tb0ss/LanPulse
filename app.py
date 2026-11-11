@@ -2172,6 +2172,10 @@ def build_app(nm: LanPulse) -> FastAPI:
     def sensor_who(request: Request):
         return nm.honeyan.auth(request.headers.get("X-LanPulse-Key", ""))
 
+    @app.get("/api/honeypot/fingerprints")
+    async def honeypot_fingerprints(hours: int = 2160):
+        return await asyncio.to_thread(nm.honeyan.fingerprints, max(1, min(hours, 2160)))
+
     @app.get("/api/honeypot/sessions")
     async def honeypot_sessions(hours: int = 168, limit: int = 100):
         return await asyncio.to_thread(nm.honeyan.sessions, max(1, min(hours, 2160)), max(1, min(limit, 500)))
