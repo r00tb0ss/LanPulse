@@ -238,6 +238,21 @@ class Store(unittest.TestCase):
         self.assertFalse(self.h.key_ok("nope"))
         self.assertFalse(self.h.key_ok(""))
 
+    def test_hassh_fingerprints_group_existing_sessions(self):
+        self.h.add_session(self.session(session="h1", hassh="16443846184eafde36765c9bab2f4397",
+                                        client="SSH-2.0-Go", ip="198.51.100.7"))
+        self.h.add_session(self.session(session="h2", hassh="16443846184eafde36765c9bab2f4397",
+                                        client="SSH-2.0-Go", ip="198.51.100.8"))
+        self.h.add_session(self.session(session="h3", hassh="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                                        client="SSH-2.0-OpenSSH", ip="198.51.100.7"))
+        result = self.h.fingerprints(24)
+        self.assertEqual(result["total"], 2)
+        first = next(x for x in result["fingerprints"] if x["hassh"] == "16443846184eafde36765c9bab2f4397")
+        self.assertEqual(first["sessions"], 2)
+        self.assertEqual(first["sources"], 2)
+        self.assertEqual(first["clients"][0]["name"], "SSH-2.0-Go")
+        self.assertEqual(first["latest_session"], "h2")
+
     def test_session_roundtrip_and_headline_once(self):
         self.assertEqual(self.h.add_session(self.session()), (True, "ok"))
         self.assertEqual(self.h.add_session(self.session()), (True, "ok"))        # re-sent: no second headline hit

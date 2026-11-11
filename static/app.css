@@ -1379,3 +1379,13 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-hashes>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pot-hashes>div .mono{overflow-wrap:anywhere}
 @media(max-width:720px){.pot-hash-row{align-items:flex-start;flex-direction:column}.pot-hash-actions{flex-wrap:wrap}.pot-hash-main{width:100%}}
+
+/* Honeypot analytics: related credential views stay together without duplicating data. */
+.pot-analytics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 14px}
+.pot-analytics>.t-card{min-width:0}
+.pot-analytics .pot-recent-card,.pot-analytics .pot-credentials{grid-column:1/-1}
+.pot-analytics .pot-recent-card .pot-hits{max-height:340px}
+.pot-credential-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.pot-credential-grid h5{margin:2px 0 8px;font-size:12px;color:var(--muted);font-weight:600}
+@media(max-width:900px){.pot-analytics{grid-template-columns:repeat(2,minmax(0,1fr))}.pot-analytics .pot-credentials{grid-column:1/-1}}
+@media(max-width:620px){.pot-analytics{grid-template-columns:minmax(0,1fr)}.pot-analytics>.t-card,.pot-analytics .pot-recent-card,.pot-analytics .pot-credentials{grid-column:1}.pot-credential-grid{grid-template-columns:minmax(0,1fr);gap:12px}}
