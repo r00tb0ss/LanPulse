@@ -766,6 +766,17 @@ function toast(msg) {
 
 /* ------------------------------------------------------------ live data */
 let bootVersion = "";
+
+// Keep the optional sidebar renderer isolated: a Health-panel error must never
+// interrupt processing of the live network snapshot or threat summary.
+function refreshNetworkHealth() {
+  try {
+    if (typeof renderHealth === "function") renderHealth();
+  } catch (e) {
+    console.warn("Network health refresh failed:", e);
+  }
+}
+
 function applySnapshot(s) {
   const prevSweep = meta.last_sweep;
   meta = s.meta || {};
@@ -776,6 +787,7 @@ function applySnapshot(s) {
   syncMap(s.layout);
   renderList();
   renderEvents(s.events || []);
+  refreshNetworkHealth();
   if (selected) renderPanel(false);
   if (meta.last_sweep !== prevSweep) {
     const p = $("pulse"); p.classList.remove("beat"); void p.offsetWidth; p.classList.add("beat");

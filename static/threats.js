@@ -442,6 +442,7 @@ function flyToCountry(iso) {
 /* ------------------------------------------------------------ dashboard panels */
 function renderThreats(s, full) {
   tSummary = s;
+  if (typeof refreshNetworkHealth === "function") refreshNetworkHealth();
   (s.recent || []).forEach((e) => { if (isReached(e)) reachedIps.add(e.src); });
   if (view !== "threats") return;
   const reached = s.total - s.blocked;
