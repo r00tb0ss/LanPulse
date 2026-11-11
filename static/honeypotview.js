@@ -21,6 +21,8 @@ function potServiceChip(svc) {                       // small label for a decoy 
   return cat ? cat.label : svc;
 }
 
+let potAttackersExpanded = false;
+
 function renderHoneypot() {
   const s = potData;
   if (!s || !$("potKpis")) return;
@@ -68,18 +70,22 @@ function renderHoneypot() {
     </div>`).join("") : `<div class="muted">No hits yet. Once the decoys are on, anything that connects shows up here.</div>`;
 
   // attackers (internal ones tappable if we know the device)
-  $("potAttackers").innerHTML = s.attackers.length ? s.attackers.map((a) => {
-    const dev = [...devices.values()].find((d) => d.ip === a.ip);
-    return `<div class="pot-att ${a.internal ? "internal" : ""}" data-pot-ip="${esc(a.ip)}">
-      <div class="pot-att-ip"><span class="mono">${esc(a.ip)}</span>
-        ${a.internal ? `<span class="tagchip bad">internal</span>` : ""}
-        ${dev ? `<span class="muted">${esc(nmLabel(dev))}</span>` : ""}</div>
-      <div class="pot-att-meta"><span class="pot-hitn">${a.hits}</span>
-        <span class="muted">${a.services.map(potServiceChip).map(esc).join(", ")}</span></div>
-      ${a.iso || a.org ? `<div class="pot-att-geo muted">${a.iso ? flagHtml(a.iso) + " " + esc([a.city, a.country].filter(Boolean).join(", ")) : ""}${a.org ? ` &middot; ${esc(a.org)}` : ""}</div>` : ""}
-      <div class="pot-att-geo muted">first ${ago(a.first)} &middot; last ${ago(a.last)}</div>
-    </div>`;
-  }).join("") : `<div class="muted">Nobody yet.</div>`;
+  const attackerRows = s.attackers || [];
+  const visibleAttackers = potAttackersExpanded ? attackerRows : attackerRows.slice(0, 10);
+  $("potAttackers").innerHTML = attackerRows.length ? `
+    <div class="pot-expand-list ${potAttackersExpanded ? "expanded" : ""}">${visibleAttackers.map((a) => {
+      const dev = [...devices.values()].find((d) => d.ip === a.ip);
+      return `<div class="pot-att ${a.internal ? "internal" : ""}" data-pot-ip="${esc(a.ip)}">
+        <div class="pot-att-ip"><span class="mono">${esc(a.ip)}</span>
+          ${a.internal ? `<span class="tagchip bad">internal</span>` : ""}
+          ${dev ? `<span class="muted">${esc(nmLabel(dev))}</span>` : ""}</div>
+        <div class="pot-att-meta"><span class="pot-hitn">${a.hits}</span>
+          <span class="muted">${a.services.map(potServiceChip).map(esc).join(", ")}</span></div>
+        ${a.iso || a.org ? `<div class="pot-att-geo muted">${a.iso ? flagHtml(a.iso) + " " + esc([a.city, a.country].filter(Boolean).join(", ")) : ""}${a.org ? ` &middot; ${esc(a.org)}` : ""}</div>` : ""}
+        <div class="pot-att-geo muted">first ${ago(a.first)} &middot; last ${ago(a.last)}</div>
+      </div>`;
+    }).join("")}</div>
+    ${attackerRows.length > 10 ? `<button class="btn sm ghost pot-expand-toggle" data-expand-attackers>${potAttackersExpanded ? "Show less" : `View all (${attackerRows.length})`}</button>` : ""}` : `<div class="muted">Nobody yet.</div>`;
 
   // services breakdown
   const maxSvc = Math.max(1, ...s.by_service.map((x) => x.count));
@@ -245,7 +251,10 @@ async function showPotSetup(force) {
   const hits = $("potHits");
   if (hits) hits.addEventListener("click", (e) => { const r = e.target.closest("[data-ip]"); if (r) showPotDetail(r.dataset.ip); });
   const att = $("potAttackers");
-  if (att) att.addEventListener("click", (e) => { const r = e.target.closest("[data-pot-ip]"); if (r) showPotDetail(r.dataset.potIp); });
+  if (att) att.addEventListener("click", (e) => {
+    if (e.target.closest("[data-expand-attackers]")) { potAttackersExpanded = !potAttackersExpanded; renderHoneypot(); return; }
+    const r = e.target.closest("[data-pot-ip]"); if (r) showPotDetail(r.dataset.potIp);
+  });
   const hrs = $("potHours");
   if (hrs) hrs.onchange = () => { potHours = parseInt(hrs.value, 10) || 168; loadHoneypot(); };
   // keep the tab badge live-ish even when another view is open
