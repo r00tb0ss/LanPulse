@@ -750,6 +750,56 @@ class HoneyAnalysis:
             self.db.commit()
 
     # -------------------------------------------------------- views
+
+    def fingerprints(self, hours: int = 2160, limit: int = 10000) -> dict:
+        """Read-only HASSH overview, grouped from the session records already collected."""
+        since = time.time() - max(1, min(int(hours), 2160)) * 3600
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, ip, client, hassh, start, proto, port FROM sessions "
+                "WHERE start >= ? AND hassh != '' ORDER BY start DESC LIMIT ?",
+                (since, max(1, min(int(limit), 20000)))).fetchall()
+        grouped = {}
+        for sid, ip, client, hassh, started, proto, port in rows:
+            fingerprint = str(hassh or "").strip().lower()
+            if not fingerprint:
+                continue
+            item = grouped.setdefault(fingerprint, {
+                "hassh": fingerprint, "sessions": 0, "ips": set(), "clients": {}, "services": {},
+                "first_seen": started, "last_seen": started, "latest_session": sid,
+            })
+            item["sessions"] += 1
+            if ip:
+                item["ips"].add(ip)
+            if client:
+                item["clients"][client] = item["clients"].get(client, 0) + 1
+            service = str(proto or "ssh").upper() + ":" + str(int(port or 0))
+            item["services"][service] = item["services"].get(service, 0) + 1
+            item["first_seen"] = min(item["first_seen"], started)
+            item["last_seen"] = max(item["last_seen"], started)
+        out = []
+        for item in grouped.values():
+            clients = sorted(item["clients"].items(), key=lambda x: (-x[1], x[0]))
+            services = sorted(item["services"].items(), key=lambda x: (-x[1], x[0]))
+            source_ips = sorted(item["ips"])
+            countries = {}
+            for source_ip in source_ips:
+                geo = self.hp._geo(source_ip)
+                country = str(geo.get("country") or geo.get("iso") or "").strip()
+                if country:
+                    countries[country] = countries.get(country, 0) + 1
+            out.append({
+                "hassh": item["hassh"], "sessions": item["sessions"],
+                "sources": len(item["ips"]), "source_ips": source_ips[:10],
+                "countries": [{"name": n, "sources": c} for n, c in sorted(countries.items(), key=lambda x: (-x[1], x[0]))[:5]],
+                "services": [{"name": n, "count": c} for n, c in services[:5]],
+                "clients": [{"name": n, "count": c} for n, c in clients[:5]],
+                "first_seen": item["first_seen"], "last_seen": item["last_seen"],
+                "latest_session": item["latest_session"],
+            })
+        out.sort(key=lambda x: (-x["sessions"], x["hassh"]))
+        return {"fingerprints": out, "total": len(out), "hours": max(1, min(int(hours), 2160))}
+
     def sessions(self, hours: int = 168, limit: int = 100) -> dict:
         since = time.time() - hours * 3600
         with self.lock:

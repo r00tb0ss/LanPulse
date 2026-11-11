@@ -1363,3 +1363,48 @@ html[data-pretheme="sand"]{background:#f4efe6}
   #potView .pot-hit{align-items:flex-start;flex-wrap:wrap}
   #potView .pot-creds{margin-left:0}
 }
+
+/* Honeypot investigation layout: compact, scannable hash intelligence. */
+#potHashIntel{margin:0 0 14px}
+.pot-hash-note{margin:0 0 10px;font-size:12px;line-height:1.5}
+.pot-hash-summary{font-size:12px;color:var(--muted);margin:0 0 8px}
+.pot-hash-list{display:grid;gap:5px;max-height:440px;overflow:auto}
+.pot-hash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)}
+.pot-hash-row.click{cursor:pointer}
+.pot-hash-row.click:hover{border-color:var(--border2);background:var(--panel2)}
+.pot-hash-main{display:grid;gap:4px;min-width:0;font-size:12px}
+.pot-hash-main b{font-weight:600;overflow-wrap:anywhere}
+.pot-hash-main .mono{font-size:11px}
+.pot-hash-actions{display:flex;gap:6px;flex:none}
+.pot-hashes>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pot-hashes>div .mono{overflow-wrap:anywhere}
+@media(max-width:720px){.pot-hash-row{align-items:flex-start;flex-direction:column}.pot-hash-actions{flex-wrap:wrap}.pot-hash-main{width:100%}}
+
+/* Honeypot analytics: related credential views stay together without duplicating data. */
+.pot-analytics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 14px}
+.pot-analytics>.t-card{min-width:0}
+.pot-analytics .pot-recent-card,.pot-analytics .pot-credentials{grid-column:1/-1}
+.pot-analytics .pot-recent-card .pot-hits{max-height:340px}
+.pot-credential-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.pot-credential-grid h5{margin:2px 0 8px;font-size:12px;color:var(--muted);font-weight:600}
+@media(max-width:900px){.pot-analytics{grid-template-columns:repeat(2,minmax(0,1fr))}.pot-analytics .pot-credentials{grid-column:1/-1}}
+@media(max-width:620px){.pot-analytics{grid-template-columns:minmax(0,1fr)}.pot-analytics>.t-card,.pot-analytics .pot-recent-card,.pot-analytics .pot-credentials{grid-column:1}.pot-credential-grid{grid-template-columns:minmax(0,1fr);gap:12px}}
+
+/* Threats view: separate traffic analytics from investigation tables. */
+#threatView .t-main{grid-template-columns:minmax(0,1fr) minmax(280px,320px)}
+#threatView .t-mapcard{min-height:410px}
+#threatView .t-feed{max-height:410px}
+#threatView .t-security-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+#threatView .t-security-grid>.t-card{grid-column:auto;min-width:0}
+#threatView #tLocal .lrows{max-height:380px;overflow:auto;padding-right:3px}
+#threatView #tLocal .lrow{gap:8px;padding:8px 9px}
+@media(max-width:900px){
+  #threatView .t-main{grid-template-columns:minmax(0,1fr)}
+  #threatView .t-mapcard{min-height:360px}
+  #threatView .t-feed{max-height:360px}
+  #threatView .t-security-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+  #threatView .t-security-grid{grid-template-columns:minmax(0,1fr)}
+  #threatView .t-security-grid>.t-card{grid-column:1}
+}
