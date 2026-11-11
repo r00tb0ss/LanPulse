@@ -1319,3 +1319,47 @@ html[data-pretheme="sand"]{background:#f4efe6}
 @media (max-width:560px){.noc-strip{grid-template-columns:1fr}}
 .noc-upd{white-space:nowrap}
 @media (max-width:560px){.noc-upd{display:none}.noc-head{gap:10px}.noc-brand span{display:none}}
+
+
+/* Threats + Honeypot visual cleanup — presentation only */
+#threatView .t-kpis{gap:12px}
+#threatView .t-main{gap:12px;align-items:stretch}
+#threatView .t-mapcard{min-height:440px}
+#threatView .t-feed{min-width:0;max-height:440px}
+#threatView .t-grid{gap:12px}
+#threatView .t-grid>.t-card{min-width:0}
+#threatView .t-card h4{gap:10px;line-height:1.35}
+#threatView .t-card h4 .muted{line-height:1.4;text-align:right}
+#threatView .rank{min-width:0}
+#threatView .atk-table{min-width:0}
+
+#potView{gap:12px}
+#potView .v-head{margin-bottom:0}
+#potView .t-kpis{gap:12px}
+#potView .pot-listeners{margin:0 0 2px;gap:7px}
+#potView #potTimeline{margin-bottom:0}
+#potView #potMalware{min-width:0}
+#potView .v-grid.two{gap:12px}
+#potView .v-grid.two>.t-card{min-width:0}
+#potView .v-grid.two>.t-card h4{gap:10px;line-height:1.35}
+#potView .v-grid.two>.t-card h4 .muted{line-height:1.4;text-align:right}
+#potView .pot-hits{gap:3px;max-height:480px}
+#potView .pot-hit{min-height:34px;padding:7px 10px}
+#potView .pot-cred{gap:12px;padding:7px 2px}
+#potView .pot-cred>span:first-child{min-width:0;overflow-wrap:anywhere}
+#potView .pot-bar{gap:10px}
+#potView .pot-bar-l{min-width:76px}
+#potView .pot-bar-n{min-width:34px}
+
+@media(max-width:720px){
+  #threatView .t-kpis{gap:8px}
+  #threatView .t-main{gap:10px}
+  #threatView .t-mapcard{min-height:340px}
+  #threatView .t-feed{max-height:360px}
+  #threatView .t-grid{gap:10px}
+  #potView{gap:10px}
+  #potView .t-kpis{gap:8px}
+  #potView .v-grid.two{gap:10px}
+  #potView .pot-hit{align-items:flex-start;flex-wrap:wrap}
+  #potView .pot-creds{margin-left:0}
+}
