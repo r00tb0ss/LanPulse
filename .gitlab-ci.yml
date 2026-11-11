@@ -1,5 +1,5 @@
 # Runs the same checks as the old GitHub workflow, and publishes docs/ as the project page (GitLab Pages).
-stages: [test, deploy]
+stages: [test, deploy, verify]
 
 checks:
   stage: test
@@ -90,7 +90,7 @@ pages:
 publish-release:
   stage: deploy
   image: alpine:3.20
-  allow_failure: true   # a failed release must not block the pages deploy, which waits on this job
+  allow_failure: true   # Pages must still deploy if publication fails; verify-release-publication reports failure afterward.
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
       changes: [app.py]
@@ -117,3 +117,27 @@ publish-release:
     - |
       curl -fsS -X POST -H "JOB-TOKEN: $CI_JOB_TOKEN" -H "Content-Type: application/json" --data @release.json "$API/releases"
     - echo "Published v$VER"
+
+# This runs after the deployment stage, so it can report a failed publication without blocking Pages.
+verify-release-publication:
+  stage: verify
+  image: alpine:3.20
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes: [app.py]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web"
+  script:
+    - apk add --no-cache curl jq
+    - VER=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app.py | head -n 1)
+    - API="$CI_API_V4_URL/projects/$CI_PROJECT_ID"
+    - |
+      RELEASE=$(curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" "$API/releases/v$VER") || {
+        echo "ERROR: v$VER was not published successfully; inspect the publish-release job."
+        exit 1
+      }
+      URL=$(printf '%s' "$RELEASE" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip")][0] | (.direct_asset_url // .url) // empty')
+      if [ -z "$URL" ]; then
+        echo "ERROR: v$VER exists but its lanpulse.zip release asset link is missing."
+        exit 1
+      fi
+      echo "Verified v$VER release entry and lanpulse.zip asset link: $URL"
