@@ -39,6 +39,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **IPS view**: what your UDM's intrusion prevention recognized (Mirai, router exploits, SSH scans...)
 - **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
 - **Honeypot sensors**: add a Raspberry Pi, Linux box or container running Cowrie (SSH/Telnet) with optional FTP and web decoys from a one-line command; every attacker session is recorded and every captured file is analysed statically (never run)
+- **Honeypot investigation intelligence**: grouped credential analytics, captured-file hash intelligence (SHA-256, SHA-1 and MD5), static malware analysis, SSH HASSH client-fingerprint summaries, related-session navigation, and compact recent-results lists with in-panel View all expansion. HASSH groups SSH client handshakes; it is not proof of a unique identity.
 - **AI Attack Intelligence**: adds a separate behavioral assessment to detailed honeypot sessions, distinguishing automated activity from potentially AI-assisted behavior, with a score, confidence and evidence. It is deliberately conservative and does not claim AI use from a connection or a few commands; it does not change the existing danger score or automatically block anyone. Requires command/session telemetry such as Cowrie.
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
 - **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
@@ -227,7 +228,7 @@ sudo /opt/lanpulse/venv/bin/python /opt/lanpulse/app.py --data-dir /opt/lanpulse
 
 ## Backups and restore
 
-The updater can roll back application files after a failed update, but that is not a backup of your network history and settings. The optional [manual backup and restore tool](docs/backup-restore.md) creates a verified archive of LanPulse data, including consistent SQLite snapshots. Restore requires a maintenance window, verifies the archive before replacing data, and preserves the previous data directory. It does not change the dashboard or run automatically.
+The updater's rollback protects application files after a failed update; it is not a backup of network history and settings. Use **Settings > Backup > Create backup now** to create a verified data archive, then list and download completed archives from the same tab. Backups include consistent SQLite snapshots and are stored privately (default `/var/backups/lanpulse`). Restore is a deliberate maintenance operation performed from the command line: the service must be stopped, the archive is verified before replacement, and the previous data directory is preserved. No automatic backup schedule is configured. See [manual backup and restore](docs/backup-restore.md) for permissions, alternate locations and container guidance.
 
 ## Try it without scanning
 
@@ -402,7 +403,7 @@ auto-refreshing. Press **Esc** to exit.
 **Settings → Appearance** offers nine looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
 **Ember** (warm black, copper glow), **Deep Ocean** (sea-green depths, aqua), **80s Hacker** (green phosphor on black),
 **Midnight Synthwave** (neon magenta and cyan), **Frost** (cool slate, ice blue), **Sand** (warm paper, terracotta) and
-**Crimson Noir** (pure black, white text, one red accent, square corners).
+**Crimson Noir** (the newest theme: pure black, white text, one red accent, square corners).
 The choice is saved in your browser.
 
 ## Red Team
