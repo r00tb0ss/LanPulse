@@ -10,7 +10,7 @@ async function loadHealth() {
   const r = await api("/api/health", "GET");
   if (!r) return;
   healthData = r;
-  renderHealth();
+  renderServiceHealth();
 }
 
 function healthTile(i) {
@@ -24,7 +24,7 @@ function healthTile(i) {
     </div></div>`;
 }
 
-function renderHealth() {
+function renderServiceHealth() {
   const h = healthData, box = $("healthCard");
   if (!h || !box) return;
   const live = h.items.filter((i) => i.state !== "off"), off = h.items.filter((i) => i.state === "off");
