@@ -1408,3 +1408,8 @@ html[data-pretheme="sand"]{background:#f4efe6}
   #threatView .t-security-grid{grid-template-columns:minmax(0,1fr)}
   #threatView .t-security-grid>.t-card{grid-column:1}
 }
+
+
+/* Compact honeypot lists expand within their own panel, not the whole page. */
+.pot-expand-list.expanded{max-height:360px;overflow-y:auto;overscroll-behavior:contain;}
+.pot-expand-toggle{margin-top:8px;}
