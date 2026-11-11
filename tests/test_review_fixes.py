@@ -41,14 +41,14 @@ class ReviewFixTests(unittest.TestCase):
         app = (root / "static" / "app.js").read_text()
         threats = (root / "static" / "threats.js").read_text()
 
-        helper = app.split("function refreshNetworkHealth() {", 1)[1].split("\\n}", 1)[0]
+        helper = app.split("function refreshNetworkHealth() {", 1)[1].split(chr(10) + "}", 1)[0]
         self.assertIn('typeof renderHealth === "function"', helper)
         self.assertIn("catch (e)", helper)
 
-        snapshot = app.split("function applySnapshot(s) {", 1)[1].split("\\n}", 1)[0]
+        snapshot = app.split("function applySnapshot(s) {", 1)[1].split(chr(10) + "}", 1)[0]
         self.assertIn("refreshNetworkHealth();", snapshot)
 
-        summary = threats.split("function renderThreats(s, full) {", 1)[1].split("\\n}", 1)[0]
+        summary = threats.split("function renderThreats(s, full) {", 1)[1].split(chr(10) + "}", 1)[0]
         self.assertIn("refreshNetworkHealth();", summary)
         self.assertLess(summary.index("refreshNetworkHealth();"), summary.index('if (view !== "threats") return;'))
 
