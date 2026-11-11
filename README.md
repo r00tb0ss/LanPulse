@@ -403,7 +403,7 @@ auto-refreshing. Press **Esc** to exit.
 **Settings → Appearance** offers nine looks: **Midnight** (the default dark), **Enterprise Light** (clean white),
 **Ember** (warm black, copper glow), **Deep Ocean** (sea-green depths, aqua), **80s Hacker** (green phosphor on black),
 **Midnight Synthwave** (neon magenta and cyan), **Frost** (cool slate, ice blue), **Sand** (warm paper, terracotta) and
-**Crimson Noir** (pure black, white text, one red accent, square corners).
+**Crimson Noir** (the newest theme: pure black, white text, one red accent, square corners).
 The choice is saved in your browser.
 
 ## Red Team
