@@ -250,6 +250,8 @@ class Store(unittest.TestCase):
         first = next(x for x in result["fingerprints"] if x["hassh"] == "16443846184eafde36765c9bab2f4397")
         self.assertEqual(first["sessions"], 2)
         self.assertEqual(first["sources"], 2)
+        self.assertEqual(first["source_ips"], ["198.51.100.7", "198.51.100.8"])
+        self.assertEqual(first["services"][0]["name"], "SSH:22")
         self.assertEqual(first["clients"][0]["name"], "SSH-2.0-Go")
         self.assertEqual(first["latest_session"], "h2")
 
