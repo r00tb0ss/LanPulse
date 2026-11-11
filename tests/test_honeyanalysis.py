@@ -514,6 +514,7 @@ class SensorOptions(unittest.TestCase):
     def test_pi_installer_sets_cowrie_virtualenv_path(self):
         script = pathlib.Path(TOOLS, "install-pi.sh").read_text()
         self.assertIn('Environment="PATH=$COWRIE_DIR/cowrie-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"', script)
+        self.assertIn('Environment="TZ=UTC"', script)
 
     def test_pi_installer_writes_the_cowrie_settings(self):
         tail = ('\nCOWRIE_DIR="$T"; CFG="$COWRIE_DIR/etc/cowrie.cfg"; UDB="$COWRIE_DIR/etc/userdb.txt"; MARK="# Written by the LanPulse installer"\n'
@@ -544,6 +545,7 @@ class SensorOptions(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         cow = yaml.safe_load(pathlib.Path(d, "docker-compose.yml").read_text())["services"]["cowrie"]
         self.assertEqual(cow["ports"], ["2200:2222"])
+        self.assertEqual(cow["environment"]["TZ"], "UTC")
         self.assertEqual(cow["environment"]["COWRIE_TELNET_ENABLED"], "no")
         self.assertEqual(cow["environment"]["COWRIE_HONEYPOT_HOSTNAME"], "web01")
         self.assertEqual((cow["mem_limit"], cow["cpus"]), ("256m", "0.50"))

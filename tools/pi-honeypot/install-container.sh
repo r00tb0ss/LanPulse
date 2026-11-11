@@ -131,7 +131,7 @@ NL=$'\n'
 PORTS=""; COWENV=""; COWVOL=""; LIMITS=""; TRAPSVC=""; FWDVOL=""; FWDENV=""; FWDDEP=""; TRAPVOL=""
 if [ "$SSH_ON" = yes ]; then PORTS="${PORTS}      - \"$SSH_PORT:2222\"$NL"; fi
 if [ "$TELNET_ON" = yes ]; then PORTS="${PORTS}      - \"$TELNET_PORT:2223\"$NL"; fi
-COWENV="${COWENV}      COWRIE_SSH_ENABLED: \"$SSH_ON\"$NL      COWRIE_TELNET_ENABLED: \"$TELNET_ON\"$NL"
+COWENV="${COWENV}      TZ: \"UTC\"$NL      COWRIE_SSH_ENABLED: \"$SSH_ON\"$NL      COWRIE_TELNET_ENABLED: \"$TELNET_ON\"$NL"
 COWENV="${COWENV}      COWRIE_HONEYPOT_HOSTNAME: \"$FAKE_HOST\"$NL"
 if [ -n "$FILE_MB" ]; then COWENV="${COWENV}      COWRIE_HONEYPOT_DOWNLOAD_LIMIT_SIZE: \"$((FILE_MB * 1048576))\"$NL"; fi
 if [ "$LOGIN" = random ]; then

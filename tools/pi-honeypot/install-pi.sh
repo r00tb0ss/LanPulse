@@ -267,6 +267,7 @@ After=network.target
 Type=forking
 User=$COWRIE_USER
 WorkingDirectory=$COWRIE_DIR
+Environment="TZ=UTC"
 Environment="PATH=$COWRIE_DIR/cowrie-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 PIDFile=$COWRIE_DIR/var/run/cowrie.pid
 ExecStart=$COWRIE_DIR/cowrie-env/bin/cowrie start
