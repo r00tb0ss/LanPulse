@@ -1389,3 +1389,22 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-credential-grid h5{margin:2px 0 8px;font-size:12px;color:var(--muted);font-weight:600}
 @media(max-width:900px){.pot-analytics{grid-template-columns:repeat(2,minmax(0,1fr))}.pot-analytics .pot-credentials{grid-column:1/-1}}
 @media(max-width:620px){.pot-analytics{grid-template-columns:minmax(0,1fr)}.pot-analytics>.t-card,.pot-analytics .pot-recent-card,.pot-analytics .pot-credentials{grid-column:1}.pot-credential-grid{grid-template-columns:minmax(0,1fr);gap:12px}}
+
+/* Threats view: separate traffic analytics from investigation tables. */
+#threatView .t-main{grid-template-columns:minmax(0,1fr) minmax(280px,320px)}
+#threatView .t-mapcard{min-height:410px}
+#threatView .t-feed{max-height:410px}
+#threatView .t-security-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+#threatView .t-security-grid>.t-card{grid-column:auto;min-width:0}
+#threatView #tLocal .lrows{max-height:380px;overflow:auto;padding-right:3px}
+#threatView #tLocal .lrow{gap:8px;padding:8px 9px}
+@media(max-width:900px){
+  #threatView .t-main{grid-template-columns:minmax(0,1fr)}
+  #threatView .t-mapcard{min-height:360px}
+  #threatView .t-feed{max-height:360px}
+  #threatView .t-security-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+  #threatView .t-security-grid{grid-template-columns:minmax(0,1fr)}
+  #threatView .t-security-grid>.t-card{grid-column:1}
+}
