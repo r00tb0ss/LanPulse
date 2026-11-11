@@ -239,6 +239,9 @@
         <li>Accepts events from external sensors such as an ESP32. Low-interaction only — it never gives a shell.</li>
         <li><b>Add a sensor</b> (Raspberry Pi, Linux box or container) with one command: a Cowrie SSH/Telnet trap plus optional <b>FTP and web decoys</b> that keep what attackers upload. Every session is replayed command by command, and every captured file is analysed statically — never run.</li>
         <li><b>AI Attack Intelligence</b> — detailed Cowrie sessions get a separate behavioral assessment with classification, intelligence score, confidence and visible evidence. It distinguishes automation from potentially AI-assisted behavior conservatively; it does not alter the existing danger score or auto-block. Command/session telemetry is required.</li>
+        <li><b>Investigation intelligence</b> groups credential analytics and adds captured-file hash intelligence (SHA-256, SHA-1 and MD5), static analysis, metadata, entropy, related sessions and VirusTotal lookup.</li>
+        <li><b>SSH HASSH summaries</b> group client handshakes with first/last seen, session counts, source context, client software and related-session navigation. A fingerprint is not proof of a unique identity.</li>
+        <li>Long investigation lists stay compact by default, with <b>View all</b> expansion inside bounded, scrollable panels.</li>
       </ul>
     </div>
     <figure class="shot"><img src="images/honeypot.png" alt="Honeypot view showing hits from inside the network, decoys hit and credentials tried"></figure>
@@ -299,6 +302,7 @@
     <div class="card"><div class="ic">🛡</div><h4>Inside-network threats</h4><p>Detects ARP spoofing, rogue DHCP servers, network sweeps and port scans — and catches a replaced or impersonated router.</p></div>
     <div class="card"><div class="ic">🌐</div><h4>DNS visibility (Pi-hole)</h4><p>Reads your Pi-hole query log and flags lookups of known-malware domains, per device.</p></div>
     <div class="card"><div class="ic">❤</div><h4>Service uptime</h4><p>HTTP, TCP and ping checks for the things you care about, with history and down/up alerts.</p></div>
+    <div class="card"><div class="ic">💾</div><h4>Verified data backups</h4><p>Create a verified backup from Settings, then list and download completed archives. SQLite snapshots are consistent; restore is a deliberate maintenance operation that verifies the archive and preserves the previous data directory. No automatic schedule is enabled.</p></div>
     <div class="card"><div class="ic">🍯</div><h4>Honeypot</h4><p>Decoy services that log every probe and the credentials tried; a hit from inside your LAN flags a likely-compromised device.</p></div>
     <div class="card"><div class="ic">🧪</div><h4>Sensors and malware analysis</h4><p>Add a Pi or container as a Cowrie trap with FTP and web decoys. Attacker sessions are recorded and dropped files are analysed statically, never run.</p></div>
     <div class="card"><div class="ic">🖥</div><h4>Pick the operating system</h4><p>When a scan can't tell Windows 11 from Server 2019, choose the real OS from a drop-down of Windows and Linux versions. Your choice sticks.</p></div>
