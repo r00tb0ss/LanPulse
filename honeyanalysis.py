@@ -163,7 +163,7 @@ def _script_credentials(text: str, limit: int = 20) -> list[dict]:
     """Extract passwords explicitly embedded in automated SSH commands; not validated credentials."""
     out, seen = [], set()
     for line in text.splitlines():
-        password = re.search(r"\bsshpass\s+-p\s*(['""]?)([^\s'""];|]+)\1", line, re.I)
+        password = re.search(r"\bsshpass\s+-p\s*(['\"]?)([^\s'\";|]+)\1", line, re.I)
         if not password:
             continue
         target = re.search(r"\b([A-Za-z_][\w.-]{0,31})@(?:\$[A-Za-z_]\w*|[A-Za-z0-9.-]+)", line)
