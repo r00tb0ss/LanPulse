@@ -98,7 +98,7 @@ def create_backup(data_dir, backup_dir):
             manifest = {"format_version": FORMAT_VERSION, "created_utc": created,
                         "source_data_dir": str(data_dir), "data_dir_mode": data_dir.stat().st_mode & 0o777,
                         "directories": directories, "files": files}
-            (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\\n", encoding="utf-8")
+            (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             os.chmod(root / "manifest.json", 0o600)
             with tarfile.open(archive, "w:gz") as tar:
                 tar.add(root, arcname="lanpulse-data", recursive=True)
