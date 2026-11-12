@@ -59,6 +59,11 @@ function renderPotRecent() {
 async function loadPotServiceDetail(service, scroll = true) {
   potSelectedService = service || "";
   renderPotRecent();
+  $("potServices").querySelectorAll("[data-pot-service]").forEach((el) => {
+    const active = el.dataset.potService === potSelectedService;
+    el.classList.toggle("selected", active);
+    el.setAttribute("aria-pressed", String(active));
+  });
   const box = $("potServiceDetail");
   if (!potSelectedService) { box.classList.add("hidden"); box.innerHTML = ""; renderHoneypot(); return; }
   box.classList.remove("hidden");
@@ -87,6 +92,7 @@ async function loadPotServiceDetail(service, scroll = true) {
           <span>${esc(h.org || "Network unknown")}${h.asn ? " · AS" + esc(h.asn) : ""}</span>
           <span>Ports: ${esc((h.ports || []).join(", ") || "—")}</span>
           <span>${h.credential_hits} credential attempts</span>
+          <span>First: ${esc(ago(h.first))}</span>
           <span>Last: ${esc(ago(h.last))}</span>
           ${h.sensor ? `<span class="tagchip">${esc(h.sensor)}</span>` : ""}
         </div>
