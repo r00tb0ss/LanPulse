@@ -891,6 +891,110 @@ class HoneyAnalysis:
         out.sort(key=lambda x: (-x["sessions"], x["hassh"]))
         return {"fingerprints": out, "total": len(out), "hours": max(1, min(int(hours), 2160))}
 
+    def campaigns(self, hours: int = 2160, limit: int = 100) -> dict:
+        """Correlate observed sessions and samples by exact shared artifacts or behavior.
+
+        Relationships are evidence links, not attribution: shared infrastructure or tooling does
+        not prove that two source IPs have the same operator.
+        """
+        hours = max(1, min(int(hours), 2160))
+        since = time.time() - hours * 3600
+        with self.lock:
+            sessions = self.db.execute(
+                "SELECT id, ip, start, hassh, commands, files, tags FROM sessions "
+                "WHERE start >= ? ORDER BY start DESC LIMIT 20000", (since,)).fetchall()
+            samples = self.db.execute(
+                "SELECT sha256, ips, urls, analysis, last_seen FROM samples "
+                "WHERE last_seen >= ? ORDER BY last_seen DESC LIMIT 500", (since,)).fetchall()
+
+        groups = {}
+
+        def add(kind, value, ip, started, session_id="", sha="", confidence="low"):
+            value = str(value or "").strip()
+            ip = str(ip or "").strip()
+            if not value or not ip:
+                return
+            key = (kind, value)
+            item = groups.setdefault(key, {"kind": kind, "value": value, "ips": set(),
+                "sessions": set(), "samples": set(), "first_seen": started, "last_seen": started,
+                "confidence": confidence})
+            item["ips"].add(ip)
+            if session_id:
+                item["sessions"].add(session_id)
+            if sha:
+                item["samples"].add(sha)
+            if started:
+                item["first_seen"] = min(item["first_seen"], started)
+                item["last_seen"] = max(item["last_seen"], started)
+            if confidence == "high":
+                item["confidence"] = "high"
+            elif confidence == "moderate" and item["confidence"] == "low":
+                item["confidence"] = "moderate"
+
+        for sid, ip, started, hassh, commands_json, files_json, tags_json in sessions:
+            if hassh:
+                add("SSH client fingerprint", hassh.lower(), ip, started, sid, confidence="moderate")
+            commands = json.loads(commands_json or "[]")
+            files = json.loads(files_json or "[]")
+            tags = sorted(set(json.loads(tags_json or "[]")) - {"logged-in"})
+            if len(tags) >= 2:
+                add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low")
+            iocs = find_iocs("\\n".join(commands))
+            for indicator in iocs.get("ips", []):
+                add("Public IP", indicator["value"], ip, started, sid, confidence="low")
+            for indicator in iocs.get("domains", []):
+                add("Domain", indicator["value"], ip, started, sid, confidence="low")
+            for indicator in iocs.get("irc_servers", []):
+                add("IRC command-and-control", indicator, ip, started, sid, confidence="moderate")
+            for indicator in iocs.get("irc_channels", []):
+                add("IRC channel", indicator, ip, started, sid, confidence="low")
+            for key_text in iocs.get("ssh_keys", []):
+                fingerprint = hashlib.sha256(key_text.encode("utf-8", "replace")).hexdigest()[:32]
+                add("SSH key fingerprint", "SHA256:" + fingerprint, ip, started, sid, confidence="high")
+            for f in files:
+                sha = str(f.get("sha256") or "").lower()
+                if HEX64.match(sha):
+                    add("Malware SHA-256", sha, ip, started, sid, sha, confidence="high")
+                url = str(f.get("url") or "")
+                host = re.sub(r"^\\w+(?:\\+\\w+)?://([^/:]+).*", r"\\1", url).lower()
+                if host and host != url.lower():
+                    add("File transfer host", host, ip, started, sid, sha, confidence="moderate")
+
+        for sha, ips_json, urls_json, analysis_json, last_seen in samples:
+            analysis = json.loads(analysis_json or "{}")
+            sample_ips = set(json.loads(ips_json or "[]"))
+            for ip in sample_ips:
+                add("Malware SHA-256", sha, ip, last_seen, sha=sha, confidence="high")
+                iocs = analysis.get("iocs") or {}
+                for indicator in iocs.get("ips", []):
+                    add("Public IP", indicator.get("value"), ip, last_seen, sha=sha, confidence="low")
+                for indicator in iocs.get("domains", []):
+                    add("Domain", indicator.get("value"), ip, last_seen, sha=sha, confidence="low")
+                for indicator in iocs.get("irc_servers", []):
+                    add("IRC command-and-control", indicator, ip, last_seen, sha=sha, confidence="moderate")
+                for key_text in iocs.get("ssh_keys", []):
+                    fingerprint = hashlib.sha256(str(key_text).encode("utf-8", "replace")).hexdigest()[:32]
+                    add("SSH key fingerprint", "SHA256:" + fingerprint, ip, last_seen, sha=sha, confidence="high")
+                for url in json.loads(urls_json or "[]"):
+                    host = re.sub(r"^\\w+(?:\\+\\w+)?://([^/:]+).*", r"\\1", url).lower()
+                    if host and host != url.lower():
+                        add("File transfer host", host, ip, last_seen, sha=sha, confidence="moderate")
+
+        out = []
+        for item in groups.values():
+            if len(item["ips"]) < 2:
+                continue
+            out.append({
+                "kind": item["kind"], "value": item["value"], "confidence": item["confidence"],
+                "sources": len(item["ips"]), "source_ips": sorted(item["ips"])[:30],
+                "sessions": len(item["sessions"]), "session_ids": sorted(item["sessions"])[:20],
+                "samples": len(item["samples"]), "sample_hashes": sorted(item["samples"])[:10],
+                "first_seen": item["first_seen"], "last_seen": item["last_seen"],
+            })
+        out.sort(key=lambda x: (-x["sources"], -x["sessions"], -x["samples"], x["kind"], x["value"]))
+        return {"campaigns": out[:max(1, min(int(limit), 200))], "total": len(out), "hours": hours,
+                "note": "Correlations show shared observable evidence; they do not prove a common operator or campaign."}
+
     def sessions(self, hours: int = 168, limit: int = 100) -> dict:
         since = time.time() - hours * 3600
         with self.lock:
@@ -920,6 +1024,30 @@ class HoneyAnalysis:
         files = json.loads(files or "[]")
         logins_data = json.loads(logins or "[]")
         intelligence = analyze_attack_intelligence(cmds, logins_data, files, max(0, end - start))
+        timeline = [{"sequence": 1, "kind": "session", "stage": "Initial access",
+                     "summary": f"Connection opened to {str(proto).upper()}:{port}", "evidence": ""}]
+        for login in logins_data:
+            timeline.append({"sequence": len(timeline) + 1, "kind": "login", "stage": "Initial access",
+                             "summary": ("Accepted" if login.get("ok") else "Attempted") + " login for " +
+                                        (login.get("u") or "unknown user"), "evidence": ""})
+        for index, command in enumerate(cmds):
+            tags_for_command = classify_command(command)
+            stage = ("Command and control" if "irc-c2" in tags_for_command else
+                     "Persistence" if any(t.startswith("persistence") or t == "ssh-key-plant" for t in tags_for_command) else
+                     "Defense evasion" if any(t in tags_for_command for t in ("disable-defenses", "cover-tracks", "deletes-files")) else
+                     "Execution" if any(t in tags_for_command for t in ("run-dropped-file", "reverse-shell", "make-executable")) else
+                     "Delivery" if any(t in tags_for_command for t in ("download", "pipe-to-shell")) else
+                     "Reconnaissance" if any(t.startswith("recon") or t == "ssh-scan" for t in tags_for_command) else
+                     "Activity")
+            labels = [TAG_INFO[t]["label"] for t in tags_for_command if t in TAG_INFO]
+            timeline.append({"sequence": len(timeline) + 1, "kind": "command", "stage": stage,
+                             "summary": "; ".join(labels) if labels else "Command entered",
+                             "evidence": command[:240]})
+        for f in files:
+            timeline.append({"sequence": len(timeline) + 1, "kind": "file",
+                             "stage": "Delivery", "summary": ("Uploaded " if f.get("dir") == "upload" else "Downloaded ") +
+                             str(f.get("name") or f.get("sha256", "")[:16]),
+                             "evidence": str(f.get("sha256") or "")})
         for f in files:
             with self.lock:
                 s = self.db.execute("SELECT type, size FROM samples WHERE sha256=?", (f["sha256"],)).fetchone()
@@ -929,7 +1057,8 @@ class HoneyAnalysis:
         return {"id": sid, "sensor": sensor, "ip": ip, "port": port, "proto": proto, "start": start,
                 "duration": round(max(0, end - start), 1), "client": client, "hassh": hassh,
                 "logins": logins_data, "commands": ca["commands"], "iocs": ca["iocs"],
-                "ai_attack_intelligence": intelligence,
+                "ai_attack_intelligence": intelligence, "timeline": timeline,
+                "timeline_note": "Sequence is reconstructed from sensor event order; per-command timestamps were not supplied.",
                 "files": files, "tags": json.loads(tags or "[]"), "score": score, "tag_info": TAG_INFO,
                 **{k: v for k, v in self.hp._geo(ip).items() if k in ("iso", "country", "city", "org", "asn")}}
 
