@@ -144,7 +144,7 @@ def identify(data: bytes) -> dict:
 # ------------------------------------------------------------------ indicators inside text
 RE_URL = re.compile(r"(?:https?|ftp|tftp|stratum\+tcp|stratum\+ssl)://[^\s'\"<>\\|;()`{}]{4,200}", re.I)
 RE_IP = re.compile(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])")
-RE_DOMAIN = re.compile(r"\b(?:[a-z0-9][a-z0-9-]{0,40}\.)+(?:com|net|org|ru|cn|xyz|top|info|io|biz|cc|tk|pw|su|me|co|in|de|uk|nl|fr|br|ir|kr|jp|online|site|club|icu|shop|live|today|pro|ws|to)\b", re.I)
+RE_DOMAIN = re.compile(r"\b(?:[a-z0-9][a-z0-9-]{0,40}\.)+(?:com|net|org|ru|cn|xyz|top|info|io|biz|cc|tk|pw|su|me|co|in|de|eu|uk|nl|fr|br|ir|kr|jp|online|site|club|icu|shop|live|today|pro|ws|to)\b", re.I)
 RE_EMAIL = re.compile(r"\b[a-z0-9._%+-]{2,40}@[a-z0-9.-]{3,60}\.[a-z]{2,10}\b", re.I)
 RE_XMR = re.compile(r"\b4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}\b")
 RE_BTC = re.compile(r"\b(?:bc1[a-z0-9]{25,60}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\b")
@@ -157,6 +157,24 @@ def _public_ip(s: str) -> bool:
     except ValueError:
         return False
     return not (a.is_private or a.is_loopback or a.is_multicast or a.is_unspecified or a.is_reserved or a.is_link_local)
+
+
+def _script_credentials(text: str, limit: int = 20) -> list[dict]:
+    """Extract passwords explicitly embedded in automated SSH commands; not validated credentials."""
+    out, seen = [], set()
+    for line in text.splitlines():
+        password = re.search(r"\bsshpass\s+-p\s*(['\"]?)([^\s'\";|]+)\1", line, re.I)
+        if not password:
+            continue
+        target = re.search(r"\b([A-Za-z_][\w.-]{0,31})@(?:\$[A-Za-z_]\w*|[A-Za-z0-9.-]+)", line)
+        item = {"service": "ssh", "username": target.group(1) if target else "", "password": password.group(2)}
+        key = (item["service"], item["username"], item["password"])
+        if key not in seen:
+            seen.add(key)
+            out.append(item)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def find_iocs(text: str, limit: int = 40) -> dict:
@@ -181,7 +199,12 @@ def find_iocs(text: str, limit: int = 40) -> dict:
         "emails": uniq(m.group() for m in RE_EMAIL.finditer(text)),
         "wallets": uniq([("Monero " + m.group()) for m in RE_XMR.finditer(text)] +
                         [("Bitcoin " + m.group()) for m in RE_BTC.finditer(text)]),
-        "ssh_keys": uniq(m.group()[:120] + ("…" if len(m.group()) > 120 else "") for m in RE_SSHKEY.finditer(text)),
+        "ssh_keys": uniq(m.group() for m in RE_SSHKEY.finditer(text)),
+        "irc_servers": uniq(m.group().lower() for m in re.finditer(r"\b(?:[a-z0-9-]+\.)+undernet\.org\b", text, re.I)),
+        "irc_channels": uniq(m.group(1) for m in re.finditer(r"\bJOIN\s+(#[A-Za-z0-9_.-]+)", text, re.I)),
+        "ports": uniq(int(m.group(1) or m.group(2)) for m in re.finditer(
+            r"/dev/tcp/[^/\s]+/(\d{1,5})|\b(?:zmap|ssh|scp)\s+-p\s*(\d{1,5})", text, re.I)),
+        "credentials": _script_credentials(text),
     }
 
 
@@ -192,14 +215,17 @@ CMD_RULES = [
     ("pipe-to-shell", "Pipes a download straight into a shell", "T1059.004", 35, r"\b(curl|wget)\b[^|;]*\|\s*(sudo\s+)?(ba|da)?sh\b"),
     ("make-executable", "Makes a file executable", "T1222.002", 15, r"\bchmod\s+(?:[ugoa]*\+x|[0-7]{3,4})\b"),
     ("run-dropped-file", "Runs a file it just wrote", "T1059.004", 20, r"(?:^|[;&|]\s*|\s)(?:\./[\w.\-]+|sh\s+[\w./\-]+\.sh|bash\s+[\w./\-]+)(?:\s|$|;)"),
-    ("reverse-shell", "Opens a reverse shell", "T1059.004", 40, r"/dev/tcp/|\bnc(?:at)?\b[^;|]*\s-e\b|bash\s+-i\s*>?&|\bmkfifo\b|socket\.socket.*connect"),
+    ("reverse-shell", "Opens a reverse shell", "T1059.004", 40, r"bash\s+-i\b[^;\n]*/dev/tcp/|\bnc(?:at)?\b[^;|]*\s-e\b|bash\s+-i\s*>?&|\bmkfifo\b|socket\.socket.*connect"),
     ("persistence-cron", "Installs a scheduled task", "T1053.003", 25, r"\bcrontab\b(?!\s+-l\b)|/etc/cron|/var/spool/cron"),
     ("persistence-startup", "Adds itself to startup", "T1546", 25, r"rc\.local|/etc/init\.d|systemctl\s+enable|\.bashrc|\.profile|ld\.so\.preload"),
     ("ssh-key-plant", "Plants its own SSH key", "T1098.004", 35, r"authorized_keys"),
     ("account-change", "Creates or changes accounts and passwords", "T1136.001", 25, r"\b(useradd|adduser|usermod|chpasswd|passwd)\b"),
     ("recon", "Looks around the system", "T1082", 5, r"\b(uname|lscpu|nproc|hostname|whoami|lspci|lsb_release|free\s+-[mgh]|df\s+-h|uptime)\b|/proc/(cpuinfo|meminfo|version)|/etc/(passwd|issue|os-release|shadow)"),
     ("recon-network", "Looks at the network setup", "T1016", 5, r"\b(ifconfig|ip\s+(a|addr|route)|netstat|ss\s+-|arp\s+-a)\b|/proc/net"),
-    ("miner", "Cryptocurrency mining", "T1496", 40, r"xmrig|minerd|cpuminer|stratum\+|kdevtmpfsi|kinsing|--donate-level|randomx"),
+    ("miner", "Cryptocurrency mining", "T1496", 40, r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:nohup\s+)?(?:\./)?(?:xmrig|minerd|cpuminer(?:-multi)?)\b|stratum\+(?:tcp|ssl)://"),
+    ("ssh-scan", "Scans for exposed SSH servers", "T1046", 30, r"\bzmap\b[^;\n]*-p\s*22|\bmasscan\b[^;\n]*\b22\b"),
+    ("ssh-password-attack", "Automates SSH password attempts", "T1110.001", 35, r"\bsshpass\b"),
+    ("miner-cleanup", "Removes competing miners or bot processes", "T1489", 15, r"\bkillall\b[^;\n]*(?:minerd|cpuminer|xmrig|kaiten)|\brm\s+-rf\b[^;\n]*(?:cpuminer|minerd|kaiten)"),
     ("kill-processes", "Kills other processes (often rival malware)", "T1489", 15, r"\b(pkill|killall|kill\s+-9|xargs\s+kill)\b"),
     ("disable-defenses", "Turns off security tools", "T1562.001", 30, r"ufw\s+disable|setenforce\s+0|iptables\s+-F|service\s+\w*(firewall|apparmor|selinux)\w*\s+stop|systemctl\s+(stop|disable)\s+\w*(firewall|apparmor|auditd)|chattr\s+-i"),
     ("cover-tracks", "Erases its tracks", "T1070.003", 25, r"history\s+-c|unset\s+HISTFILE|HISTSIZE=0|HISTFILE=/dev/null|rm\s+-r?f?\s+[^;]*(/var/log|\.bash_history)|>\s*/var/log|\bshred\b"),
@@ -308,9 +334,67 @@ FAMILY_HINTS = [
     ("Mining dropper / cleaner script", r"kdevtmpfsi|kinsing|\.ICEauth|ld\.so\.preload"),
     ("DDoS tool", r"(udp|syn|ack|http|dns)[ _-]?flood|\bddos\b|\battack_method"),
     ("SSH brute-forcer / worm", r"sshpass|libssh|zmap|masscan|\bhydra\b|authorized_keys"),
-    ("Reverse shell / backdoor", r"/dev/tcp/|reverse.?shell|bindshell|nc -e|\bmkfifo\b"),
+    ("Reverse shell / backdoor", r"bash\s+-i\b[^;\n]*/dev/tcp/|reverse.?shell|bindshell|nc -e|\bmkfifo\b"),
+    ("IRC-controlled Linux botnet", r"undernet\.org[\s\S]{0,500}JOIN\s+#[\w.-]+|JOIN\s+#[\w.-]+[\s\S]{0,500}PRIVMSG"),
 ]
 _FAMILY = [(lab, re.compile(p, re.I)) for lab, p in FAMILY_HINTS]
+
+
+def analyze_script(data: bytes) -> dict:
+    """Explain shell-script behavior using bounded regex inspection only; never parse or execute a shell."""
+    text = data[:200_000].decode("latin-1", "replace")
+    lines = text.splitlines()[:MAX_CMDS * 4]
+
+    def evidence(pattern: str, limit: int = 5) -> list[dict]:
+        rx, found = re.compile(pattern, re.I), []
+        for number, line in enumerate(lines, 1):
+            if rx.search(line):
+                found.append({"line": number, "text": line.strip()[:240]})
+                if len(found) >= limit:
+                    break
+        return found
+
+    behaviors = []
+
+    def add(code: str, label: str, attack: str, confidence: str, pattern: str):
+        matches = evidence(pattern)
+        if matches:
+            behaviors.append({"id": code, "label": label, "attack": attack,
+                              "confidence": confidence, "evidence": matches})
+
+    if (re.search(r"\bundernet\.org\b", text, re.I) and
+            re.search(r"\bJOIN\s+#[\w.-]+", text, re.I) and re.search(r"\bPRIVMSG\b", text, re.I)):
+        add("irc-c2", "Uses IRC for command-and-control", "T1071.001", "high",
+            r"undernet\.org|JOIN\s+#[\w.-]+|PRIVMSG|PING|PONG")
+    if (re.search(r"\bzmap\b[^;\n]*-p\s*22", text, re.I) and re.search(r"\bsshpass\b", text, re.I)
+            and re.search(r"\bscp\b", text, re.I)):
+        add("ssh-worm", "Scans for SSH hosts and attempts to copy itself", "T1046 / T1110.001", "high",
+            r"zmap\b|sshpass\b|scp\b|ssh\s+")
+    add("ssh-passwords", "Contains hardcoded SSH login passwords", "T1110.001", "high", r"sshpass\s+-p")
+    add("boot-persistence", "Attempts to persist through system startup", "T1037.004", "high",
+        r"/etc/rc\.local|/opt/\$|sudo\s+reboot")
+    add("account-tampering", "Changes a local account password", "T1098", "high", r"\busermod\s+-p\b|\bchpasswd\b")
+    if re.search(r"ssh-rsa\s+AAAA", text) and re.search(r"/root/\.ssh|authorized_keys", text):
+        label = "Attempts to install an SSH authorized key" if re.search(r"authorized_keys", text) else "Embeds an SSH public key; installation is not confirmed"
+        add("ssh-key-artifact", label, "T1098.004", "medium", r"ssh-rsa\s+AAAA|/root/\.ssh|authorized_keys")
+    if (re.search(r"\bPRIVMSG\b", text, re.I) and re.search(r"\bbase64\s+-d\b", text, re.I)
+            and re.search(r"\bbash\s+-c\b", text, re.I)):
+        add("irc-command-exec", "Executes decoded shell commands received over IRC", "T1059.004", "high",
+            r"PRIVMSG|base64\s+-d|bash\s+-c")
+    cleanup = re.search(r"\bkillall\b[^;\n]*(?:minerd|cpuminer|xmrig|kaiten)|\brm\s+-rf\b[^;\n]*(?:cpuminer|minerd|kaiten)", text, re.I)
+    active_miner = re.search(r"^\s*(?:sudo\s+)?(?:nohup\s+)?(?:\./)?(?:xmrig|minerd|cpuminer(?:-multi)?)\b|stratum\+(?:tcp|ssl)://", text, re.I | re.M)
+    if cleanup and not active_miner:
+        add("competitor-cleanup", "Kills or removes competing miners and bot processes", "T1489", "high",
+            r"killall\b[^;\n]*(?:minerd|cpuminer|xmrig|kaiten)|rm\s+-rf\b[^;\n]*(?:cpuminer|minerd|kaiten)")
+    if active_miner:
+        add("miner-execution", "Contains a cryptocurrency-mining launch or pool reference", "T1496", "medium",
+            r"^\s*(?:sudo\s+)?(?:nohup\s+)?(?:\./)?(?:xmrig|minerd|cpuminer(?:-multi)?)\b|stratum\+(?:tcp|ssl)://")
+    if re.search(r"\bnohup\b", text) and re.search(r"\brm\s+-rf\s+/tmp/\$?BOT\b", text, re.I):
+        add("self-cleanup", "Deletes a temporary bot executable after launching it", "T1070.004", "medium",
+            r"nohup\b|rm\s+-rf\s+/tmp/\$?BOT\b")
+    return {"behaviors": behaviors, "behavior_score": min(100, sum(
+        {"high": 25, "medium": 15, "low": 5}.get(x["confidence"], 0) for x in behaviors)),
+            "iocs": find_iocs(text)}
 
 
 def analyze_sample(data: bytes) -> dict:
@@ -332,14 +416,20 @@ def analyze_sample(data: bytes) -> dict:
     for lab, rx in _FAMILY:
         if rx.search(blob):
             families.append(lab)
-    script_tags = {}
+    script_tags, script_analysis = {}, {}
     if ident["kind"] in ("script", "text", "web"):
         text = data[:200_000].decode("latin-1", "replace")
         lines = [ln for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")][:MAX_CMDS]
         ca = analyze_commands(lines)
         script_tags = {"tags": ca["tags"], "score": ca["score"]}
+        script_analysis = analyze_script(data)
     tags = list(script_tags.get("tags", []))
-    if families and not any(t == "miner" for t in tags) and any("miner" in f.lower() for f in families):
+    if "Cryptocurrency miner" in families and script_analysis:
+        if not any(x["id"] == "miner-execution" for x in script_analysis.get("behaviors", [])):
+            families.remove("Cryptocurrency miner")
+        if any(x["id"] == "competitor-cleanup" for x in script_analysis.get("behaviors", [])):
+            families.append("Miner-related cleanup / competitor removal")
+    if families and not any(t == "miner" for t in tags) and "Cryptocurrency miner" in families:
         tags.append("miner")
     score = script_tags.get("score", 0)
     if ident["kind"] in ("elf", "pe"):
@@ -350,7 +440,8 @@ def analyze_sample(data: bytes) -> dict:
         score = min(100, score + 10)
     return {**h, "size": len(data), "kind": ident["kind"], "type": ident["detail"], "arch": ident.get("arch", ""),
             "entropy": ent, "families": families, "notes": notes, "tags": tags, "score": score,
-            "iocs": find_iocs(blob), "strings": strs[:150]}
+            "iocs": script_analysis.get("iocs", find_iocs(blob)), "script_analysis": script_analysis,
+            "strings": strs[:150]}
 
 
 # ------------------------------------------------------------------ Add sensor: installer and one-line command

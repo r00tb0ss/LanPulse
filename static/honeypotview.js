@@ -8,6 +8,23 @@ let potData = null;
 let potHours = 168;
 let potAttackType = "all";
 let potSelectedService = "";
+let potSection = (() => { try { return localStorage.getItem("lp_pot_section") === "analysis" ? "analysis" : "overview"; } catch (_) { return "overview"; } })();
+
+function setPotSection(section, persist = true) {
+  potSection = section === "analysis" ? "analysis" : "overview";
+  const analysis = potSection === "analysis";
+  const tabs = $("potSectionTabs");
+  if (tabs) tabs.querySelectorAll("[data-pot-section]").forEach((b) => {
+    const active = b.dataset.potSection === potSection;
+    b.classList.toggle("on", active);
+    b.setAttribute("aria-selected", String(active));
+    b.tabIndex = active ? 0 : -1;
+  });
+  $("potOverviewPane")?.classList.toggle("hidden", analysis);
+  $("potAnalysisPane")?.classList.toggle("hidden", !analysis);
+  if (persist) { try { localStorage.setItem("lp_pot_section", potSection); } catch (_) {} }
+  if (analysis && typeof loadMalware === "function") loadMalware();
+}
 
 async function loadHoneypot() {
   const r = await api("/api/honeypot?hours=" + potHours, "GET");
@@ -320,6 +337,25 @@ async function showPotSetup(force) {
 
 (function initHoneypot() {
   viewHooks.honeypot = loadHoneypot;
+  const sectionTabs = $("potSectionTabs");
+  if (sectionTabs) {
+    sectionTabs.addEventListener("click", (e) => {
+      const tab = e.target.closest("[data-pot-section]");
+      if (tab) setPotSection(tab.dataset.potSection);
+    });
+    sectionTabs.addEventListener("keydown", (e) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+      const tabs = [...sectionTabs.querySelectorAll("[data-pot-section]")];
+      const current = tabs.indexOf(document.activeElement);
+      if (current < 0) return;
+      e.preventDefault();
+      const next = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 :
+        (current + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+      tabs[next].focus();
+      setPotSection(tabs[next].dataset.potSection);
+    });
+    setPotSection(potSection, false);
+  }
   const cfg = $("potCfgBtn");
   if (cfg) cfg.onclick = () => showPotSetup();
   const svc = $("potServices");

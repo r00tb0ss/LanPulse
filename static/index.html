@@ -272,39 +272,46 @@
       <button class="btn sm ghost" id="potCfgBtn"><i class="fa-solid fa-gear"></i>Settings</button>
     </div></div>
   <div class="pot-setup hidden" id="potSetup"></div>
-  <div class="v-note hidden" id="potStatus"></div>
-  <div class="t-kpis four" id="potKpis"></div>
-  <div class="pot-listeners" id="potListeners"></div>
-  <div class="t-card" id="potTimeline"></div>
-  <div class="t-card hidden" id="potDetail"></div>
-  <div class="t-card" id="potMalware"><h4><span>Captured attacks and malware</span><span class="pot-tabs" id="potMalTabs"><button data-t="sessions">Sessions</button><button data-t="sensors">Sensors</button></span></h4><div id="potMalBody"></div><div class="hidden" id="potSensorAdd"></div><div class="hidden" id="potMalDetail"></div></div>
-  <div class="t-card" id="potHashIntel">
-    <h4><span>Hash intelligence</span><span class="pot-tabs" id="potHashTabs"><button data-hash-tab="files" class="on">Captured files</button><button data-hash-tab="hassh">SSH fingerprints</button></span></h4>
-    <p class="muted pot-hash-note">Hashes identify observed files; HASSH groups SSH client handshakes. Neither alone proves who operated a source or whether a file is malicious.</p>
-    <div id="potHashBody"></div>
+  <div class="pot-tabs pot-section-tabs" id="potSectionTabs" role="tablist" aria-label="Honeypot sections">
+    <button type="button" id="potOverviewTab" role="tab" data-pot-section="overview" aria-selected="true" aria-controls="potOverviewPane" class="on">Overview</button>
+    <button type="button" id="potAnalysisTab" role="tab" data-pot-section="analysis" aria-selected="false" aria-controls="potAnalysisPane">Analysis</button>
   </div>
-  <div class="pot-analytics">
-    <div class="t-card pot-recent-card"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4>
-      <div class="pot-hit-filters"><label>Attack type <select id="potAttackType"><option value="all">All activity</option><option value="credentials">Credential attempts</option><option value="probe">Protocol / request probes</option><option value="connection">Connections only</option></select></label>
-        <span class="muted" id="potFilterSummary">All services · All attack evidence</span></div>
-      <div class="pot-hits" id="potHits"></div></div>
-    <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap any address for details</span></h4><div class="rank" id="potAttackers"></div></div>
-    <div class="t-card"><h4><span>Decoys hit</span><span class="muted">select a service to inspect its hosts</span></h4><div id="potServices"></div></div>
-    <div class="t-card pot-service-detail hidden" id="potServiceDetail"></div>
-    <div class="t-card"><h4><span>Where they come from</span><span class="muted">by country</span></h4><div id="potCountries"></div></div>
-    <div class="t-card pot-credentials">
-      <h4><span>Credential intelligence</span><span class="muted">attempted pairs and most-guessed values</span></h4>
-      <div class="pot-credential-grid">
-        <div><h5>Credentials tried</h5><div id="potCreds"></div></div>
-        <div><h5>Most-guessed usernames</h5><div id="potUsers"></div></div>
-        <div><h5>Most-guessed passwords</h5><div id="potPasswords"></div></div>
+  <div class="pot-section-pane" id="potOverviewPane" role="tabpanel" aria-labelledby="potOverviewTab">
+    <div class="v-note hidden" id="potStatus"></div>
+    <div class="t-kpis four" id="potKpis"></div>
+    <div class="pot-listeners" id="potListeners"></div>
+    <div class="t-card" id="potTimeline"></div>
+    <div class="t-card hidden" id="potDetail"></div>
+    <div class="pot-analytics">
+      <div class="t-card pot-recent-card"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4>
+        <div class="pot-hit-filters"><label>Attack type <select id="potAttackType"><option value="all">All activity</option><option value="credentials">Credential attempts</option><option value="probe">Protocol / request probes</option><option value="connection">Connections only</option></select></label>
+          <span class="muted" id="potFilterSummary">All services · All attack evidence</span></div>
+        <div class="pot-hits" id="potHits"></div></div>
+      <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap any address for details</span></h4><div class="rank" id="potAttackers"></div></div>
+      <div class="t-card"><h4><span>Decoys hit</span><span class="muted">select a service to inspect its hosts</span></h4><div id="potServices"></div></div>
+      <div class="t-card pot-service-detail hidden" id="potServiceDetail"></div>
+      <div class="t-card"><h4><span>Where they come from</span><span class="muted">by country</span></h4><div id="potCountries"></div></div>
+      <div class="t-card pot-credentials">
+        <h4><span>Credential intelligence</span><span class="muted">attempted pairs and most-guessed values</span></h4>
+        <div class="pot-credential-grid">
+          <div><h5>Credentials tried</h5><div id="potCreds"></div></div>
+          <div><h5>Most-guessed usernames</h5><div id="potUsers"></div></div>
+          <div><h5>Most-guessed passwords</h5><div id="potPasswords"></div></div>
+        </div>
       </div>
     </div>
+    <p class="v-foot">This is a <b>low-interaction</b> honeypot: the decoys log connections and the logins attackers try, but never
+      grant access or run anything. An external sensor (such as an ESP32 honeypot) can feed in hits via
+      <span class="mono">POST /api/honeypot/ingest</span>.</p>
   </div>
-  <p class="v-foot">This is a <b>low-interaction</b> honeypot: the decoys log connections and the logins attackers try, but never
-    grant access or run anything. A hit from a device on your own network is a strong sign that device is compromised or scanning the LAN.
-    An external sensor (such as an ESP32 honeypot) can feed in hits via <span class="mono">POST /api/honeypot/ingest</span>.</p>
-</section>
+  <div class="pot-section-pane hidden" id="potAnalysisPane" role="tabpanel" aria-labelledby="potAnalysisTab">
+    <div class="t-card" id="potMalware"><h4><span>Captured attacks and malware</span><span class="pot-tabs" id="potMalTabs"><button data-t="sessions">Sessions</button><button data-t="sensors">Sensors</button></span></h4><div id="potMalBody"></div><div class="hidden" id="potSensorAdd"></div><div class="hidden" id="potMalDetail"></div></div>
+    <div class="t-card" id="potHashIntel">
+      <h4><span>Hash intelligence</span><span class="pot-tabs" id="potHashTabs"><button data-hash-tab="files" class="on">Captured files</button><button data-hash-tab="hassh">SSH fingerprints</button></span></h4>
+      <p class="muted pot-hash-note">Hashes identify observed files; HASSH groups SSH client handshakes. Neither alone proves who operated a source or whether a file is malicious.</p>
+      <div id="potHashBody"></div>
+    </div>
+  </div>
 
   <aside class="panel" id="panel" aria-hidden="true">
     <button class="icon-btn close" id="btnClose" title="Close"><i class="fa-solid fa-xmark"></i></button>
