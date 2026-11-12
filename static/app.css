@@ -1429,3 +1429,109 @@ html[data-pretheme="sand"]{background:#f4efe6}
 /* Compact honeypot lists expand within their own panel, not the whole page. */
 .pot-expand-list.expanded{max-height:360px;overflow-y:auto;overscroll-behavior:contain;}
 .pot-expand-toggle{margin-top:8px;}
+
+
+/* Honeypot + malware analysis: restrained, theme-aware visual system. */
+#potView{gap:14px}
+#potView .v-head{align-items:center;gap:14px;padding-bottom:4px}
+#potView .v-head h2{display:flex;align-items:center;gap:10px;letter-spacing:-.025em}
+#potView .v-head h2 i{color:var(--accent)}
+#potView .v-head .muted{display:block;max-width:68ch;line-height:1.5;margin-top:4px}
+#potView .v-tools{gap:8px}
+#potView .pot-setup{margin-top:0}
+#potView .pot-section-tabs{
+  width:fit-content;max-width:100%;gap:4px;padding:4px;margin:0 0 2px;
+  border:1px solid var(--border);border-radius:11px;background:var(--bg2)
+}
+#potView .pot-section-tabs button{
+  min-width:112px;padding:8px 16px;border:0;border-radius:8px;
+  color:var(--muted);font-size:13px;font-weight:600;transition:background .15s,color .15s
+}
+#potView .pot-section-tabs button:hover{background:var(--panel2);color:var(--text)}
+#potView .pot-section-tabs button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.16)}
+#potView .pot-section-pane{display:grid;gap:14px;min-width:0}
+#potView .t-card{
+  min-width:0;border-color:var(--border);border-radius:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.06)
+}
+#potView .t-card>h4{
+  min-height:28px;margin-bottom:12px;padding-bottom:9px;
+  border-bottom:1px solid var(--border);font-size:13px;font-weight:650;letter-spacing:.005em
+}
+#potView .t-card>h4 .muted{font-size:11.5px;font-weight:400}
+#potView .t-kpis .kpi{border-radius:11px;padding:13px 15px}
+#potView .kpi .k-num{letter-spacing:-.035em}
+#potView .pot-listeners{display:flex;flex-wrap:wrap;gap:7px}
+#potView .pot-listener{border:1px solid var(--border);border-radius:8px;background:var(--bg2);padding:6px 9px}
+#potView .pot-hit{border:1px solid transparent;border-radius:8px;gap:9px}
+#potView .pot-hit.click:hover,#potView .pot-att[data-ext-ip]:hover{border-color:var(--border2);background:var(--panel2)}
+#potView .pot-hit .pot-ip,#potView .pot-hit .pot-data{overflow-wrap:anywhere}
+#potView .pot-hit .pot-when{font-variant-numeric:tabular-nums}
+#potView .pot-service-row{border-radius:8px}
+#potView .pot-service-row.selected{border-color:var(--accent);background:var(--panel2)}
+#potView .pot-service-detail,#potView #potDetail,#potView #potMalDetail{
+  border:1px solid var(--border);border-radius:11px;background:var(--bg2);
+  padding:14px;margin-top:0
+}
+#potView #potDetail h4,#potView #potMalDetail h4{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:0 0 10px;padding-bottom:9px;border-bottom:1px solid var(--border)
+}
+#potView .pot-d-facts>div{
+  min-width:0;padding:9px 10px;border:1px solid var(--border);
+  border-radius:8px;background:var(--panel)
+}
+#potView .pot-d-facts b{overflow-wrap:anywhere;line-height:1.45}
+#potView .pot-note{line-height:1.55}
+#potView .pot-replay,#potView .pot-strings{
+  background:var(--panel);border:1px solid var(--border);border-radius:9px;
+  color:var(--text)
+}
+#potView .pot-cmd{border-bottom-color:var(--border);padding:6px 2px}
+#potView .pot-cmd code{color:var(--text);line-height:1.5}
+#potView .pot-strings{padding:12px;font-size:11.5px;line-height:1.55}
+#potView .pot-hashes{gap:6px}
+#potView .pot-hashes>div{
+  min-width:0;padding:7px 9px;border:1px solid var(--border);
+  border-radius:8px;background:var(--panel)
+}
+#potView .pot-hashes>div .k-lbl{min-width:58px}
+#potView .pot-hashes>div .mono{flex:1;min-width:0}
+#potView .pot-hash-summary{line-height:1.5;margin-bottom:10px}
+#potView .pot-hash-list{gap:7px;max-height:520px;padding:1px}
+#potView .pot-hash-row{
+  align-items:center;padding:12px 13px;border-radius:10px;
+  background:var(--bg2);transition:border-color .15s,background .15s
+}
+#potView .pot-hash-row:hover{border-color:var(--border2)}
+#potView .pot-hash-main{gap:5px;line-height:1.45}
+#potView .pot-hash-main b{font-size:12.5px}
+#potView .pot-hash-main .muted{overflow-wrap:anywhere}
+#potView .pot-hash-actions .btn{white-space:nowrap}
+#potView .pot-tabs{padding:2px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)}
+#potView .pot-tabs button{padding:5px 10px;border:0;border-radius:7px}
+#potView .pot-tabs button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+#potView .pot-score{font-variant-numeric:tabular-nums}
+#potView .pot-cred-chip{max-width:100%;overflow-wrap:anywhere;white-space:normal}
+#potView button:focus-visible,#potView a:focus-visible,#potView select:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:720px){
+  #potView{gap:10px}
+  #potView .v-head{align-items:flex-start}
+  #potView .v-head .muted{max-width:100%}
+  #potView .pot-section-tabs{width:100%}
+  #potView .pot-section-tabs button{flex:1;min-width:0;padding:8px 10px}
+  #potView .pot-section-pane{gap:10px}
+  #potView .t-card{padding:12px}
+  #potView .t-card>h4{align-items:flex-start;flex-wrap:wrap}
+  #potView .pot-hash-row{gap:9px}
+  #potView .pot-hash-actions{width:100%}
+  #potView .pot-hashes>div{align-items:flex-start}
+  #potView .pot-hashes>div .mono{width:100%;flex-basis:100%}
+  #potView .pot-d-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+}
+@media(max-width:420px){
+  #potView .pot-d-facts{grid-template-columns:minmax(0,1fr)}
+  #potView .pot-hash-actions .btn{flex:1}
+}
