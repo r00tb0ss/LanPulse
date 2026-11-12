@@ -1,4 +1,5 @@
 import sys
+import fcntl
 import tarfile
 import tempfile
 import sqlite3
@@ -88,6 +89,18 @@ class BackupTests(unittest.TestCase):
         self.assertNotIn("lanpulse-data/openvas/gvmd/gvmd.pid", names)
         self.assertNotIn("lanpulse-data/openvas/gvmd/gvmd.sock", names)
         self.assertIn("lanpulse-data/openvas/gvmd/config.txt", names)
+
+    def test_refuses_a_second_backup_while_one_is_running(self):
+        archive_dir = self.destination
+        archive_dir.mkdir(mode=0o700)
+        lock_fd = __import__("os").open(archive_dir / ".lanpulse-backup.lock",
+                                        __import__("os").O_CREAT | __import__("os").O_RDWR, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(RuntimeError, "already in progress"):
+                backup.create_backup(self.data, archive_dir)
+        finally:
+            __import__("os").close(lock_fd)
 
     def test_backup_must_be_outside_data(self):
         with self.assertRaisesRegex(ValueError, "outside"):

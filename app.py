@@ -1514,6 +1514,8 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def create_backup():
         if nm.args.demo:
             return JSONResponse({"error": "Backups are unavailable in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a dashboard login in Settings > Login before creating backups. They may contain credentials and network history."}, 403)
         if not IS_ROOT:
             return JSONResponse({"error": "LanPulse must run with administrator rights to back up its data."}, 403)
         tool = BASE / "tools" / "lanpulse_backup.py"
@@ -1531,7 +1533,8 @@ def build_app(nm: LanPulse) -> FastAPI:
         if result.returncode:
             detail = (result.stderr or result.stdout or "Unknown backup error").strip()[-1200:]
             log.error("LanPulse backup failed: %s", detail)
-            return JSONResponse({"error": detail}, 500)
+            status = 409 if "already in progress" in detail.lower() else 500
+            return JSONResponse({"error": detail}, status)
         backups = list_backup_archives()
         return {"ok": True, "backups": backups}
 
