@@ -1050,8 +1050,8 @@ class HoneyAnalysis:
             if not value or not ip:
                 return
             if kind in ("Public IP", "Domain", "File transfer host") and value.lower() in COMMON_INFRA:
-            return
-        key = (kind, value)
+                return
+            key = (kind, value)
             item = groups.setdefault(key, {"kind": kind, "value": value, "ips": set(),
                 "sessions": set(), "samples": set(), "first_seen": started, "last_seen": started,
                 "confidence": confidence})
