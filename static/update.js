@@ -55,8 +55,9 @@ function drawUpdate(body, u, staged = u.staged, note = "") {
         <b>${staged ? "Choose a different file" : "Choose the update file"}</b>
         <span>the <code>lanpulse.zip</code> you were given, or drop it here</span>
       </label>
-      <p class="hint" style="margin-top:10px">Your devices, history, settings and login are kept. The current version is backed up first,
-        and if anything goes wrong it's restored automatically. Only install files from a source you trust.</p>` : ""}
+      <p class="hint" style="margin-top:10px">Your devices, history, settings and login are kept. Downloaded releases are checked against the publisher's SHA-256 checksum.
+        The staged file is checked again by the root updater before installation. Your current version is backed up first,
+        and if anything goes wrong it's restored automatically. Only install manually supplied files from a source you trust.</p>` : ""}
     ${u.log ? `<details class="upd-log" ${busy || u.state === "failed" ? "open" : ""}><summary>Update log</summary><pre>${esc(u.log)}</pre></details>` : ""}`;
 
   $("updToLogin")?.addEventListener("click", () => { setTab = "account"; renderSettings(); });
