@@ -62,7 +62,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.34.10"
+VERSION = "1.34.11"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
