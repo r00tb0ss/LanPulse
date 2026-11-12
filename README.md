@@ -138,19 +138,50 @@ The **blocked** badge only means an IP is in the group. LanPulse can't see your 
 
 ### Supported routers
 
-LanPulse reads firewall logs over syslog (UDP, default port 514), so it is not tied to one brand. The setup guide shows
-the steps for your router.
+LanPulse is designed to work across brands rather than require a particular router. Device discovery, port scanning,
+the honeypot, OpenVAS and the AI Security Analyst run independently of the router. For the attack map and device-traffic
+view, LanPulse can read firewall events sent to it over remote syslog (UDP, default port 514), or accept structured
+events through its JSON ingest API.
 
-| Router / firewall | Log format | Notes |
+#### Routers LanPulse already supports
+
+| Router / firewall | Log format | What works |
 |---|---|---|
-| UniFi (UDM, UCG) | netfilter, CEF (IPS) | Also supports one-click blocking and the IPS view |
-| pfSense / OPNsense | filterlog | Tick **Log** on the rules you want to see |
-| OpenWrt, DD-WRT, Linux (iptables / nftables / UFW) | netfilter | Add LOG rules, forward with rsyslog |
-| MikroTik RouterOS | firewall log | Log rule with a prefix containing `drop` or `accept` |
-| Fortinet, SonicWall, Sophos, WatchGuard | key=value | Needs `srcip`, `dstip`, `dstport` and `action` |
-| Anything else | JSON | POST events to `/api/threats/ingest` |
+| **UniFi** (UDM, UDM Pro, UCG) | netfilter, CEF (IPS) | Firewall events, attack map, device traffic, IPS view, automatic topology and one-click blocking |
+| **pfSense / OPNsense** | filterlog | Firewall events and attack map; enable **Log** on the rules you want to monitor |
+| **OpenWrt / DD-WRT / Linux routers** (iptables, nftables, UFW) | netfilter | Firewall events and attack map; add LOG rules and forward them with rsyslog |
+| **MikroTik RouterOS** | firewall log | Firewall events and attack map; add a logging rule with a prefix containing `drop` or `accept` |
+| **Fortinet / SonicWall / Sophos / WatchGuard** | key=value | Firewall events when logs include `srcip`, `dstip`, `dstport` and `action` |
+| **Other systems and custom integrations** | JSON | Send events to `/api/threats/ingest` from scripts, IDS tools or other log processors |
 
-Everything except one-click blocking works with any of these; blocking currently needs a UniFi gateway.
+#### Other router brands
+
+TP-Link, ASUS, Netgear, Linksys, Zyxel, GL.iNet and Cisco equipment may also be usable, depending on the exact
+model, firmware and available logging options. These are not blanket model-by-model compatibility claims: a router
+needs to provide remote firewall logs in a format LanPulse understands, or have a supported firmware/log-forwarding
+method. GL.iNet devices running OpenWrt are especially promising; Cisco and other business firewalls commonly offer
+syslog, but their event formats still need to match a supported parser or be converted to JSON.
+
+#### What to expect from each integration level
+
+| Integration level | What you get |
+|---|---|
+| **Basic — any router** | LAN device discovery, device details, port and OS scanning, security checks, honeypot, vulnerability scanning and alerts |
+| **Firewall-log integration** | Attack map, inbound/outbound firewall events, and device-traffic insights where the required events are logged |
+| **Advanced topology** | Automatic switch-port, access-point and client relationships when the router/network equipment exposes supported UniFi or SNMP/LLDP data |
+
+To connect a router that supports remote syslog, point its remote logging destination at the LanPulse server's IP
+address and UDP port **514**, then enable logging on the firewall rules you want to monitor. The exact menu names vary
+by manufacturer; the Attack map section above includes examples for common platforms.
+
+The Network topology view reads real connections automatically from UniFi. For other routers and switches, LanPulse
+can use read-only SNMP v2c and LLDP to discover neighbours and switch MAC-table relationships, but real-hardware
+coverage is still being expanded. Otherwise, set device connections and network zones manually in the Network view.
+
+**Important limitations:** many consumer routers running stock firmware do not expose remote firewall logs. They can
+still use LanPulse's basic discovery and scanning features, but without usable firewall events the attack map and
+device-traffic view cannot show that router's traffic. One-click attacker blocking currently requires a UniFi gateway;
+LanPulse does not automatically change firewall rules on other brands.
 
 ## Threats inside your network
 
