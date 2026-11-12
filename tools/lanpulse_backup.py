@@ -69,6 +69,9 @@ def copy_tree(data_dir, snapshot):
     return files, directories
 
 def create_backup(data_dir, backup_dir):
+    """Create one verified backup at a time, including across CLI/API processes."""
+    import fcntl
+
     data_dir = Path(data_dir).resolve()
     backup_dir = Path(backup_dir).resolve()
     if not data_dir.is_dir():
@@ -77,21 +80,32 @@ def create_backup(data_dir, backup_dir):
         raise ValueError("Backup directory must be outside the data directory")
     backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(backup_dir, 0o700)
-    created = stamp()
-    archive = backup_dir / f"lanpulse-{created}.tar.gz"
-    with tempfile.TemporaryDirectory(prefix="lanpulse-backup-") as temp:
-        root = Path(temp) / "lanpulse-data"
-        root.mkdir(mode=0o700)
-        files, directories = copy_tree(data_dir, root)
-        manifest = {"format_version": FORMAT_VERSION, "created_utc": created,
-                    "source_data_dir": str(data_dir), "data_dir_mode": data_dir.stat().st_mode & 0o777,
-                    "directories": directories, "files": files}
-        (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-        os.chmod(root / "manifest.json", 0o600)
-        with tarfile.open(archive, "w:gz") as tar:
-            tar.add(root, arcname="lanpulse-data", recursive=True)
-    os.chmod(archive, 0o600)
-    return archive
+
+    lock_path = backup_dir / ".lanpulse-backup.lock"
+    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("Another LanPulse backup is already in progress") from exc
+
+        created = stamp()
+        archive = backup_dir / f"lanpulse-{created}.tar.gz"
+        with tempfile.TemporaryDirectory(prefix="lanpulse-backup-") as temp:
+            root = Path(temp) / "lanpulse-data"
+            root.mkdir(mode=0o700)
+            files, directories = copy_tree(data_dir, root)
+            manifest = {"format_version": FORMAT_VERSION, "created_utc": created,
+                        "source_data_dir": str(data_dir), "data_dir_mode": data_dir.stat().st_mode & 0o777,
+                        "directories": directories, "files": files}
+            (root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\\n", encoding="utf-8")
+            os.chmod(root / "manifest.json", 0o600)
+            with tarfile.open(archive, "w:gz") as tar:
+                tar.add(root, arcname="lanpulse-data", recursive=True)
+        os.chmod(archive, 0o600)
+        return archive
+    finally:
+        os.close(lock_fd)
 
 def service_active():
     try:
