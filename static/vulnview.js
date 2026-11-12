@@ -34,7 +34,7 @@ function renderVulns() {
       <span class="k-sub">verified by active check</span></div>` : ""}
     <div class="kpi ${t.kev ? "danger" : ""}"><span class="k-lbl">Actively exploited</span><span class="k-num">${t.kev}</span>
       <span class="k-sub">${t.kev ? "attackers use these now" : "none found"}</span></div>
-    <div class="kpi ${t.exploits ? "warn-kpi" : ""}"><span class="k-lbl">Exploit available</span><span class="k-num" style="${t.exploits ? "color:#fdba74" : ""}">${t.exploits || 0}</span>
+    <div class="kpi ${t.exploits ? "warn-kpi" : ""}"><span class="k-lbl">Exploit or module available</span><span class="k-num" style="${t.exploits ? "color:#fdba74" : ""}">${t.exploits || 0}</span>
       <span class="k-sub">${t.msf ? `${t.msf} distinct Metasploit modules` : "public exploit code"}</span></div>
     <div class="kpi"><span class="k-lbl">Critical</span><span class="k-num" style="${t.critical ? "color:#fda4af" : ""}">${t.critical}</span><span class="k-sub">CVSS 9 or higher</span></div>
     <div class="kpi"><span class="k-lbl">Known flaws</span><span class="k-num">${t.cves}</span><span class="k-sub">different CVEs</span></div>
@@ -96,7 +96,7 @@ function renderVulns() {
   const dmax = Math.max(1, ...s.devices.map((d) => d.count));
   $("vulnDevs").innerHTML = s.devices.map((d) => { const ty = TYPES[d.type] || TYPES.unknown; return `<div class="rk click" data-dev-id="${esc(d.id)}">
       <span class="ico"><i class="${faClass(ty)}" style="color:${ty.color}"></i></span><span class="nm">${esc(d.name)}</span>
-      <span class="ct">${ovBtn(devices.get(d.id)?.ip)}${xBtn("redteam", d.id)}${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.msf_modules ? `<span style="color:#fdba74">${d.msf_modules} Metasploit modules · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} exploitable · </span>` : ""}${d.count}</span>
+      <span class="ct">${ovBtn(devices.get(d.id)?.ip)}${xBtn("redteam", d.id)}${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.msf_modules ? `<span style="color:#fdba74">${d.msf_modules} Metasploit modules · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} findings with public code · </span>` : ""}${d.count}</span>
       <div class="bar"><i style="width:${(100 * d.count / dmax).toFixed(1)}%;background:${SEV_COLOR[sevOf(d.max)]}"></i></div></div>`; }).join("")
     || `<div class="muted">No affected devices.</div>`;
 

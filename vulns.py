@@ -727,12 +727,14 @@ class VulnScanner:
                 g = groups.setdefault((dev_id, f["software"], f["port"]), {
                     "id": dev_id, "name": self.nm.label(d), "ip": d["ip"], "software": f["software"], "port": f["port"],
                     "count": 0, "kev": 0, "max": 0, "top": f, "distro": f["distro"], "unverified": f.get("unverified", False),
+                    "msf_modules": [],
                     "os": f.get("os", False), "confirmed": 0, "confidence": f.get("confidence", "version")})
                 g["count"] += 1
                 g["cves"] = g.get("cves", 0) + bool(re.match(r"CVE-\d{4}-\d+$", f["cve"] or ""))   # others are scanner-test ids
                 g["kev"] += f["kev"]
                 g["confirmed"] += f.get("confidence") == "confirmed"
-                g["msf"] = g.get("msf", 0) + bool(f.get("msf"))
+                g["msf_modules"] = sorted(set(g.get("msf_modules", [])) | {m[0] for m in f.get("msf", []) if m and m[0]})
+                g["msf"] = len(g["msf_modules"])
                 g["edb"] = g.get("edb", 0) + bool(f.get("edb") and not f.get("msf"))
                 g["max"] = max(g["max"], f["score"] or 0)
                 if f.get("confidence") == "confirmed":       # a confirmed hit heads the group
