@@ -73,23 +73,24 @@ function showTechnique(id) {
 
 /* Metasploit commands inside a device panel (built from the CVE findings already loaded). */
 function msfPanelSection(ip, items) {
-  const withMod = items.filter((f) => (f.msf || []).length);
-  if (!withMod.length) return "";
   const safeIp = /^[0-9a-fA-F:.]+$/.test(ip) ? ip : "";
-  const blocks = withMod.slice(0, 8).map((f) => {
-    const mod = f.msf[0][0];
-    if (!/^(auxiliary|exploit|post)\/[\w./-]+$/.test(mod) || !safeIp) return "";
-    const lines = [`use ${mod}`, `set RHOSTS ${safeIp}`];
+  if (!safeIp) return "";
+  const modules = new Map();
+  for (const f of items) for (const m of (f.msf || [])) {
+    const mod = Array.isArray(m) ? m[0] : "";
+    if (mod && /^(auxiliary|exploit|post)\/[\w./-]+$/.test(mod) && !modules.has(mod))
+      modules.set(mod, { finding: f, title: Array.isArray(m) ? (m[1] || "") : "" });
+  }
+  if (!modules.size) return "";
+  const blocks = [...modules.entries()].map(([mod, item]) => {
+    const f = item.finding, lines = [`use ${mod}`, `set RHOSTS ${safeIp}`];
     if (f.port) lines.push(`set RPORT ${f.port}`);
     const cmd = lines.join("\n");
-    return `<div class="msf-block"><div class="msf-top"><span class="mono">${esc(f.cve)}</span>
-        ${f.kev ? '<span class="tagchip bad">exploited</span>' : ""}
+    return `<div class="msf-block"><div class="msf-top"><span class="mono" title="${esc(item.title)}">${esc(f.cve || f.software || "finding")}</span>
         <button class="linkbtn" data-msf="${esc(btoa(cmd))}"><i class="fa-regular fa-copy"></i>Copy</button></div>
       <pre class="msf-cmd">${esc(cmd)}</pre></div>`;
   }).join("");
-  if (!blocks) return "";
-  return `<div class="p-sec"><h4>Metasploit commands</h4>
-    ${blocks}
+  return `<div class="p-sec"><h4>Metasploit modules (${modules.size})</h4>${blocks}
     <div class="btns" style="margin-top:8px">
       <a class="btn" href="/api/export/metasploit.rc?device=${encodeURIComponent(selected)}"><i class="fa-solid fa-file-code"></i>Download .rc</a>
       <a class="btn" href="/api/export/nmap.xml?device=${encodeURIComponent(selected)}"><i class="fa-solid fa-file-export"></i>Nmap XML</a>

@@ -62,6 +62,7 @@ _EXTRA_MSF = {
     "CVE-2020-1938": ("auxiliary/admin/http/tomcat_ghostcat", "Apache Tomcat AJP file read (Ghostcat)"),
     "CVE-2017-0143": ("exploit/windows/smb/ms17_010_eternalblue", "MS17-010 EternalBlue SMB remote code execution"),
     "CVE-2008-4250": ("exploit/windows/smb/ms08_067_netapi", "MS08-067 Server service remote code execution"),
+    "CVE-2012-1823": ("exploit/multi/http/php_cgi_arg_injection", "PHP CGI argument injection"),
 }
 MSF_BY_CVE = {**{cve: (msf, title) for _, _, _, _, cve, _, title, _, msf in SIGNATURES if msf and cve.startswith("CVE-")},
               **_EXTRA_MSF}
@@ -106,3 +107,25 @@ def match_device(d: dict) -> list[tuple[int, dict]]:
                 port = next((p.get("port") for p in d.get("ports", []) if p.get("port") in (445, 139)), 445)
                 out.append((port, sig))
     return out
+
+
+# Specific OpenVAS findings without CVE references; caller restricts these to confirmed results.
+_FINDING_MSF = [
+    (re.compile(r"\bghostcat\b", re.I), "auxiliary/admin/http/tomcat_ghostcat", "Apache Tomcat AJP file read (Ghostcat)"),
+    (re.compile(r"distributed ruby|\bd[r]?b\b", re.I), "exploit/linux/misc/drb_remote_codeexec", "Distributed Ruby remote code execution"),
+    (re.compile(r"php.*cgi|cgi.*php", re.I), "exploit/multi/http/php_cgi_arg_injection", "PHP CGI argument injection"),
+    (re.compile(r"postgresql default credentials", re.I), "auxiliary/scanner/postgres/postgres_login", "PostgreSQL Login Utility"),
+    (re.compile(r"vnc brute force login", re.I), "auxiliary/scanner/vnc/vnc_login", "VNC Authentication Scanner"),
+    (re.compile(r"ftp brute force logins", re.I), "auxiliary/scanner/ftp/ftp_login", "FTP Authentication Scanner"),
+    (re.compile(r"anonymous ftp login", re.I), "auxiliary/scanner/ftp/ftp_anonymous", "FTP Anonymous Access Scanner"),
+    (re.compile(r"rlogin passwordless login", re.I), "auxiliary/scanner/rservices/rlogin_login", "rlogin Authentication Scanner"),
+]
+
+
+def msf_for_finding(name: str, desc: str = "") -> list:
+    """Known modules for specifically named, confirmed scanner findings."""
+    text = f"{name or ''} {desc or ''}"
+    for pattern, module, title in _FINDING_MSF:
+        if pattern.search(text):
+            return [[module, title, 0]]
+    return []
