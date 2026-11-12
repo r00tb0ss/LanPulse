@@ -1271,6 +1271,9 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-d-actions{margin-top:12px;display:flex;gap:8px}
 #potDetail h5{margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 #potTimeline{margin-bottom:14px}
+.pot-section-tabs{display:flex;gap:5px;margin:0 0 14px;align-items:center}
+.pot-section-tabs button{min-width:104px}
+.pot-section-pane{min-width:0}
 .pot-tabs{display:inline-flex;gap:4px}
 .pot-tabs button{background:transparent;border:1px solid var(--line,#2a3858);color:var(--muted,#8b9bb6);padding:3px 12px;border-radius:999px;font:inherit;font-size:12px;cursor:pointer}
 .pot-tabs button.on{background:var(--accent,#2dd4bf);border-color:var(--accent,#2dd4bf);color:#06121f;font-weight:600}
