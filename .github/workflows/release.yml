@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
     paths: [app.py]
+  # Run by hand from the Actions tab when a push did not trigger it (for example a large mirrored push).
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
