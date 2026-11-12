@@ -174,9 +174,7 @@
     <div class="ftext">
       <span class="tag">NETWORK TOPOLOGY</span>
       <h3>See how your network is actually wired</h3>
-      <p>The Network tab draws your real topology: Internet, gateway, switches, access points, then every device on its own
-        cable. With a UniFi gateway it reads the connections automatically. On any other router you tell LanPulse where a
-        device plugs in, and add VLANs or subnets as zones.</p>
+      <p>The Network tab draws your topology: Internet, gateway, switches, access points, then every device on its own cable. UniFi supplies live client and infrastructure relationships. Compatible routers and switches can also be queried read-only through SNMP v2c and LLDP for neighbour and switch-port relationships; where that data is unavailable, assign connections manually and add VLANs or subnets as zones.</p>
       <ul>
         <li><b>Live traffic on every cable</b> — with a UniFi gateway, dots flow along each link (blue for download, purple for upload) with the speed shown beside each device, refreshed every few seconds while you watch. Other routers show connection counts instead.</li>
         <li><b>Drag devices</b> to arrange the map your way, zoom and pinch on a phone, and use the minimap on big networks.</li>
@@ -226,6 +224,7 @@
       <ul>
         <li><b>Confirmed</b> findings from active checks (for example EternalBlue / MS17-010), ranked above version guesses.</li>
         <li>CISA <b>Known Exploited Vulnerabilities</b> and <b>Metasploit &amp; Exploit-DB</b> cross-referenced per CVE.</li>
+        <li>Metasploit coverage includes exploit and auxiliary modules, recovers CVEs from OpenVAS finding text when references are missing, and maps selected confirmed findings without CVEs. Counts show distinct module names, not just CVEs; auxiliary scanners are not presented as exploits.</li>
         <li>Non-intrusive: nothing is exploited, and confirmed flaws raise the Risk Profile score.</li>
       </ul>
     </div>
@@ -266,6 +265,7 @@
         <li><b>Intelligence workspace</b> — Overview, Activity, Sessions, Attackers, Campaigns, Artifacts and Sensors each have their own section, with attack-type filters and the hosts behind every decoy hit.</li>
         <li><b>Attacker profiles and campaigns</b> — one profile per source IP with its full session history, and correlation of sources that share a captured file, SSH fingerprint, SSH key or transfer host. Shared evidence is shown with a confidence level; it is not attribution.</li>
         <li><b>Static behavior findings</b> — captured shell scripts are explained with the source lines behind each finding, and sessions get a reconstructed attack timeline.</li>
+        <li><b>Score-band filters</b> — filter captured sessions and malware samples into Low (0–19), Guarded (20–39), Elevated (40–59), High (60–79) and Critical (80–100), then sort newest, highest or lowest. Scores support triage; they are not proof of compromise.</li>
       </ul>
     </div>
     <figure class="shot"><img src="images/honeypot.png" alt="Honeypot view showing hits from inside the network, decoys hit and credentials tried"></figure>
@@ -333,6 +333,8 @@
     <div class="card"><div class="ic">✅</div><h4>Confirmed vulnerabilities</h4><p>Safe active checks prove flaws that version matching misses, like missing SMB patches on old Windows.</p></div>
     <div class="card"><div class="ic">🤖</div><h4>AI analyst (bring your own)</h4><p>Ask questions in plain language with Ollama, an OpenAI-compatible server or Anthropic. Read-only, grounded in your data.</p></div>
     <div class="card"><div class="ic">🔬</div><h4>OpenVAS scanning</h4><p>Install and run Greenbone's vulnerability scanner from Settings; findings merge into the Vulnerabilities tab.</p></div>
+    <div class="card"><div class="ic">🎯</div><h4>Metasploit module intelligence</h4><p>Counts distinct exploit and auxiliary modules, recovers missing CVE references from OpenVAS finding text, and maps selected confirmed findings. LanPulse prepares reviewable hand-off commands; it never runs modules.</p></div>
+    <div class="card"><div class="ic">📊</div><h4>Honeypot score filters</h4><p>Filter captured sessions and malware samples by five score bands from Low (0–19) to Critical (80–100), and sort by newest or score to triage large collections.</p></div>
     <div class="card"><div class="ic">↔</div><h4>Lateral-movement detection</h4><p>Flags a device probing 5+ machines on admin ports within 10 minutes, including across VLANs.</p></div>
     <div class="card"><div class="ic">🧭</div><h4>Guided setup</h4><p>A first-run wizard walks through the router, alerts, scanning, honeypot and AI analyst.</p></div>
     <div class="card"><div class="ic">🕑</div><h4>Per-device timeline</h4><p>Every change on a device — ports opened, software updated, vulnerabilities found, threats seen — in one history.</p></div>
@@ -377,8 +379,7 @@
       <tr><td><b>Fortinet, SonicWall, Sophos, WatchGuard</b></td><td>key=value</td><td>Needs srcip, dstip, dstport and action</td></tr>
       <tr><td><b>Anything else</b></td><td>JSON</td><td>POST events to the ingest API from scripts or IDS</td></tr>
     </tbody></table></div>
-  <p class="rt-note">The Topology view reads real connections from UniFi automatically; on other routers you set where devices
-    connect, and add zones by network range. One-click blocking currently needs a UniFi gateway. Many consumer routers on stock firmware can't send
+  <p class="rt-note">The Topology view reads real connections from UniFi automatically and can use read-only SNMP v2c / LLDP data from compatible routers and switches; otherwise set device connections manually and add zones by network range. One-click blocking currently needs a UniFi gateway. Many consumer routers on stock firmware can't send
     firewall logs, so they get device mapping and scanning but no attack map.</p>
 </div></section>
 
@@ -507,7 +508,7 @@
 <section id="themes"><div class="wrap">
   <p class="eyebrow">Make it yours</p>
   <h2 class="title">Nine built-in themes</h2>
-  <p class="lead2">From a clean enterprise look to full 80s hacker. Switch in Settings → Appearance.</p>
+  <p class="lead2">Nine browser-saved looks, from a clean enterprise palette to 80s hacker phosphor and Crimson Noir's pure-black surfaces, white text, single red accent and square corners. Switch in Settings → Appearance.</p>
   <div class="themes" style="margin-top:28px">
     <figure class="theme"><img src="images/network.png" alt="Midnight default theme"><figcaption>Midnight (default)</figcaption></figure>
     <figure class="theme"><img src="images/theme_light.png" alt="Enterprise Light theme"><figcaption>Enterprise Light</figcaption></figure>
