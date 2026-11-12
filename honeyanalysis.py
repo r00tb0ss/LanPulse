@@ -905,6 +905,36 @@ class HoneyAnalysis:
         out.sort(key=lambda x: (-x["sessions"], x["hassh"]))
         return {"fingerprints": out, "total": len(out), "hours": max(1, min(int(hours), 2160))}
 
+    def attacker_sessions(self, ip: str, hours: int = 2160, limit: int = 100) -> dict:
+        """Return a bounded session history for one exact source IP."""
+        ip = str(ip or "").strip()
+        if not ip or len(ip) > 64:
+            return {"ip": ip, "sessions": [], "total": 0, "hours": max(1, min(int(hours), 2160))}
+        hours = max(1, min(int(hours), 2160))
+        limit = max(1, min(int(limit), 200))
+        since = time.time() - hours * 3600
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, sensor, ip, port, proto, start, end, client, logins, commands, files, tags, score "
+                "FROM sessions WHERE ip = ? AND start >= ? ORDER BY start DESC LIMIT ?",
+                (ip, since, limit)).fetchall()
+            total = self.db.execute(
+                "SELECT COUNT(*) FROM sessions WHERE ip = ? AND start >= ?", (ip, since)).fetchone()[0]
+        out = []
+        for sid, sensor, source_ip, port, proto, start, end, client, logins, commands, files, tags, score in rows:
+            lg = json.loads(logins or "[]")
+            cm = json.loads(commands or "[]")
+            fl = json.loads(files or "[]")
+            geo = self.hp._geo(source_ip)
+            out.append({"id": sid, "sensor": sensor, "ip": source_ip, "port": port, "proto": proto,
+                        "start": start, "duration": round(max(0, end - start), 1), "client": client,
+                        "logins": len(lg), "logged_in": any(x.get("ok") for x in lg),
+                        "commands": len(cm), "files": len(fl), "tags": json.loads(tags or "[]"),
+                        "score": max(0, min(100, int(score or 0))), "iso": geo.get("iso", ""),
+                        "country": geo.get("country", ""), "city": geo.get("city", "")})
+        return {"ip": ip, "sessions": out, "total": total, "hours": hours,
+                "returned": len(out), "limit": limit}
+
     def attacker_profiles(self, hours: int = 2160, limit: int = 5000) -> dict:
         """Summarize observed behavior per source IP without claiming real-world identity."""
         hours = max(1, min(int(hours), 2160))
