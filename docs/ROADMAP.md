@@ -3,8 +3,7 @@
 What is planned next, in the order it is likely to ship. Releases are small and built one at a time. Dates are not promised, and the order can change.
 
 ## 1. Hardening and release checks
-- Tighter handling of backups: automatic pruning, one backup at a time, and a login required to create them.
-- Verification of downloaded updates before they are installed.
+- Automatic pruning of old backups.
 - Clearer, friendlier errors when a backup cannot be restored.
 - An automated browser check in CI that opens every tab and fails on any JavaScript error.
 
@@ -35,4 +34,4 @@ What is planned next, in the order it is likely to ship. Releases are small and 
 User roles, an audit log, optional two-factor login, a combined incident view, API tokens, a metrics endpoint, several sites in one dashboard, Docker and Debian packages, a written threat model with a security policy, and an independent security test.
 
 ## Already shipped recently
-Health board, quiet mode, verified backups with a restore tool, honeypot hash and SSH fingerprint intelligence, and honeypot attack filters with per-service host details. Password changes rotate the session signing secret; other existing sessions are invalidated while the changing browser receives a fresh session.
+Health board, quiet mode, verified backups with a restore tool, honeypot hash and SSH fingerprint intelligence, and honeypot attack filters with per-service host details. Password changes rotate the session signing secret; other existing sessions are invalidated while the changing browser receives a fresh session. Backups need a login and run one at a time, downloaded updates are verified against a published SHA-256 checksum before installation, and the Honeypot tab has attacker profiles, campaign correlation and a sectioned intelligence workspace.
