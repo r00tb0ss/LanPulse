@@ -19,5 +19,7 @@ jobs:
           VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
           if gh release view "v$VER" >/dev/null 2>&1; then echo "v$VER already released"; exit 0; fi
           git archive --prefix=lanpulse/ HEAD -o /tmp/lanpulse.zip --format=zip
+          # The in-app updater refuses a release without this checksum file.
+          (cd /tmp && sha256sum lanpulse.zip > lanpulse.zip.sha256)
           if [ -f "docs/releases/$VER.md" ]; then NOTES=(-F "docs/releases/$VER.md"); else NOTES=(--generate-notes); fi
-          gh release create "v$VER" /tmp/lanpulse.zip --title "LanPulse $VER" --target "$GITHUB_SHA" "${NOTES[@]}"
+          gh release create "v$VER" /tmp/lanpulse.zip /tmp/lanpulse.zip.sha256 --title "LanPulse $VER" --target "$GITHUB_SHA" "${NOTES[@]}"
