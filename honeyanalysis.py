@@ -976,7 +976,7 @@ class HoneyAnalysis:
                     fingerprint = hashlib.sha256(str(key_text).encode("utf-8", "replace")).hexdigest()[:32]
                     add("SSH key fingerprint", "SHA256:" + fingerprint, ip, last_seen, sha=sha, confidence="high")
                 for url in json.loads(urls_json or "[]"):
-                host = re.sub(r"^\w+(?:\+\w+)?://([^/:]+).*", r"\1", url).lower()
+                    host = re.sub(r"^\w+(?:\+\w+)?://([^/:]+).*", r"\1", url).lower()
                     if host and host != url.lower():
                         add("File transfer host", host, ip, last_seen, sha=sha, confidence="moderate")
 
