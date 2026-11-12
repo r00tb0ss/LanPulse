@@ -39,7 +39,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **IPS view**: what your UDM's intrusion prevention recognized (Mirai, router exploits, SSH scans...)
 - **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
 - **Honeypot sensors**: add a Raspberry Pi, Linux box or container running Cowrie (SSH/Telnet) with optional FTP and web decoys from a one-line command; every attacker session is recorded and every captured file is analysed statically (never run)
-- **Honeypot investigation intelligence**: grouped credential analytics, captured-file hash intelligence (SHA-256, SHA-1 and MD5), static malware analysis, SSH HASSH client-fingerprint summaries, related-session navigation, and compact recent-results lists with in-panel View all expansion. HASSH groups SSH client handshakes; it is not proof of a unique identity.
+- **Honeypot investigation intelligence**: grouped credential analytics, captured-file hash intelligence (SHA-256, SHA-1 and MD5), static malware analysis, SSH HASSH client-fingerprint summaries, related-session navigation, score-band filters and sorting for captured sessions and samples, and compact recent-results lists with in-panel View all expansion. HASSH groups SSH client handshakes; it is not proof of a unique identity.
 - **AI Attack Intelligence**: adds a separate behavioral assessment to detailed honeypot sessions, distinguishing automated activity from potentially AI-assisted behavior, with a score, confidence and evidence. It is deliberately conservative and does not claim AI use from a connection or a few commands; it does not change the existing danger score or automatically block anyone. Requires command/session telemetry such as Cowrie.
 - **Honeypot intelligence workspace**: the Honeypot tab is organized into Overview, Activity, Sessions, Attackers, Campaigns, Artifacts and Sensors. Attacker profiles summarize each source IP with its full session history, campaign correlation links sources that share observable evidence (a captured file, an SSH client fingerprint, an SSH key or a file-transfer host), session timelines are reconstructed from the recorded evidence, and captured shell scripts get static behavior findings with the source lines behind them. All of it describes observed evidence, not who is behind an address.
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
@@ -392,6 +392,7 @@ The Honeypot tab is split into sections:
 - **Campaigns**: sources that share the same observable evidence, such as a captured file hash, an SSH client fingerprint (HASSH), an SSH key or a file-transfer host, each with a confidence level. Widely shared addresses such as public DNS resolvers are ignored. A match shows shared evidence, not a proven common operator.
 - **Artifacts**: captured files with hashes, static analysis and, for shell scripts, behavior findings with the source lines that triggered them (command-and-control, SSH scanning, embedded credentials, persistence and more), plus SSH fingerprints.
 - **Sensors**: add, check and revoke sensors.
+- **Score filters and sorting**: narrow captured sessions and malware samples by score band (0–19 Low, 20–39 Guarded, 40–59 Elevated, 60–79 High, 80–100 Critical), then sort by newest, highest score or lowest score. This helps triage large collections; a score is an assessment, not proof of compromise.
 
 Captured files are only ever inspected as bytes. They are never run.
 
@@ -462,6 +463,7 @@ The **Red Team** tab turns what LanPulse already found into an offensive-recon w
 **never runs an exploit**. Everything is built from data already scanned, so it adds no new traffic to your devices.
 
 - **MITRE ATT&CK mapping** — open ports, services and vulnerabilities are mapped to ATT&CK techniques, grouped by tactic.
+- **Broader Metasploit coverage** — indexes exploit and auxiliary modules, recovers CVEs from OpenVAS finding text when references are missing, and maps selected confirmed findings to relevant modules. Device totals count distinct module names; auxiliary scanners are not presented as exploits.
 - **Metasploit hand-off** — each vulnerability with a module gets its `use` / `set RHOSTS` / `set RPORT` lines, with a
   copy button in the device panel. You run them yourself in your own `msfconsole`. LanPulse generates the text only, from
   module names it already identified, and device banners can never become commands.
