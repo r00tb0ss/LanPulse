@@ -316,7 +316,7 @@ class Store(unittest.TestCase):
         self.assertEqual(result["returned"], 1)
         self.assertEqual(len(result["sessions"]), 1)
         self.assertEqual(result["sessions"][0]["id"], "history-b")
-        self.assertEqual(result["sessions"][0]["score"], 0)
+        self.assertEqual(result["sessions"][0]["score"], 50)
         self.assertEqual(self.h.attacker_sessions("198.51.100.8", 24)["total"], 1)
         self.assertEqual(self.h.attacker_sessions("", 24)["total"], 0)
 
