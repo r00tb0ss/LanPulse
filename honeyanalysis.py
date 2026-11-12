@@ -939,7 +939,7 @@ class HoneyAnalysis:
             tags = sorted(set(json.loads(tags_json or "[]")) - {"logged-in"})
             if len(tags) >= 2:
                 add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low")
-            iocs = find_iocs("\\n".join(commands))
+            iocs = find_iocs("\n".join(commands))
             for indicator in iocs.get("ips", []):
                 add("Public IP", indicator["value"], ip, started, sid, confidence="low")
             for indicator in iocs.get("domains", []):
@@ -956,7 +956,7 @@ class HoneyAnalysis:
                 if HEX64.match(sha):
                     add("Malware SHA-256", sha, ip, started, sid, sha, confidence="high")
                 url = str(f.get("url") or "")
-                host = re.sub(r"^\\w+(?:\\+\\w+)?://([^/:]+).*", r"\\1", url).lower()
+                host = re.sub(r"^\w+(?:\+\w+)?://([^/:]+).*", r"\1", url).lower()
                 if host and host != url.lower():
                     add("File transfer host", host, ip, started, sid, sha, confidence="moderate")
 
@@ -976,7 +976,7 @@ class HoneyAnalysis:
                     fingerprint = hashlib.sha256(str(key_text).encode("utf-8", "replace")).hexdigest()[:32]
                     add("SSH key fingerprint", "SHA256:" + fingerprint, ip, last_seen, sha=sha, confidence="high")
                 for url in json.loads(urls_json or "[]"):
-                    host = re.sub(r"^\\w+(?:\\+\\w+)?://([^/:]+).*", r"\\1", url).lower()
+                host = re.sub(r"^\w+(?:\+\w+)?://([^/:]+).*", r"\1", url).lower()
                     if host and host != url.lower():
                         add("File transfer host", host, ip, last_seen, sha=sha, confidence="moderate")
 
@@ -1032,7 +1032,7 @@ class HoneyAnalysis:
                                         (login.get("u") or "unknown user"), "evidence": ""})
         for index, command in enumerate(cmds):
             tags_for_command = classify_command(command)
-            stage = ("Command and control" if re.search(r"\\b(?:JOIN\\s+#[\\w.-]+|PRIVMSG)\\b", command, re.I) else
+            stage = ("Command and control" if re.search(r"\b(?:JOIN\s+#[\w.-]+|PRIVMSG)\b", command, re.I) else
                      "Persistence" if any(t.startswith("persistence") or t == "ssh-key-plant" for t in tags_for_command) else
                      "Defense evasion" if any(t in tags_for_command for t in ("disable-defenses", "cover-tracks", "deletes-files")) else
                      "Execution" if any(t in tags_for_command for t in ("run-dropped-file", "reverse-shell", "make-executable")) else
