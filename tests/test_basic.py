@@ -70,7 +70,7 @@ class ReleaseSources(unittest.TestCase):
             calls.append(url)
             if "gitlab" in url:
                 raise OSError("offline")
-            if url.endswith("lanpulse.zip.sha256"):
+            if url.endswith(".zip.sha256"):
                 return io.BytesIO(("a" * 64 + "  lanpulse.zip\n").encode())
             return io.BytesIO(json.dumps({"tag_name": "v1.25.36", "assets": [
                 {"name": "lanpulse.zip", "browser_download_url": "https://github.com/a/b.zip"},
