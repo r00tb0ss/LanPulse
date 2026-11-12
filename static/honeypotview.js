@@ -8,11 +8,23 @@ let potData = null;
 let potHours = 168;
 let potAttackType = "all";
 let potSelectedService = "";
-let potSection = (() => { try { return localStorage.getItem("lp_pot_section") === "analysis" ? "analysis" : "overview"; } catch (_) { return "overview"; } })();
+let potSection = (() => {
+  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors"];
+  try {
+    const saved = localStorage.getItem("lp_pot_section");
+    if (valid.includes(saved)) return saved;
+    if (saved === "analysis") {
+      const legacy = localStorage.getItem("lp_pot_tab");
+      return legacy === "malware" ? "artifacts" : (["profiles", "campaigns", "sensors"].includes(legacy) ? legacy : "sessions");
+    }
+  } catch (_) {}
+  return "overview";
+})();
 
 function setPotSection(section, persist = true) {
-  potSection = section === "analysis" ? "analysis" : "overview";
-  const analysis = potSection === "analysis";
+  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors"];
+  potSection = valid.includes(section) ? section : "overview";
+  const investigation = ["sessions", "profiles", "campaigns", "artifacts", "sensors"].includes(potSection);
   const tabs = $("potSectionTabs");
   if (tabs) tabs.querySelectorAll("[data-pot-section]").forEach((b) => {
     const active = b.dataset.potSection === potSection;
@@ -20,10 +32,24 @@ function setPotSection(section, persist = true) {
     b.setAttribute("aria-selected", String(active));
     b.tabIndex = active ? 0 : -1;
   });
-  $("potOverviewPane")?.classList.toggle("hidden", analysis);
-  $("potAnalysisPane")?.classList.toggle("hidden", !analysis);
+  $("potOverviewPane")?.classList.toggle("hidden", potSection !== "overview");
+  $("potActivityPane")?.classList.toggle("hidden", potSection !== "activity");
+  $("potInvestigationPane")?.classList.toggle("hidden", !investigation);
+  $("potMalware")?.classList.toggle("hidden", potSection === "artifacts");
+  $("potHashIntel")?.classList.toggle("hidden", potSection !== "artifacts");
+  $("potMalDetail")?.classList.add("hidden");
   if (persist) { try { localStorage.setItem("lp_pot_section", potSection); } catch (_) {} }
-  if (analysis && typeof loadMalware === "function") loadMalware();
+  if (investigation) {
+    const title = $("potMalTitle");
+    if (title && potSection !== "artifacts") title.textContent = ({sessions:"Attack sessions",profiles:"Attacker profiles",campaigns:"Campaign correlations",sensors:"Honeypot sensors"})[potSection] || "Investigation";
+    if (typeof loadMalware === "function") {
+      if (potSection !== "artifacts") {
+        potMalTab = potSection;
+        try { localStorage.setItem("lp_pot_tab", potMalTab); } catch (_) {}
+        if (potSess === null) loadMalware(); else renderMalware();
+      } else if (typeof renderHashIntel === "function") renderHashIntel();
+    }
+  }
 }
 
 async function loadHoneypot() {
@@ -51,12 +77,12 @@ function potAttackKind(hit) {
 }
 function potAttackKindLabel(kind) {
   return ({credentials: "Credential attempts", probe: "Protocol / request probes",
-    connection: "Connections only"})[kind] || kind;
+    connection: "Connections only", internal: "Internal sources"})[kind] || kind;
 }
 function renderPotRecent() {
   const hits = (potData && potData.recent) || [];
   const filtered = hits.filter((h) => (!potSelectedService || h.service === potSelectedService) &&
-    (potAttackType === "all" || potAttackKind(h) === potAttackType));
+    (potAttackType === "all" || (potAttackType === "internal" ? !!h.internal : potAttackKind(h) === potAttackType)));
   $("potHits").innerHTML = filtered.length ? filtered.map((h) => `
     <div class="pot-hit click ${h.internal ? "internal" : ""}" data-ip="${esc(h.ip)}" title="Show everything this address did">
       <span class="pot-when" title="${esc(full(h.t))}">${ago(h.t)}</span>
@@ -139,10 +165,10 @@ function renderHoneypot() {
   }
 
   $("potKpis").innerHTML = `
-    <div class="kpi"><span class="k-lbl">Hits</span><span class="k-num">${t.hits}</span><span class="k-sub">last ${Math.round(s.hours / 24) || 1}d &middot; ${t.all_time} all time</span></div>
-    <div class="kpi ${t.internal ? "danger" : ""}"><span class="k-lbl">From your network</span><span class="k-num">${t.internal}</span><span class="k-sub">${t.internal ? "possible compromise" : "none — good"}</span></div>
-    <div class="kpi"><span class="k-lbl">Unique sources</span><span class="k-num">${t.attackers}</span><span class="k-sub">${t.external} external hits</span></div>
-    <div class="kpi"><span class="k-lbl">Logins tried</span><span class="k-num">${t.creds}</span><span class="k-sub">captured credentials</span></div>`;
+    <div class="kpi pot-kpi-action" role="button" tabindex="0" data-pot-jump="activity"><span class="k-lbl">Hits</span><span class="k-num">${t.hits}</span><span class="k-sub">last ${Math.round(s.hours / 24) || 1}d &middot; ${t.all_time} all time</span></div>
+    <div class="kpi pot-kpi-action ${t.internal ? "danger" : ""}" role="button" tabindex="0" data-pot-jump="activity" data-pot-filter="internal"><span class="k-lbl">From your network</span><span class="k-num">${t.internal}</span><span class="k-sub">${t.internal ? "possible compromise" : "none — good"}</span></div>
+    <div class="kpi pot-kpi-action" role="button" tabindex="0" data-pot-jump="activity"><span class="k-lbl">Unique sources</span><span class="k-num">${t.attackers}</span><span class="k-sub">${t.external} external hits</span></div>
+    <div class="kpi pot-kpi-action" role="button" tabindex="0" data-pot-jump="activity" data-pot-filter="credentials"><span class="k-lbl">Logins tried</span><span class="k-num">${t.creds}</span><span class="k-sub">captured credentials</span></div>`;
 
   // listener status strip
   $("potListeners").innerHTML = Object.entries(s.listeners || {}).map(([k, l]) => {
@@ -356,6 +382,22 @@ async function showPotSetup(force) {
     });
     setPotSection(potSection, false);
   }
+  const sectionJump = (target, filter) => {
+    if (filter) {
+      potAttackType = filter;
+      const select = $("potAttackType");
+      if (select) select.value = filter;
+      renderPotRecent();
+    }
+    if (target) setPotSection(target);
+  };
+  const kpis = $("potKpis");
+  if (kpis) {
+    kpis.addEventListener("click", (e) => { const card = e.target.closest("[data-pot-jump]"); if (card) sectionJump(card.dataset.potJump, card.dataset.potFilter); });
+    kpis.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { const card = e.target.closest("[data-pot-jump]"); if (card) { e.preventDefault(); sectionJump(card.dataset.potJump); } } });
+  }
+  const intelCards = $("potIntelCards");
+  if (intelCards) intelCards.addEventListener("click", (e) => { const card = e.target.closest("[data-pot-jump]"); if (card) sectionJump(card.dataset.potJump); });
   const cfg = $("potCfgBtn");
   if (cfg) cfg.onclick = () => showPotSetup();
   const svc = $("potServices");
