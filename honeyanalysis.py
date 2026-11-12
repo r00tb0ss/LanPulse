@@ -405,7 +405,7 @@ def analyze_script(data: bytes) -> dict:
     add("firewall-tampering", "Attempts to disable or flush firewall protections", "T1562.004", "high",
         r"ufw\s+disable|iptables\s+-F|nft\s+flush|setenforce\s+0")
     add("dns-tampering", "Modifies the system DNS resolver configuration", "T1565.001", "medium",
-        r"(?:>|>>|tee\s+|sed\s+-i[^;\n]*\s)/etc/resolv\.conf|(?:echo|printf)\b[^;\n]*>\s*/etc/resolv\.conf"
+        r"(?:>|>>|tee\s+|sed\s+-i[^;\n]*\s)/etc/resolv\.conf|(?:echo|printf)\b[^;\n]*>\s*/etc/resolv\.conf")
     return {"behaviors": behaviors, "behavior_score": min(100, sum(
         {"high": 25, "medium": 15, "low": 5}.get(x["confidence"], 0) for x in behaviors)),
             "iocs": find_iocs(text)}
