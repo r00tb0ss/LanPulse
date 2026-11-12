@@ -41,16 +41,19 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Honeypot sensors**: add a Raspberry Pi, Linux box or container running Cowrie (SSH/Telnet) with optional FTP and web decoys from a one-line command; every attacker session is recorded and every captured file is analysed statically (never run)
 - **Honeypot investigation intelligence**: grouped credential analytics, captured-file hash intelligence (SHA-256, SHA-1 and MD5), static malware analysis, SSH HASSH client-fingerprint summaries, related-session navigation, and compact recent-results lists with in-panel View all expansion. HASSH groups SSH client handshakes; it is not proof of a unique identity.
 - **AI Attack Intelligence**: adds a separate behavioral assessment to detailed honeypot sessions, distinguishing automated activity from potentially AI-assisted behavior, with a score, confidence and evidence. It is deliberately conservative and does not claim AI use from a connection or a few commands; it does not change the existing danger score or automatically block anyone. Requires command/session telemetry such as Cowrie.
+- **Honeypot intelligence workspace**: the Honeypot tab is organized into Overview, Activity, Sessions, Attackers, Campaigns, Artifacts and Sensors. Attacker profiles summarize each source IP with its full session history, campaign correlation links sources that share observable evidence (a captured file, an SSH client fingerprint, an SSH key or a file-transfer host), session timelines are reconstructed from the recorded evidence, and captured shell scripts get static behavior findings with the source lines behind them. All of it describes observed evidence, not who is behind an address.
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
 - **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
 - **Guided setup** wizard on first run, and lateral-movement detection
 - **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data. It knows what LanPulse is and where each feature lives, and sees live honeypot, DNS, services, traffic and vulnerability data
-- **Daily summary** to any alert channel
+- **Daily summary** to any alert channel, and **quiet mode** (the bell in the top bar) to mute alerts for 1 hour, 4 hours or until 8 AM
+- **Health board** on the Services tab: shows whether each data source LanPulse depends on (router logs, UniFi, SNMP, Pi-hole, vulnerability data, honeypot sensors) is working, when it last reported, and what to check when it isn't
 - **Device traffic on the attack map**: live arcs showing where each device connects (Google, Netflix, Amazon...), top destinations and busiest devices, and an alert when a device contacts an IP that attacked you
 - **Security warnings** for risky services: Telnet, VNC, FTP, exposed databases, Docker API, old SSH, HTTP-only admin pages
 - **Works with many routers**: UniFi, pfSense/OPNsense, OpenWrt/Linux, MikroTik, Fortinet-style firewalls or anything that can send syslog or JSON (see [Supported routers](#supported-routers))
 - **Alerts** by ntfy push, Telegram, webhook (Discord, Slack, Home Assistant), email or IRC
-- **Login** with a hashed password, plus optional HTTPS
+- **Login** with a hashed password, plus optional HTTPS; changing the password signs out every other session
+- **Verified updates and backups**: downloaded releases are checked against a published SHA-256 checksum before they are installed, the previous version is restored automatically if an update fails, and data backups are verified archives you create and download from Settings
 - **Works offline**: map and icon libraries are stored locally
 - Wake-on-LAN, saved map layout, CSV export, search and filters, and it works on phones
 
@@ -231,6 +234,8 @@ renaming it, accepting a risk). Filter it by kind; the default hides online/offl
 | Email | SMTP server, port (587 STARTTLS or 465 SSL), username and password. Gmail needs an app password. |
 | IRC | Server, port, nickname and channel. Turn off certificate checks for a self-signed server. |
 
+**Quiet mode.** The bell in the top bar mutes alert messages for 1 hour, 4 hours or until 8 AM, and turns them back on early if you want. Only the messages stop: detection and the dashboard carry on as normal, and the daily summary is still sent. Alerts raised while quiet mode is on are not sent afterwards.
+
 ## Options
 
 Everything is set in the dashboard under **Settings > System**: how often devices are checked, when they count as
@@ -259,7 +264,7 @@ sudo /opt/lanpulse/venv/bin/python /opt/lanpulse/app.py --data-dir /opt/lanpulse
 
 ## Backups and restore
 
-The updater's rollback protects application files after a failed update; it is not a backup of network history and settings. Use **Settings > Backup > Create backup now** to create a verified data archive, then list and download completed archives from the same tab. Backups include consistent SQLite snapshots and are stored privately (default `/var/backups/lanpulse`). Restore is a deliberate maintenance operation performed from the command line: the service must be stopped, the archive is verified before replacement, and the previous data directory is preserved. No automatic backup schedule is configured. See [manual backup and restore](docs/backup-restore.md) for permissions, alternate locations and container guidance.
+The updater's rollback protects application files after a failed update; it is not a backup of network history and settings. Use **Settings > Backup > Create backup now** to create a verified data archive, then list and download completed archives from the same tab. Backups include consistent SQLite snapshots and are stored privately (default `/var/backups/lanpulse`). Restore is a deliberate maintenance operation performed from the command line: the service must be stopped, the archive is verified before replacement, and the previous data directory is preserved. Creating a backup needs a dashboard login, and only one backup runs at a time. No automatic backup schedule is configured. See [manual backup and restore](docs/backup-restore.md) for permissions, alternate locations and container guidance.
 
 ## Try it without scanning
 
@@ -362,7 +367,7 @@ access, caps its logging under floods and escapes everything it records.
 
 For a more realistic trap, add a **sensor**: a Raspberry Pi, any Linux box or a container running
 [Cowrie](https://github.com/cowrie/cowrie), a fake SSH/Telnet server that lets attackers "log in" and type commands.
-On the Honeypot tab open **Captured attacks and malware > Sensors > Add sensor**, pick the kind and paste the one-line
+On the Honeypot tab open **Sensors > Add sensor**, pick the kind and paste the one-line
 command on the sensor. LanPulse then shows every attacker **session** (logins tried, a command-by-command replay, tags
 mapped to MITRE ATT&CK) and every **file** they drop, analysed statically: hashes, file type and CPU, entropy, readable
 strings, addresses and wallets inside, and family hints. Captured files are never run and never offered for download,
@@ -374,7 +379,21 @@ long data is kept, and you can switch on two more decoys that the sensor runs it
 2121) and a **web** server (default port 2180) that accept logins and uploads and keep what is sent, so you can see
 what attackers try to drop. They are small, read-only-by-design programs (no outbound connections, no shell, file and
 store size caps, hard time limits per connection) that write the same session records as Cowrie, so everything shows up
-in the same Sessions and Samples lists. Ports are 1024 or higher; forward the real port (21, 80) to them on your router.
+in the same Sessions and Artifacts sections. Ports are 1024 or higher; forward the real port (21, 80) to them on your router.
+
+### Investigating honeypot activity
+
+The Honeypot tab is split into sections:
+
+- **Overview**: totals, listener status, the activity timeline and an "Intelligence at a glance" summary. Each number opens the section behind it.
+- **Activity**: recent hits with attack-type filters (credential attempts, protocol or request probes, connections only, internal sources), who is probing, the decoys hit with the hosts that contacted each one, countries, and the credentials tried.
+- **Sessions**: every recorded attacker session with a command-by-command replay, a reconstructed timeline of the attack stages, and the separate AI Attack Intelligence assessment. Per-command timestamps are not recorded, so the timeline shows order of evidence, not exact timing.
+- **Attackers**: one profile per source IP (sessions, logins, commands, files, services, usernames, client software) with that address's full session history. An IP address can be shared, proxied or reassigned, so a profile is not a person.
+- **Campaigns**: sources that share the same observable evidence, such as a captured file hash, an SSH client fingerprint (HASSH), an SSH key or a file-transfer host, each with a confidence level. Widely shared addresses such as public DNS resolvers are ignored. A match shows shared evidence, not a proven common operator.
+- **Artifacts**: captured files with hashes, static analysis and, for shell scripts, behavior findings with the source lines that triggered them (command-and-control, SSH scanning, embedded credentials, persistence and more), plus SSH fingerprints.
+- **Sensors**: add, check and revoke sensors.
+
+Captured files are only ever inspected as bytes. They are never run.
 
 ![Honeypot](docs/images/honeypot.png)
 
@@ -486,9 +505,13 @@ with 24-hour and 7-day uptime, response times, an availability strip and outage 
 a service counts as down and you get an alert, and another when it recovers. LanPulse suggests checks for things it
 found (Plex, Pi-hole, your router, Proxmox, Home Assistant and more).
 
+At the top of the tab, the **health board** shows LanPulse's own data sources: router logs, UniFi, SNMP, Pi-hole,
+vulnerability data and honeypot sensors. Each one is marked working, needs attention, failing or not set up, with when
+it last reported and a hint about what to check.
+
 ## Updating
 
-**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse looks at the [latest release](https://gitlab.com/r00tb0ss/lanpulse/-/releases) on GitLab (and on GitHub as a fallback), shows what's new, downloads it, and you click Install. Only the app's own files are replaced; your data and OpenVAS are untouched.
+**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse looks at the [latest release](https://gitlab.com/r00tb0ss/lanpulse/-/releases) on GitLab (and on GitHub as a fallback), shows what's new, downloads it, and you click Install. Each release is published with a SHA-256 checksum: LanPulse checks the download against it, and the root-only helper checks the staged file again just before installing. A file that doesn't match is refused. This is an integrity check, not a publisher signature. Only the app's own files are replaced; your data and OpenVAS are untouched.
 
 **From the dashboard, manual:** download `lanpulse.zip` from the latest release, then Settings > Update, choose it, check the version shown, and click Install.
 LanPulse backs up the current version, installs the update, restarts, and reloads the page. If the install fails,
@@ -502,6 +525,7 @@ run with administrator rights. The web app itself can't change its own files: a 
 ## Security
 
 - **Set a login and use HTTPS.** The installer offers both. Without HTTPS, your password crosses the network in plain text.
+  Changing the password signs out every other browser session.
 - **Without a login,** LanPulse only answers to IP addresses and local names (`.lan`, `.local`, single-word names). This blocks
   DNS-rebinding attacks from web pages you visit. To use a real domain name, add it under Settings > System >
   Extra host names.
@@ -517,7 +541,7 @@ run with administrator rights. The web app itself can't change its own files: a 
   To turn the sandbox off yourself: `sudo mv /etc/systemd/system/lanpulse.service.d/hardening.conf{,.off}` then
   `sudo systemctl daemon-reload && sudo systemctl restart lanpulse`.
 - **Updates from the dashboard run with administrator rights.** They need a login, the root-only helper re-checks every
-  zip (only plain files inside a `lanpulse` folder: no links, nothing outside it) and backs up the current version first.
+  zip (only plain files inside a `lanpulse` folder: no links, nothing outside it), verifies its SHA-256 checksum and backs up the current version first.
   Anyone who can log in can install an update, so use a strong password. To turn dashboard updates off on the machine
   itself: `sudo mv /etc/lanpulse/web-updates /etc/lanpulse/web-updates.off` (terminal installs still work).
 - **Web server and network settings, and restarting, need a login,** so nobody else on your network can lock you out.
