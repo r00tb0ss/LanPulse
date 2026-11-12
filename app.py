@@ -2183,7 +2183,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.get("/api/honeypot/sessions")
     async def honeypot_sessions(hours: int = 168, limit: int = 100):
-        return await asyncio.to_thread(nm.honeyan.sessions, max(1, min(hours, 2160)), max(1, min(limit, 500)))
+        return await asyncio.to_thread(nm.honeyan.sessions, max(1, min(hours, 2160)), max(1, min(limit, 2000)))
 
     @app.get("/api/honeypot/session")
     async def honeypot_session(id: str):
@@ -2192,7 +2192,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.get("/api/honeypot/samples")
     async def honeypot_samples(limit: int = 100):
-        return await asyncio.to_thread(nm.honeyan.samples, max(1, min(limit, 500)))
+        return await asyncio.to_thread(nm.honeyan.samples, max(1, min(limit, 2000)))
 
     @app.get("/api/honeypot/sample")
     async def honeypot_sample(sha: str):
