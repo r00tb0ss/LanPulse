@@ -31,6 +31,26 @@
   .rt th{color:var(--dim);font-size:12px;letter-spacing:1px;text-transform:uppercase}
   .rt tr:last-child td{border-bottom:0}.rt td{color:var(--muted)}.rt td b{color:var(--text)}
   .rt-note{color:var(--dim);font-size:13px;margin-top:14px}
+  /* router logos and setup guide */
+  .router-logos{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:28px 0 20px}
+  .router-brand{min-height:104px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center}
+  .router-brand img{width:auto;height:34px;max-width:145px;object-fit:contain;filter:grayscale(1) brightness(0) invert(1)}
+  .router-brand b{font-size:14px;color:var(--text)}
+  .router-brand small{font-size:11px;color:var(--dim)}
+  .router-brand .wordmark{font-size:19px;font-weight:800;letter-spacing:-.04em;color:var(--text)}
+  .setup-intro{color:var(--muted);max-width:760px}
+  .setup-list{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:24px}
+  .setup-item{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .setup-item summary{cursor:pointer;list-style:none;padding:17px 20px;font-weight:700;color:var(--text);display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .setup-item summary::-webkit-details-marker{display:none}
+  .setup-item summary:after{content:"+";color:var(--accent);font-size:21px;font-weight:400}
+  .setup-item[open] summary:after{content:"−"}
+  .setup-body{padding:0 20px 18px;color:var(--muted);font-size:14px}
+  .setup-body ol,.setup-body ul{padding-left:20px}
+  .setup-body li{margin:7px 0}
+  .setup-body code{color:#bae6fd;overflow-wrap:anywhere}
+  .setup-callout{margin-top:16px;padding:14px 16px;background:rgba(56,189,248,.07);border:1px solid var(--border2);border-radius:9px;color:var(--muted);font-size:13px}
+  @media(max-width:760px){.router-logos{grid-template-columns:repeat(2,1fr)}.setup-list{grid-template-columns:1fr}}
   /* nav */
   .nav{position:sticky;top:0;z-index:10;background:rgba(10,15,28,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
   .nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
@@ -110,6 +130,7 @@
     <a href="#features">Features</a>
     <a href="#security">Security</a>
     <a href="#routers">Routers</a>
+    <a href="#router-setup">Setup Guide</a>
     <a href="#themes">Themes</a>
     <a href="#install">Install</a>
     <a href="https://ko-fi.com/r00tb0ss" rel="noopener">Support</a>
@@ -326,6 +347,21 @@
   <h2 class="title">Not tied to one brand</h2>
   <p class="lead2">Device discovery, scanning, the honeypot, OpenVAS and the AI analyst work on any network. The attack map
     and botnet detection read your router's firewall log over syslog, and the setup guide shows the steps for yours.</p>
+
+  <div class="router-logos" aria-label="Router and firewall platforms">
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/ubiquiti" alt="Ubiquiti logo"><b>UniFi / Ubiquiti</b><small>Advanced integration</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/pfsense" alt="pfSense logo"><b>pfSense</b><small>Firewall log support</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/opnsense" alt="OPNsense logo"><b>OPNsense</b><small>Firewall log support</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/openwrt" alt="OpenWrt logo"><b>OpenWrt</b><small>Netfilter log support</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/mikrotik" alt="MikroTik logo"><b>MikroTik</b><small>Firewall log support</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/fortinet" alt="Fortinet logo"><b>Fortinet</b><small>Key/value log support</small></div>
+    <div class="router-brand"><span class="wordmark">SonicWall</span><b>SonicWall</b><small>Format-dependent</small></div>
+    <div class="router-brand"><span class="wordmark">sophos</span><b>Sophos</b><small>Format-dependent</small></div>
+    <div class="router-brand"><span class="wordmark">WatchGuard</span><b>WatchGuard</b><small>Format-dependent</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/cisco" alt="Cisco logo"><b>Cisco</b><small>Model / format-dependent</small></div>
+    <div class="router-brand"><img src="https://cdn.simpleicons.org/asus" alt="ASUS logo"><b>ASUS</b><small>Firmware-dependent</small></div>
+    <div class="router-brand"><span class="wordmark">TP-Link</span><b>TP-Link</b><small>Firmware-dependent</small></div>
+  </div>
   <div class="rt-wrap"><table class="rt">
     <thead><tr><th>Router / firewall</th><th>Log format</th><th>Notes</th></tr></thead>
     <tbody>
@@ -339,6 +375,128 @@
   <p class="rt-note">The Topology view reads real connections from UniFi automatically; on other routers you set where devices
     connect, and add zones by network range. One-click blocking currently needs a UniFi gateway. Many consumer routers on stock firmware can't send
     firewall logs, so they get device mapping and scanning but no attack map.</p>
+</div></section>
+
+
+<div class="divider"></div>
+
+<section id="router-setup"><div class="wrap">
+  <p class="eyebrow">Quick-start help</p>
+  <h2 class="title">Router setup guide</h2>
+  <p class="setup-intro">Choose your router or firewall below. The common goal is to send firewall events to the machine running LanPulse, then enable logging on the rules you want to monitor. Menu names vary by firmware version.</p>
+
+  <div class="setup-list">
+    <details class="setup-item">
+      <summary>UniFi gateways (UDM, UDM Pro, UCG)</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Give the LanPulse server a reserved LAN address so the destination stays stable.</li>
+          <li>In UniFi Network, open <b>Settings → CyberSecure / System Logging</b> (the label depends on the Network version) and add a remote SIEM/syslog destination.</li>
+          <li>Enter the LanPulse server address and use <code>UDP 514</code>.</li>
+          <li>Enable logging on the firewall or traffic rules you want to inspect. For device-traffic visibility on a UDM, enable syslog for new outbound connections in the relevant Policy Engine rule.</li>
+          <li>In LanPulse, open <b>Threats</b> and confirm that new events appear. Connect the gateway under <b>Settings → UniFi</b> separately for automatic topology and one-click blocking.</li>
+        </ol>
+        <p><b>Extra capabilities:</b> automatic topology, IPS events and one-click blocking require a supported UniFi gateway connection; syslog alone does not enable them.</p>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>pfSense</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Open <b>Status → System Logs → Settings</b>.</li>
+          <li>Find <b>Remote Logging Options</b> and enable remote logging.</li>
+          <li>Add the LanPulse server IP as the remote log host, using UDP port <code>514</code> if the field accepts a host:port value.</li>
+          <li>Include firewall events in the remote log selection.</li>
+          <li>On the firewall rules you want to monitor, enable <b>Log packets that are handled by this rule</b>, then save and apply.</li>
+          <li>Generate a test connection and check <b>Threats</b> in LanPulse.</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>OPNsense</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Open <b>System → Settings → Logging / Targets</b> (menu wording can vary by release).</li>
+          <li>Add a remote target pointing to the LanPulse server IP on UDP <code>514</code>.</li>
+          <li>Select the firewall/filterlog events to forward and save the target.</li>
+          <li>Open <b>Firewall → Rules</b> and enable logging on the rules you want LanPulse to see.</li>
+          <li>Apply the changes, generate a test connection and check <b>Threats</b>.</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>OpenWrt</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Open <b>System → System → Logging</b>.</li>
+          <li>Set <b>External system log server</b> to the LanPulse server IP and set the port to <code>514</code>.</li>
+          <li>Save and apply. Then open <b>Network → Firewall → Zones</b> and enable logging for the WAN zone or the specific rules you want to monitor.</li>
+          <li>If you use custom firewall rules, make sure they emit supported netfilter log messages.</li>
+          <li>Generate a test event and check <b>Threats</b> in LanPulse.</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>MikroTik RouterOS</summary>
+      <div class="setup-body">
+        <ol>
+          <li>In RouterOS, create a remote logging action for the LanPulse server (replace <code>LANPULSE_IP</code> with its LAN address):</li>
+        </ol>
+        <pre>/system logging action add name=lanpulse target=remote remote=LANPULSE_IP remote-port=514
+/system logging add topics=firewall action=lanpulse</pre>
+        <ol start="2">
+          <li>Add or adjust firewall rules so the traffic you care about is logged. Use a clear prefix such as <code>drop</code> or <code>accept</code> where appropriate.</li>
+          <li>Check the LanPulse <b>Threats</b> view for incoming events.</li>
+        </ol>
+        <p class="note">Review your existing logging rules before adding duplicates; excessive firewall logging can create a lot of events.</p>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>Linux router (iptables / nftables / UFW)</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Make sure the firewall emits kernel log messages for the traffic you want to monitor (for example, iptables LOG or nftables log rules).</li>
+          <li>Configure <code>rsyslog</code> to forward those kernel messages to the LanPulse server over UDP port <code>514</code>.</li>
+          <li>Restart the logging service and generate a test event.</li>
+          <li>Confirm the event appears in LanPulse before adding broader logging rules.</li>
+        </ol>
+        <p class="note">Use rate limits and narrow rules. Logging every packet can overwhelm both the router and the dashboard.</p>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>Fortinet, SonicWall, Sophos or WatchGuard</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Enable remote syslog in the firewall's logging or reporting settings.</li>
+          <li>Set the destination to the LanPulse server IP and UDP port <code>514</code>.</li>
+          <li>Enable traffic/firewall event logging for the policies you want to monitor.</li>
+          <li>Send a test event and check whether it contains source IP, destination IP, destination port and action fields.</li>
+        </ol>
+        <p class="note">These platforms and firmware versions can use different event formats. LanPulse's key=value parser needs fields such as <code>srcip</code>, <code>dstip</code>, <code>dstport</code> and <code>action</code>. If your logs differ, use a log processor to convert them to the JSON ingest format.</p>
+      </div>
+    </details>
+
+    <details class="setup-item">
+      <summary>Other routers and custom systems</summary>
+      <div class="setup-body">
+        <ol>
+          <li>Look for <b>Remote Syslog</b>, <b>Remote Logging</b> or <b>Log Server</b> in the router's administration interface.</li>
+          <li>If available, point it to the LanPulse server IP on UDP <code>514</code>.</li>
+          <li>Enable firewall or connection logging only for the events you need.</li>
+          <li>If the router cannot send a supported syslog format, use a script or log processor to send normalized JSON to <code>/api/threats/ingest</code> with the API key shown in <b>Settings → Threats</b>.</li>
+        </ol>
+        <p class="note">Some stock consumer-router firmware does not expose remote firewall logs. Basic discovery and scanning still work, but the attack map needs usable firewall events.</p>
+      </div>
+    </details>
+  </div>
+
+  <div class="setup-callout"><b>Before troubleshooting:</b> reserve the LanPulse server's IP, allow inbound UDP <code>514</code> through the server firewall, and verify the router can reach it. Start with a small number of logged rules. A router sending syslog does not automatically provide topology discovery or one-click blocking.</div>
 </div></section>
 
 <section id="themes"><div class="wrap">
