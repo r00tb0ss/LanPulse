@@ -2181,6 +2181,11 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def honeypot_fingerprints(hours: int = 2160):
         return await asyncio.to_thread(nm.honeyan.fingerprints, max(1, min(hours, 2160)))
 
+    @app.get("/api/honeypot/profile/sessions")
+    async def honeypot_profile_sessions(ip: str, hours: int = 2160, limit: int = 100):
+        return await asyncio.to_thread(nm.honeyan.attacker_sessions, ip,
+                                       max(1, min(hours, 2160)), max(1, min(limit, 200)))
+
     @app.get("/api/honeypot/profiles")
     async def honeypot_profiles(hours: int = 2160, limit: int = 5000):
         return await asyncio.to_thread(nm.honeyan.attacker_profiles,

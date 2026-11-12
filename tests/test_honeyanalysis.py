@@ -306,6 +306,20 @@ class Store(unittest.TestCase):
         self.assertEqual(first["clients"][0]["name"], "SSH-2.0-Go")
         self.assertEqual(first["latest_session"], "h2")
 
+    def test_attacker_sessions_returns_only_exact_ip_and_is_bounded(self):
+        self.h.add_session(self.session(session="history-a", ip="198.51.100.7"))
+        self.h.add_session(self.session(session="history-b", ip="198.51.100.7", proto="telnet", port=23))
+        self.h.add_session(self.session(session="history-other", ip="198.51.100.8"))
+        result = self.h.attacker_sessions("198.51.100.7", 24, 1)
+        self.assertEqual(result["ip"], "198.51.100.7")
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["returned"], 1)
+        self.assertEqual(len(result["sessions"]), 1)
+        self.assertEqual(result["sessions"][0]["id"], "history-b")
+        self.assertEqual(result["sessions"][0]["score"], 50)
+        self.assertEqual(self.h.attacker_sessions("198.51.100.8", 24)["total"], 1)
+        self.assertEqual(self.h.attacker_sessions("", 24)["total"], 0)
+
     def test_attacker_profiles_aggregate_source_activity_and_filter_window(self):
         self.h.add_session(self.session(session="profile-a", ip="198.51.100.7", port=22,
             logins=[{"u": "root", "p": "x", "ok": True}, {"u": "admin", "p": "y", "ok": False}],
