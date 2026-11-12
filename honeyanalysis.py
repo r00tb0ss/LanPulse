@@ -41,6 +41,25 @@ RATE = {"session": 60, "sample": 30}  # most the sensor may send per minute; a h
 # ------------------------------------------------------------------ small helpers
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
+# Addresses and domains that show up in countless unrelated sessions (public resolvers, common sites). Sharing one of
+# these says nothing about a common operator, so campaign correlation ignores them.
+COMMON_INFRA = frozenset({
+    "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "208.67.222.222", "208.67.220.220",
+    "google.com", "github.com", "githubusercontent.com", "raw.githubusercontent.com", "example.com",
+    "debian.org", "ubuntu.com", "microsoft.com", "cloudflare.com", "amazonaws.com", "pastebin.com",
+})
+
+
+def _ssh_key_fingerprint(key_text) -> str:
+    """OpenSSH-style SHA256 fingerprint of a public key line (base64 of the SHA-256 of the decoded key blob)."""
+    import base64
+    parts = str(key_text).split()
+    try:
+        blob = base64.b64decode(parts[1] + "=" * (-len(parts[1]) % 4), validate=True)
+        return "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+    except Exception:
+        return "SHA256:" + hashlib.sha256(str(key_text).encode("utf-8", "replace")).hexdigest()[:32]
+
 
 def defang(s: str) -> str:
     """Make a URL or address harmless to read and copy: hxxp://evil[.]com"""
@@ -52,11 +71,9 @@ def entropy(data: bytes) -> float:
     """Shannon entropy in bits per byte (0 to 8). Above about 7.2 usually means packed or encrypted."""
     if not data:
         return 0.0
-    counts = [0] * 256
-    for b in data:
-        counts[b] += 1
+    from collections import Counter
     n = len(data)
-    return round(-sum(c / n * math.log2(c / n) for c in counts if c), 2)
+    return round(-sum(c / n * math.log2(c / n) for c in Counter(data).values()), 2)
 
 
 def hashes(data: bytes) -> dict:
@@ -1032,6 +1049,8 @@ class HoneyAnalysis:
             ip = str(ip or "").strip()
             if not value or not ip:
                 return
+            if kind in ("Public IP", "Domain", "File transfer host") and value.lower() in COMMON_INFRA:
+                return
             key = (kind, value)
             item = groups.setdefault(key, {"kind": kind, "value": value, "ips": set(),
                 "sessions": set(), "samples": set(), "first_seen": started, "last_seen": started,
@@ -1055,7 +1074,7 @@ class HoneyAnalysis:
             commands = json.loads(commands_json or "[]")
             files = json.loads(files_json or "[]")
             tags = sorted(set(json.loads(tags_json or "[]")) - {"logged-in"})
-            if len(tags) >= 2:
+            if len(tags) >= 3:
                 add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low")
             iocs = find_iocs("\n".join(commands))
             for indicator in iocs.get("ips", []):
@@ -1067,8 +1086,7 @@ class HoneyAnalysis:
             for indicator in iocs.get("irc_channels", []):
                 add("IRC channel", indicator, ip, started, sid, confidence="low")
             for key_text in iocs.get("ssh_keys", []):
-                fingerprint = hashlib.sha256(key_text.encode("utf-8", "replace")).hexdigest()[:32]
-                add("SSH key fingerprint", "SHA256:" + fingerprint, ip, started, sid, confidence="high")
+                add("SSH key fingerprint", _ssh_key_fingerprint(key_text), ip, started, sid, confidence="high")
             for f in files:
                 sha = str(f.get("sha256") or "").lower()
                 if HEX64.match(sha):
@@ -1091,8 +1109,7 @@ class HoneyAnalysis:
                 for indicator in iocs.get("irc_servers", []):
                     add("IRC command-and-control", indicator, ip, last_seen, sha=sha, confidence="moderate")
                 for key_text in iocs.get("ssh_keys", []):
-                    fingerprint = hashlib.sha256(str(key_text).encode("utf-8", "replace")).hexdigest()[:32]
-                    add("SSH key fingerprint", "SHA256:" + fingerprint, ip, last_seen, sha=sha, confidence="high")
+                    add("SSH key fingerprint", _ssh_key_fingerprint(key_text), ip, last_seen, sha=sha, confidence="high")
                 for url in json.loads(urls_json or "[]"):
                     host = re.sub(r"^\w+(?:\+\w+)?://([^/:]+).*", r"\1", url).lower()
                     if host and host != url.lower():

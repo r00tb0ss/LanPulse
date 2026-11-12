@@ -62,7 +62,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.34.14"
+VERSION = "1.34.15"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -2189,14 +2189,29 @@ def build_app(nm: LanPulse) -> FastAPI:
         return await asyncio.to_thread(nm.honeyan.attacker_sessions, ip,
                                        max(1, min(hours, 2160)), max(1, min(limit, 200)))
 
+    # Profiles and campaigns re-read every session in the window, so keep each answer for 30 seconds.
+    pot_cache = {}
+
+    def pot_cached(fn, *args):
+        key = (fn.__name__,) + args
+        now = time.monotonic()
+        hit = pot_cache.get(key)
+        if hit and now - hit[0] < 30:
+            return hit[1]
+        value = fn(*args)
+        if len(pot_cache) > 32:
+            pot_cache.clear()
+        pot_cache[key] = (now, value)
+        return value
+
     @app.get("/api/honeypot/profiles")
     async def honeypot_profiles(hours: int = 2160, limit: int = 5000):
-        return await asyncio.to_thread(nm.honeyan.attacker_profiles,
+        return await asyncio.to_thread(pot_cached, nm.honeyan.attacker_profiles,
                                        max(1, min(hours, 2160)), max(1, min(limit, 5000)))
 
     @app.get("/api/honeypot/campaigns")
     async def honeypot_campaigns(hours: int = 2160):
-        return await asyncio.to_thread(nm.honeyan.campaigns, max(1, min(hours, 2160)))
+        return await asyncio.to_thread(pot_cached, nm.honeyan.campaigns, max(1, min(hours, 2160)))
 
     @app.get("/api/honeypot/sessions")
     async def honeypot_sessions(hours: int = 168, limit: int = 100):
