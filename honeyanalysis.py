@@ -1032,7 +1032,7 @@ class HoneyAnalysis:
                                         (login.get("u") or "unknown user"), "evidence": ""})
         for index, command in enumerate(cmds):
             tags_for_command = classify_command(command)
-            stage = ("Command and control" if "irc-c2" in tags_for_command else
+            stage = ("Command and control" if re.search(r"\\b(?:JOIN\\s+#[\\w.-]+|PRIVMSG)\\b", command, re.I) else
                      "Persistence" if any(t.startswith("persistence") or t == "ssh-key-plant" for t in tags_for_command) else
                      "Defense evasion" if any(t in tags_for_command for t in ("disable-defenses", "cover-tracks", "deletes-files")) else
                      "Execution" if any(t in tags_for_command for t in ("run-dropped-file", "reverse-shell", "make-executable")) else
