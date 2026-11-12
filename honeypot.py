@@ -657,6 +657,28 @@ class Honeypot:
             "passwords": top(passwords),
         }
 
+    def service_detail(self, service: str, hours: int = 168) -> dict | None:
+        """Hosts that touched one decoy, with counts and offline GeoIP context."""
+        if service not in SERVICES:
+            return None
+        since = time.time() - hours * 3600
+        with self.lock:
+            total, host_count = self.db.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT ip) FROM hits WHERE service = ? AND t >= ?",
+                (service, since)).fetchone()
+            rows = self.db.execute(
+                "SELECT ip, COUNT(*), MAX(internal), MIN(t), MAX(t), "
+                "GROUP_CONCAT(DISTINCT port), SUM(CASE WHEN creds != '' AND creds IS NOT NULL THEN 1 ELSE 0 END), "
+                "MAX(sensor) FROM hits WHERE service = ? AND t >= ? GROUP BY ip "
+                "ORDER BY COUNT(*) DESC, MAX(t) DESC LIMIT 200", (service, since)).fetchall()
+        hosts = []
+        for ip, count, internal, first, last, ports, credential_hits, sensor in rows:
+            hosts.append({"ip": ip, "hits": count, "internal": bool(internal), "first": first, "last": last,
+                          "ports": sorted(int(p) for p in (ports or "").split(",") if p.isdigit()),
+                          "credential_hits": credential_hits or 0, "sensor": sensor or "", **self._geo(ip)})
+        return {"service": service, "label": SERVICES[service][1], "hours": hours, "total": total,
+                "host_count": host_count, "hosts": hosts, "truncated": host_count > len(hosts)}
+
     def _geo(self, ip: str) -> dict:
         """Country / city / network owner for an IP, from the offline GeoIP databases (blank for LAN addresses)."""
         out = {"iso": "", "country": "", "city": "", "org": "", "asn": None}

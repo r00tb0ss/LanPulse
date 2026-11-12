@@ -284,9 +284,13 @@
     <div id="potHashBody"></div>
   </div>
   <div class="pot-analytics">
-    <div class="t-card pot-recent-card"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4><div class="pot-hits" id="potHits"></div></div>
+    <div class="t-card pot-recent-card"><h4><span>Recent hits</span><span class="muted">newest first &mdash; internal sources flagged</span></h4>
+      <div class="pot-hit-filters"><label>Attack type <select id="potAttackType"><option value="all">All activity</option><option value="credentials">Credential attempts</option><option value="probe">Protocol / request probes</option><option value="connection">Connections only</option></select></label>
+        <span class="muted" id="potFilterSummary">All services · All attack evidence</span></div>
+      <div class="pot-hits" id="potHits"></div></div>
     <div class="t-card"><h4><span>Who's probing</span><span class="muted">tap any address for details</span></h4><div class="rank" id="potAttackers"></div></div>
-    <div class="t-card"><h4><span>Decoys hit</span><span class="muted">which services drew fire</span></h4><div id="potServices"></div></div>
+    <div class="t-card"><h4><span>Decoys hit</span><span class="muted">select a service to inspect its hosts</span></h4><div id="potServices"></div></div>
+    <div class="t-card pot-service-detail hidden" id="potServiceDetail"></div>
     <div class="t-card"><h4><span>Where they come from</span><span class="muted">by country</span></h4><div id="potCountries"></div></div>
     <div class="t-card pot-credentials">
       <h4><span>Credential intelligence</span><span class="muted">attempted pairs and most-guessed values</span></h4>

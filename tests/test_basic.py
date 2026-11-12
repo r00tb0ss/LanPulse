@@ -141,6 +141,39 @@ class HoneypotSummary(unittest.TestCase):
         self.assertEqual(s["attackers"][0]["hits"], 100)
 
 
+    def test_service_detail_groups_hosts_and_credentials(self):
+        import tempfile
+        import time
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        class Pot(honeypot.Honeypot):
+            cfg = {"enabled": False, "bind": "0.0.0.0", "ingest_key": "", "services": {}, "ports": {},
+                   "banners": {}, "retention_days": 90}
+            def _geo(self, ip):
+                return {"iso": "US", "country": "United States", "city": "Test City", "org": "Test ISP", "asn": 64500}
+
+        pot = Pot(SimpleNamespace(args=SimpleNamespace(demo=False), data_dir=Path(tempfile.mkdtemp()),
+                                  settings={}, threats=None))
+        now = time.time()
+        pot.db.executemany(
+            "INSERT INTO hits (t, ip, service, port, internal, creds, data, sensor) VALUES (?,?,?,?,?,?,?,?)",
+            [(now - 20, "203.0.113.10", "ftp", 21, 0, "root / x", "", ""),
+             (now - 10, "203.0.113.10", "ftp", 21, 0, "", "commands: SYST", ""),
+             (now - 5, "203.0.113.11", "ftp", 2121, 1, "admin / test", "", ""),
+             (now - 2, "203.0.113.10", "ssh", 22, 0, "", "client=ssh", "")])
+        pot.db.commit()
+        result = pot.service_detail("ftp", 24)
+        self.assertEqual((result["total"], result["host_count"]), (3, 2))
+        self.assertEqual(result["hosts"][0]["ip"], "203.0.113.10")
+        self.assertEqual(result["hosts"][0]["hits"], 2)
+        self.assertEqual(result["hosts"][0]["credential_hits"], 1)
+        self.assertEqual(result["hosts"][0]["ports"], [21])
+        self.assertEqual(result["hosts"][1]["ip"], "203.0.113.11")
+        self.assertTrue(result["hosts"][1]["internal"])
+        self.assertIsNone(pot.service_detail("not-a-service", 24))
+
+
 class TopologyRates(unittest.TestCase):
     def test_client_rate(self):
         self.assertEqual(topology._client_rate({"bytes-r": 1500}), 1500.0)

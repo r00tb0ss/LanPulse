@@ -6,12 +6,15 @@
 
 let potData = null;
 let potHours = 168;
+let potAttackType = "all";
+let potSelectedService = "";
 
 async function loadHoneypot() {
   const r = await api("/api/honeypot?hours=" + potHours, "GET");
   if (!r || view !== "honeypot") return;
   potData = r;
   renderHoneypot();
+  if (potSelectedService) loadPotServiceDetail(potSelectedService, false);
   if (typeof loadMalware === "function") loadMalware();      // captured attacks and malware card (static/malwareview.js)
 }
 
@@ -22,6 +25,78 @@ function potServiceChip(svc) {                       // small label for a decoy 
 }
 
 let potAttackersExpanded = false;
+
+// Categories describe the evidence captured by the decoy; they do not claim attribution or intent.
+function potAttackKind(hit) {
+  if (hit.creds) return "credentials";
+  if (hit.data) return "probe";
+  return "connection";
+}
+function potAttackKindLabel(kind) {
+  return ({credentials: "Credential attempts", probe: "Protocol / request probes",
+    connection: "Connections only"})[kind] || kind;
+}
+function renderPotRecent() {
+  const hits = (potData && potData.recent) || [];
+  const filtered = hits.filter((h) => (!potSelectedService || h.service === potSelectedService) &&
+    (potAttackType === "all" || potAttackKind(h) === potAttackType));
+  $("potHits").innerHTML = filtered.length ? filtered.map((h) => `
+    <div class="pot-hit click ${h.internal ? "internal" : ""}" data-ip="${esc(h.ip)}" title="Show everything this address did">
+      <span class="pot-when" title="${esc(full(h.t))}">${ago(h.t)}</span>
+      <span class="pot-svc">${esc(potServiceChip(h.service))}<span class="pot-port">:${h.port}</span></span>
+      <span class="pot-ip mono">${esc(h.ip)}</span>
+      ${h.iso ? `<span class="pot-geo" title="${esc([h.city, h.country].filter(Boolean).join(", "))}">${flagHtml(h.iso)} ${esc(h.country || h.iso)}</span>` : ""}
+      ${h.internal ? `<span class="tagchip bad" title="A device on your own network hit the honeypot">internal</span>`
+                   : (h.sensor ? `<span class="tagchip">${esc(h.sensor)}</span>` : "")}
+      ${h.creds ? `<span class="pot-creds" title="login attempted"><i class="fa-solid fa-key"></i>${esc(h.creds)}</span>` : ""}
+      ${h.data ? `<span class="pot-data mono">${esc(h.data)}</span>` : ""}
+    </div>`).join("") : `<div class="muted">No recent hits match these filters.</div>`;
+  const serviceLabel = potSelectedService ? potServiceChip(potSelectedService) : "All services";
+  $("potFilterSummary").textContent = serviceLabel + " · " +
+    (potAttackType === "all" ? "All attack evidence" : potAttackKindLabel(potAttackType)) +
+    ` · ${filtered.length} of ${hits.length} recent hits`;
+}
+async function loadPotServiceDetail(service, scroll = true) {
+  potSelectedService = service || "";
+  renderPotRecent();
+  const box = $("potServiceDetail");
+  if (!potSelectedService) { box.classList.add("hidden"); box.innerHTML = ""; renderHoneypot(); return; }
+  box.classList.remove("hidden");
+  box.innerHTML = `<div class="muted">Loading ${esc(potServiceChip(service))} hosts…</div>`;
+  if (scroll) box.scrollIntoView({behavior: "smooth", block: "nearest"});
+  const r = await api("/api/honeypot/service?service=" + encodeURIComponent(service) +
+    "&hours=" + potHours, "GET");
+  if (!r || potSelectedService !== service) {
+    if (!r && potSelectedService === service) box.innerHTML = `<div class="muted">Couldn't load hosts for this service.</div>`;
+    return;
+  }
+  const hosts = r.hosts || [];
+  box.innerHTML = `
+    <h4><span>${esc(r.label)} hosts <span class="muted">· ${r.total} hits from ${r.host_count} hosts</span></span>
+      <button class="btn sm ghost" id="potServiceClear">Show all services <i class="fa-solid fa-xmark"></i></button></h4>
+    ${hosts.length ? `<div class="pot-service-hosts">${hosts.map((h) => {
+      const dev = devByIp(h.ip);
+      const where = [h.city, h.country].filter(Boolean).join(", ");
+      return `<div class="pot-service-host click" data-pot-ip="${esc(h.ip)}">
+        <div class="pot-service-host-main"><b class="mono">${esc(h.ip)}</b>
+          ${h.internal ? `<span class="tagchip bad">internal</span>` : ""}
+          ${dev ? `<span class="muted">${esc(nmLabel(dev))}</span>` : ""}
+          <span class="pot-hitn">${h.hits} hits</span></div>
+        <div class="pot-service-host-meta">
+          <span>${h.iso ? flagHtml(h.iso) + " " : ""}${esc(where || "Location unavailable")}</span>
+          <span>${esc(h.org || "Network unknown")}${h.asn ? " · AS" + esc(h.asn) : ""}</span>
+          <span>Ports: ${esc((h.ports || []).join(", ") || "—")}</span>
+          <span>${h.credential_hits} credential attempts</span>
+          <span>Last: ${esc(ago(h.last))}</span>
+          ${h.sensor ? `<span class="tagchip">${esc(h.sensor)}</span>` : ""}
+        </div>
+      </div>`;
+    }).join("")}</div>` : `<div class="muted">No hosts hit this service in the selected time range.</div>`}
+    ${r.truncated ? `<p class="muted">Showing the 200 most active hosts.</p>` : ""}
+    <p class="muted">Select a host to inspect its full event history and captured details.</p>`;
+  $("potServiceClear").onclick = () => loadPotServiceDetail("");
+  box.querySelectorAll("[data-pot-ip]").forEach((el) => el.addEventListener("click", () => showPotDetail(el.dataset.potIp)));
+}
 
 function renderHoneypot() {
   const s = potData;
@@ -56,18 +131,8 @@ function renderHoneypot() {
       ${l.state === "error" ? `<span class="pot-lerr">${esc(l.error || "error")}</span>` : ""}</span>`;
   }).join("");
 
-  // recent hits
-  $("potHits").innerHTML = s.recent.length ? s.recent.map((h) => `
-    <div class="pot-hit click ${h.internal ? "internal" : ""}" data-ip="${esc(h.ip)}" data-ext="${h.internal ? "" : "1"}" title="Show everything this address did">
-      <span class="pot-when" title="${esc(full(h.t))}">${ago(h.t)}</span>
-      <span class="pot-svc">${esc(potServiceChip(h.service))}<span class="pot-port">:${h.port}</span></span>
-      <span class="pot-ip mono">${esc(h.ip)}</span>
-      ${h.iso ? `<span class="pot-geo" title="${esc([h.city, h.country].filter(Boolean).join(", "))}">${flagHtml(h.iso)} ${esc(h.country || h.iso)}</span>` : ""}
-      ${h.internal ? `<span class="tagchip bad" title="A device on your own network hit the honeypot">internal</span>`
-                   : (h.sensor ? `<span class="tagchip">${esc(h.sensor)}</span>` : "")}
-      ${h.creds ? `<span class="pot-creds" title="login attempted"><i class="fa-solid fa-key"></i>${esc(h.creds)}</span>` : ""}
-      ${h.data ? `<span class="pot-data mono">${esc(h.data)}</span>` : ""}
-    </div>`).join("") : `<div class="muted">No hits yet. Once the decoys are on, anything that connects shows up here.</div>`;
+  // Recent hits are filtered by captured evidence and selected decoy.
+  renderPotRecent();
 
   // attackers (internal ones tappable if we know the device)
   const attackerRows = s.attackers || [];
@@ -87,12 +152,15 @@ function renderHoneypot() {
     }).join("")}</div>
     ${attackerRows.length > 10 ? `<button class="btn sm ghost pot-expand-toggle" data-expand-attackers>${potAttackersExpanded ? "Show less" : `View all (${attackerRows.length})`}</button>` : ""}` : `<div class="muted">Nobody yet.</div>`;
 
-  // services breakdown
+  // Services are buttons: selecting one opens the hosts that hit that decoy.
   const maxSvc = Math.max(1, ...s.by_service.map((x) => x.count));
   $("potServices").innerHTML = s.by_service.length ? s.by_service.map((x) => `
-    <div class="pot-bar"><span class="pot-bar-l">${esc(x.label)}</span>
+    <button type="button" class="pot-bar pot-service-row ${potSelectedService === x.service ? "selected" : ""}"
+      data-pot-service="${esc(x.service)}" aria-pressed="${potSelectedService === x.service}">
+      <span class="pot-bar-l">${esc(x.label)}</span>
       <span class="pot-bar-track"><span class="pot-bar-fill" style="width:${Math.round(x.count / maxSvc * 100)}%"></span></span>
-      <span class="pot-bar-n">${x.count}</span></div>`).join("") : `<div class="muted">No decoy has been touched yet.</div>`;
+      <span class="pot-bar-n">${x.count}</span><i class="fa-solid fa-chevron-right"></i></button>`).join("")
+    : `<div class="muted">No decoy has been touched yet.</div>`;
 
   // credentials tried
   $("potCreds").innerHTML = s.creds.length ? s.creds.map((c) => `
@@ -248,6 +316,13 @@ async function showPotSetup(force) {
   viewHooks.honeypot = loadHoneypot;
   const cfg = $("potCfgBtn");
   if (cfg) cfg.onclick = () => showPotSetup();
+  const svc = $("potServices");
+  if (svc) svc.addEventListener("click", (e) => {
+    const row = e.target.closest("[data-pot-service]");
+    if (row) loadPotServiceDetail(row.dataset.potService);
+  });
+  const attackType = $("potAttackType");
+  if (attackType) attackType.onchange = () => { potAttackType = attackType.value; renderPotRecent(); };
   const hits = $("potHits");
   if (hits) hits.addEventListener("click", (e) => { const r = e.target.closest("[data-ip]"); if (r) showPotDetail(r.dataset.ip); });
   const att = $("potAttackers");
