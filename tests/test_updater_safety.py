@@ -18,6 +18,14 @@ def updater_source():
 
 
 class UpdaterRollbackSafety(unittest.TestCase):
+    def test_updater_verifies_staged_zip_checksum_before_unpacking(self):
+        source = updater_source()
+        checksum = source.index('sha256sum -c incoming.zip.sha256')
+        unpack = source.index('unzip -q "\\$D/incoming.zip"')
+        self.assertLess(checksum, unpack)
+        self.assertIn('incoming.zip.sha256', source)
+        self.assertIn('failed SHA-256 verification', source)
+
     def test_rollback_archive_is_verified_before_installing(self):
         source = updater_source()
         archive_create = source.index('tar -czf "\$PREVIOUS_TMP"')
@@ -76,6 +84,12 @@ class UpdaterRollbackSafety(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_upload_staging_writes_sha256_sidecar_and_apply_requires_it(self):
+        app = (ROOT / "app.py").read_text()
+        self.assertIn('incoming.zip.sha256.tmp', app)
+        self.assertIn('staged update is missing or failed SHA-256 verification', app)
+        self.assertIn('hashlib.sha256()', app)
 
     def test_installer_checks_generated_updater_before_replacing_it(self):
         syntax_check = INSTALL.index("bash -n /usr/local/sbin/lanpulse-update.new")

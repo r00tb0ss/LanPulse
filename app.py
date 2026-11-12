@@ -62,7 +62,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.34.15"
+VERSION = "1.34.16"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -159,7 +159,12 @@ def check_update_zip(path) -> dict:
         m = re.search(r'^VERSION = "([^"]+)"', z.read("lanpulse/app.py").decode("utf-8", "replace"), re.M)
     if not m:
         raise ValueError("Couldn't find a version number in this update.")
-    return {"version": m.group(1), "files": len(names)}
+    import hashlib
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            digest.update(chunk)
+    return {"version": m.group(1), "files": len(names), "sha256": digest.hexdigest()}
 
 
 def version_tuple(v: str) -> tuple:
@@ -1661,8 +1666,12 @@ def build_app(nm: LanPulse) -> FastAPI:
         z = upd_dir / "incoming.zip"
         if z.exists() and out["state"] not in ("installing", "queued"):
             try:
-                out["staged"] = check_update_zip(z)
-            except ValueError:
+                staged = check_update_zip(z)
+                checksum = (upd_dir / "incoming.zip.sha256").read_text().strip().split()
+                if len(checksum) != 2 or checksum[0] != staged["sha256"] or checksum[1] != "incoming.zip":
+                    raise ValueError("Staged update checksum is missing or does not match.")
+                out["staged"] = staged
+            except (ValueError, OSError):
                 out["staged"] = None
         try:
             out["log"] = "\n".join((upd_dir / "log.txt").read_text(errors="replace").splitlines()[-40:])
@@ -1706,6 +1715,8 @@ def build_app(nm: LanPulse) -> FastAPI:
             tmp.unlink(missing_ok=True)
             return JSONResponse({"error": str(e)}, 400)
         tmp.replace(upd_dir / "incoming.zip")
+        (upd_dir / "incoming.zip.sha256.tmp").write_text(f"{info['sha256']}  incoming.zip\n")
+        (upd_dir / "incoming.zip.sha256.tmp").replace(upd_dir / "incoming.zip.sha256")
         (upd_dir / "status.json").unlink(missing_ok=True)
         cmp = (version_tuple(info["version"]) > version_tuple(VERSION)) - (version_tuple(info["version"]) < version_tuple(VERSION))
         return {**info, "current": VERSION, "kind": {1: "newer", 0: "same", -1: "older"}[cmp]}
@@ -1729,8 +1740,10 @@ def build_app(nm: LanPulse) -> FastAPI:
         upd_dir.mkdir(parents=True, exist_ok=True)
         tmp = upd_dir / "upload.part"
         try:
-            await asyncio.to_thread(releases.download, rel["asset_url"], tmp, UPDATE_MAX_BYTES)
+            await asyncio.to_thread(releases.download, rel["asset_url"], tmp, UPDATE_MAX_BYTES, rel["sha256"])
             info = await asyncio.to_thread(check_update_zip, tmp)
+            if info["sha256"] != rel["sha256"]:
+                raise ValueError("The downloaded release failed SHA-256 verification.")
         except ValueError as e:
             tmp.unlink(missing_ok=True)
             return JSONResponse({"error": str(e)}, 400)
@@ -1738,6 +1751,8 @@ def build_app(nm: LanPulse) -> FastAPI:
             tmp.unlink(missing_ok=True)
             return JSONResponse({"error": f"Couldn't download the release ({e.__class__.__name__})."}, 502)
         tmp.replace(upd_dir / "incoming.zip")
+        (upd_dir / "incoming.zip.sha256.tmp").write_text(f"{info['sha256']}  incoming.zip\n")
+        (upd_dir / "incoming.zip.sha256.tmp").replace(upd_dir / "incoming.zip.sha256")
         (upd_dir / "status.json").unlink(missing_ok=True)
         return update_state()
 
@@ -1745,8 +1760,9 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def update_apply():
         if (r := update_refusal()):
             return r
-        if not (upd_dir / "incoming.zip").exists():
-            return JSONResponse({"error": "Upload an update file first."}, 400)
+        staged = update_state().get("staged")
+        if not staged:
+            return JSONResponse({"error": "The staged update is missing or failed SHA-256 verification. Upload or download it again."}, 400)
         (upd_dir / "status.json").write_text(json.dumps({"state": "queued", "message": "Starting the updater…",
                                                          "t": time.time()}))
         (upd_dir / "request").write_text(json.dumps({"t": time.time()}))
@@ -1755,7 +1771,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.post("/api/update/discard")
     async def update_discard():
-        for n in ("incoming.zip", "upload.part"):
+        for n in ("incoming.zip", "incoming.zip.sha256", "incoming.zip.sha256.tmp", "upload.part"):
             (upd_dir / n).unlink(missing_ok=True)
         return update_state()
 

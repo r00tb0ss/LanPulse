@@ -276,6 +276,10 @@ rm -f "\$D/request"
 # Off switch only root can flip: sudo mv /etc/lanpulse/web-updates /etc/lanpulse/web-updates.off  (terminal installs still work)
 [[ -f /etc/lanpulse/web-updates ]] || { state failed "Updates from the dashboard are turned off on this machine (/etc/lanpulse/web-updates is missing)."; exit 1; }
 [[ -f "\$D/incoming.zip" ]] || { state failed "No update file was uploaded."; exit 1; }
+[[ -f "\$D/incoming.zip.sha256" ]] || { state failed "The update has no SHA-256 verification file; it wasn't installed."; exit 1; }
+if ! (cd "\$D" && sha256sum -c incoming.zip.sha256) >> "\$LOG" 2>&1; then
+  state failed "The update failed SHA-256 verification and wasn't installed."; exit 1
+fi
 # Check again here, as root, before unpacking: only plain files under lanpulse/, no links or special files
 if zipinfo "\$D/incoming.zip" 2>/dev/null | awk 'NR>2 && /^[-dlbcps?]/ {print substr(\$0,1,1)}' | grep -qv '^[-d]\$'; then
   state failed "The update contains links or special files, so it wasn't installed."; exit 1
@@ -320,7 +324,7 @@ if (
   cd "\$W/lanpulse"
   bash ./install.sh --upgrade
 ) > "\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then
-  rm -f "\$D/incoming.zip"
+  rm -f "\$D/incoming.zip" "\$D/incoming.zip.sha256"
   state done "Update installed."
 else
   echo "-- update failed: restoring the previous version" >> "\$LOG"

@@ -73,12 +73,16 @@ pages:
     # Only written when the release (and so its lanpulse.zip link) already exists; the link is read from the
     # release itself, so it works for releases made by tools/release_gitlab.py or by publish-release.
     - |
-      URL=$(curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" "$API/releases/v$VER" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip")][0] | (.direct_asset_url // .url) // empty')
-      if [ -n "$URL" ]; then
-        jq -n --arg tag "v$VER" --arg v "$VER" --arg a "$URL" --arg u "$CI_PROJECT_URL/-/releases/v$VER" '{tag: $tag, version: $v, asset_url: $a, url: $u}' > public/latest.json
-        echo "latest.json written for v$VER"
+      RELEASE=$(curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" "$API/releases/v$VER")
+      URL=$(printf '%s' "$RELEASE" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip")][0] | (.direct_asset_url // .url) // empty')
+      SUM_URL=$(printf '%s' "$RELEASE" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip.sha256")][0] | (.direct_asset_url // .url) // empty')
+      SHA=""
+      if [ -n "$SUM_URL" ]; then SHA=$(curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" "$SUM_URL" | awk 'NR==1 {print $1}'); fi
+      if [ -n "$URL" ] && printf '%s' "$SHA" | grep -qE '^[a-fA-F0-9]{64}$'; then
+        jq -n --arg tag "v$VER" --arg v "$VER" --arg a "$URL" --arg h "$SHA" --arg u "$CI_PROJECT_URL/-/releases/v$VER" '{tag: $tag, version: $v, asset_url: $a, sha256: $h, url: $u}' > public/latest.json
+        echo "latest.json written for v$VER with SHA-256 verification"
       else
-        echo "No release for v$VER yet, so no latest.json"
+        echo "No verified release for v$VER yet, so no latest.json"
       fi
   artifacts:
     paths: [public]
@@ -106,14 +110,17 @@ publish-release:
         echo "v$VER already released"; exit 0
       fi
     - git archive --prefix=lanpulse/ HEAD -o lanpulse.zip --format=zip
+    - sha256sum lanpulse.zip > lanpulse.zip.sha256
     - PKG="$API/packages/generic/lanpulse/$VER/lanpulse.zip"
+    - SUM_PKG="$API/packages/generic/lanpulse/$VER/lanpulse.zip.sha256"
     - |
       curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file lanpulse.zip "$PKG"
+      curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file lanpulse.zip.sha256 "$SUM_PKG"
     - |
       if [ -f "docs/releases/$VER.md" ]; then cp "docs/releases/$VER.md" notes.md; else echo "LanPulse $VER" > notes.md; fi
     - |
-      jq -n --arg tag "v$VER" --arg name "LanPulse $VER" --arg ref "$CI_COMMIT_SHA" --arg url "$PKG" --rawfile desc notes.md \
-        '{tag_name: $tag, name: $name, ref: $ref, description: $desc, assets: {links: [{name: "lanpulse.zip", url: $url, link_type: "package"}]}}' > release.json
+      jq -n --arg tag "v$VER" --arg name "LanPulse $VER" --arg ref "$CI_COMMIT_SHA" --arg url "$PKG" --arg sum "$SUM_PKG" --rawfile desc notes.md \
+        '{tag_name: $tag, name: $name, ref: $ref, description: $desc, assets: {links: [{name: "lanpulse.zip", url: $url, link_type: "package"}, {name: "lanpulse.zip.sha256", url: $sum, link_type: "package"}]}}' > release.json
     - |
       curl -fsS -X POST -H "JOB-TOKEN: $CI_JOB_TOKEN" -H "Content-Type: application/json" --data @release.json "$API/releases"
     - echo "Published v$VER"
@@ -136,8 +143,11 @@ verify-release-publication:
         exit 1
       }
       URL=$(printf '%s' "$RELEASE" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip")][0] | (.direct_asset_url // .url) // empty')
-      if [ -z "$URL" ]; then
-        echo "ERROR: v$VER exists but its lanpulse.zip release asset link is missing."
+      SUM_URL=$(printf '%s' "$RELEASE" | jq -r '[.assets.links[] | select(.name=="lanpulse.zip.sha256")][0] | (.direct_asset_url // .url) // empty')
+      if [ -z "$URL" ] || [ -z "$SUM_URL" ]; then
+        echo "ERROR: v$VER is missing its ZIP or SHA-256 release asset."
         exit 1
       fi
-      echo "Verified v$VER release entry and lanpulse.zip asset link: $URL"
+      SHA=$(curl -fsS -H "JOB-TOKEN: $CI_JOB_TOKEN" "$SUM_URL" | awk 'NR==1 {print $1}')
+      printf '%s' "$SHA" | grep -qE '^[a-fA-F0-9]{64}$' || { echo "ERROR: v$VER has an invalid SHA-256 file."; exit 1; }
+      echo "Verified v$VER release ZIP and SHA-256 asset: $URL"

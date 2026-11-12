@@ -7,6 +7,7 @@ and every redirect must stay on those hosts. The downloaded file goes through th
 before anything is installed."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -54,20 +55,24 @@ def _parse(kind: str, j: dict) -> dict:
         tag = j.get("tag") or ""
         ver = str(j.get("version") or tag.lstrip("vV"))
         return {"tag": tag, "version": ver, "name": f"LanPulse {ver}", "notes": "", "url": j.get("url", ""),
-                "asset_url": j.get("asset_url", ""), "size": 0, "published": ""}
+                "asset_url": j.get("asset_url", ""), "sha256": str(j.get("sha256") or "").lower(), "size": 0, "published": ""}
     tag = j.get("tag_name") or ""
     if kind == "gitlab":
-        links = [a for a in (j.get("assets") or {}).get("links", []) if str(a.get("name", "")).lower().endswith(".zip")]
-        asset = next((a for a in links if a["name"].lower() == "lanpulse.zip"), links[0] if links else None)
+        links = (j.get("assets") or {}).get("links", [])
+        asset = next((a for a in links if str(a.get("name", "")).lower() == "lanpulse.zip"), None)
+        checksum = next((a for a in links if str(a.get("name", "")).lower() == "lanpulse.zip.sha256"), None)
         return {"tag": tag, "version": tag.lstrip("vV"), "name": j.get("name") or tag,
                 "notes": (j.get("description") or "")[:4000], "url": (j.get("_links") or {}).get("self", ""),
-                "asset_url": (asset.get("direct_asset_url") or asset.get("url") or "") if asset else "", "size": 0,
-                "published": j.get("released_at", "")}
-    assets = [a for a in j.get("assets", []) if str(a.get("name", "")).lower().endswith(".zip")]
-    asset = next((a for a in assets if a["name"].lower() == "lanpulse.zip"), assets[0] if assets else None)
+                "asset_url": (asset.get("direct_asset_url") or asset.get("url") or "") if asset else "",
+                "checksum_url": (checksum.get("direct_asset_url") or checksum.get("url") or "") if checksum else "",
+                "sha256": "", "size": 0, "published": j.get("released_at", "")}
+    assets = j.get("assets", [])
+    asset = next((a for a in assets if str(a.get("name", "")).lower() == "lanpulse.zip"), None)
+    checksum = next((a for a in assets if str(a.get("name", "")).lower() == "lanpulse.zip.sha256"), None)
     return {"tag": tag, "version": tag.lstrip("vV"), "name": j.get("name") or tag, "notes": (j.get("body") or "")[:4000],
             "url": j.get("html_url", ""), "asset_url": asset["browser_download_url"] if asset else "",
-            "size": asset.get("size", 0) if asset else 0, "published": j.get("published_at", "")}
+            "checksum_url": checksum["browser_download_url"] if checksum else "",
+            "sha256": "", "size": asset.get("size", 0) if asset else 0, "published": j.get("published_at", "")}
 
 
 def latest(current: str, force: bool = False) -> dict:
@@ -93,6 +98,18 @@ def latest(current: str, force: bool = False) -> dict:
         if not d["version"] or not d["asset_url"]:
             errors.append(f"{label}: release has no lanpulse.zip")
             continue
+        if not d.get("sha256") and d.get("checksum_url"):
+            try:
+                with _open(d["checksum_url"], 15) as r:
+                    checksum_text = r.read(4096).decode("ascii", "strict")
+                match = re.match(r"^([a-fA-F0-9]{64})\s+", checksum_text)
+                if match:
+                    d["sha256"] = match.group(1).lower()
+            except Exception:
+                pass
+        if not re.fullmatch(r"[a-f0-9]{64}", d.get("sha256", "")):
+            errors.append(f"{label}: release has no valid SHA-256 checksum")
+            continue
         d["source"] = label
         if best is None or version_tuple(d["version"]) > version_tuple(best["version"]):
             best = d
@@ -106,13 +123,20 @@ def latest(current: str, force: bool = False) -> dict:
     return {**best, "newer": version_tuple(best["version"]) > version_tuple(current)}
 
 
-def download(url: str, dest: Path, max_bytes: int) -> int:
-    """Stream the release zip to dest. Raises ValueError when it's too big, URLError when the release host can't be reached."""
+def download(url: str, dest: Path, max_bytes: int, expected_sha256: str) -> int:
+    """Download a release only when its bytes match the checksum published with that release."""
+    if not re.fullmatch(r"[a-fA-F0-9]{64}", str(expected_sha256 or "")):
+        raise ValueError("The release has no valid SHA-256 checksum; refusing to download it.")
     size = 0
+    digest = hashlib.sha256()
     with _open(url, 120) as r, open(dest, "wb") as f:
         while chunk := r.read(1 << 16):
             size += len(chunk)
             if size > max_bytes:
                 raise ValueError("That release is too big for a LanPulse update.")
+            digest.update(chunk)
             f.write(chunk)
+    if digest.hexdigest() != expected_sha256.lower():
+        dest.unlink(missing_ok=True)
+        raise ValueError("The downloaded release failed SHA-256 verification.")
     return size

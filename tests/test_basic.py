@@ -70,8 +70,11 @@ class ReleaseSources(unittest.TestCase):
             calls.append(url)
             if "gitlab" in url:
                 raise OSError("offline")
+            if url.endswith(".zip.sha256"):
+                return io.BytesIO(("a" * 64 + "  lanpulse.zip\n").encode())
             return io.BytesIO(json.dumps({"tag_name": "v1.25.36", "assets": [
-                {"name": "lanpulse.zip", "browser_download_url": "https://github.com/a/b.zip"}]}).encode())
+                {"name": "lanpulse.zip", "browser_download_url": "https://github.com/a/b.zip"},
+                {"name": "lanpulse.zip.sha256", "browser_download_url": "https://github.com/a/b.zip.sha256"}]}).encode())
 
         orig = releases._open
         releases._open = fake_open
@@ -82,7 +85,7 @@ class ReleaseSources(unittest.TestCase):
             releases._open = orig
             releases._cache.update(t=0.0, data=None)
         self.assertEqual((r["version"], r["source"], r["newer"]), ("1.25.36", "GitHub", True))
-        self.assertEqual(len(calls), 3)   # Pages, GitLab API, GitHub
+        self.assertEqual(len(calls), 4)   # Pages, GitLab API, GitHub release and its checksum
 
     def test_pages_answer_skips_the_api(self):
         calls = []
@@ -93,6 +96,7 @@ class ReleaseSources(unittest.TestCase):
             calls.append(url)
             return io.BytesIO(json.dumps({"tag": "v1.25.37", "version": "1.25.37",
                                           "asset_url": "https://gitlab.com/-/project/1/uploads/abc/lanpulse.zip",
+                                          "sha256": "b" * 64,
                                           "url": "https://gitlab.com/r00tb0ss/lanpulse/-/releases/v1.25.37"}).encode())
 
         orig = releases._open
