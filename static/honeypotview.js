@@ -343,6 +343,17 @@ async function showPotSetup(force) {
       const tab = e.target.closest("[data-pot-section]");
       if (tab) setPotSection(tab.dataset.potSection);
     });
+    sectionTabs.addEventListener("keydown", (e) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+      const tabs = [...sectionTabs.querySelectorAll("[data-pot-section]")];
+      const current = tabs.indexOf(document.activeElement);
+      if (current < 0) return;
+      e.preventDefault();
+      const next = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 :
+        (current + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+      tabs[next].focus();
+      setPotSection(tabs[next].dataset.potSection);
+    });
     setPotSection(potSection, false);
   }
   const cfg = $("potCfgBtn");
