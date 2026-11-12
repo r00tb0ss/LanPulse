@@ -305,11 +305,25 @@
       <span class="mono">POST /api/honeypot/ingest</span>.</p>
   </div>
   <div class="pot-section-pane hidden" id="potAnalysisPane" role="tabpanel" aria-labelledby="potAnalysisTab">
-    <div class="t-card" id="potMalware"><h4><span>Captured attacks and malware</span><span class="pot-tabs" id="potMalTabs"><button data-t="sessions">Sessions</button><button data-t="profiles">Attackers</button><button data-t="campaigns">Campaigns</button><button data-t="sensors">Sensors</button></span></h4><div id="potMalBody"></div><div class="hidden" id="potSensorAdd"></div><div class="hidden" id="potMalDetail"></div></div>
-    <div class="t-card" id="potHashIntel">
-      <h4><span>Hash intelligence</span><span class="pot-tabs" id="potHashTabs"><button data-hash-tab="files" class="on">Captured files</button><button data-hash-tab="hassh">SSH fingerprints</button></span></h4>
-      <p class="muted pot-hash-note">Hashes identify observed files; HASSH groups SSH client handshakes. Neither alone proves who operated a source or whether a file is malicious.</p>
-      <div id="potHashBody"></div>
+    <div class="t-card" id="potMalware">
+      <h4><span>Investigation</span><span class="pot-tabs" id="potMalTabs" role="tablist" aria-label="Honeypot investigations">
+        <button type="button" data-t="sessions" aria-selected="true" class="on">Sessions</button>
+        <button type="button" data-t="malware" aria-selected="false">Malware</button>
+        <button type="button" data-t="profiles" aria-selected="false">Attackers</button>
+        <button type="button" data-t="campaigns" aria-selected="false">Campaigns</button>
+        <button type="button" data-t="sensors" aria-selected="false">Sensors</button>
+      </span></h4>
+      <div id="potMalBody"></div>
+      <div class="hidden" id="potSensorAdd"></div>
+      <div class="hidden" id="potMalDetail"></div>
+      <div class="hidden" id="potHashIntel">
+        <h4><span>Captured-file and SSH intelligence</span><span class="pot-tabs" id="potHashTabs" role="tablist" aria-label="Malware intelligence type">
+          <button type="button" data-hash-tab="files" class="on" aria-selected="true">Captured files</button>
+          <button type="button" data-hash-tab="hassh" aria-selected="false">SSH fingerprints</button>
+        </span></h4>
+        <p class="muted pot-hash-note">File hashes and SSH fingerprints are evidence for investigation, not proof of attribution or malicious intent.</p>
+        <div id="potHashBody"></div>
+      </div>
     </div>
   </div>
 
