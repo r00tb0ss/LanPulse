@@ -2134,6 +2134,11 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def honeypot_summary(hours: int = 168):
         return await asyncio.to_thread(nm.honeypot.summary, max(1, min(hours, 2160)))
 
+    @app.get("/api/honeypot/service")
+    async def honeypot_service(service: str, hours: int = 168):
+        r = await asyncio.to_thread(nm.honeypot.service_detail, service, max(1, min(hours, 2160)))
+        return r if r else JSONResponse({"error": "unknown service"}, 404)
+
     @app.get("/api/honeypot/ip")
     async def honeypot_ip(ip: str, hours: int = 2160):
         try:

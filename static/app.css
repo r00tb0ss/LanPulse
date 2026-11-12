@@ -883,6 +883,19 @@ label.check input { width: auto; }
 .pot-att-meta{display:flex;align-items:center;gap:8px;font-size:12px}
 .pot-hitn{font-weight:700;font-variant-numeric:tabular-nums;background:var(--panel);border:1px solid var(--border2);
   border-radius:999px;padding:0 8px;font-size:12px}
+.pot-hit-filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px;font-size:12px}
+.pot-hit-filters label{display:flex;align-items:center;gap:7px;color:var(--muted)}
+.pot-hit-filters select{font-size:12px;padding:5px 8px}
+.pot-service-row{width:100%;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;padding:7px 8px;border-radius:8px}
+.pot-service-row:hover,.pot-service-row.selected{background:var(--panel2);outline:1px solid var(--border2)}
+.pot-service-row .fa-chevron-right{font-size:10px;color:var(--dim)}
+.pot-service-row.selected .fa-chevron-right{color:var(--accent)}
+.pot-service-detail{grid-column:1/-1}
+.pot-service-hosts{display:grid;gap:6px;max-height:460px;overflow:auto}
+.pot-service-host{padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2);cursor:pointer}
+.pot-service-host:hover{border-color:var(--accent);background:var(--panel2)}
+.pot-service-host-main,.pot-service-host-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pot-service-host-meta{margin-top:5px;color:var(--muted);font-size:11px}
 .pot-bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px}
 .pot-bar-l{min-width:64px;font-weight:600}
 .pot-bar-track{flex:1;height:8px;background:var(--bg2);border-radius:999px;overflow:hidden}
