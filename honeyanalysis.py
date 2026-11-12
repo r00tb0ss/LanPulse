@@ -905,6 +905,80 @@ class HoneyAnalysis:
         out.sort(key=lambda x: (-x["sessions"], x["hassh"]))
         return {"fingerprints": out, "total": len(out), "hours": max(1, min(int(hours), 2160))}
 
+    def attacker_profiles(self, hours: int = 2160, limit: int = 5000) -> dict:
+        """Summarize observed behavior per source IP without claiming real-world identity."""
+        hours = max(1, min(int(hours), 2160))
+        since = time.time() - hours * 3600
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, ip, start, end, proto, port, client, hassh, logins, commands, files, tags, score "
+                "FROM sessions WHERE start >= ? ORDER BY start DESC LIMIT 20000", (since,)).fetchall()
+
+        grouped = {}
+        for sid, ip, started, ended, proto, port, client, hassh, logins_json, commands_json, files_json, tags_json, score in rows:
+            if not ip:
+                continue
+            item = grouped.setdefault(ip, {
+                "ip": ip, "sessions": 0, "successful_logins": 0, "login_attempts": 0,
+                "commands": 0, "files": 0, "scores": [], "services": {}, "usernames": {},
+                "tags": {}, "clients": {}, "hassh": {}, "sample_hashes": set(),
+                "first_seen": started, "last_seen": started, "latest_session": sid,
+            })
+            logins = json.loads(logins_json or "[]")
+            commands = json.loads(commands_json or "[]")
+            files = json.loads(files_json or "[]")
+            tags = json.loads(tags_json or "[]")
+            item["sessions"] += 1
+            item["login_attempts"] += len(logins)
+            item["successful_logins"] += sum(1 for entry in logins if isinstance(entry, dict) and entry.get("ok"))
+            item["commands"] += len(commands)
+            item["files"] += len(files)
+            item["scores"].append(max(0, min(100, int(score or 0))))
+            service = str(proto or "ssh").upper() + ":" + str(int(port or 0))
+            item["services"][service] = item["services"].get(service, 0) + 1
+            if client:
+                item["clients"][client] = item["clients"].get(client, 0) + 1
+            if hassh:
+                item["hassh"][str(hassh).lower()] = item["hassh"].get(str(hassh).lower(), 0) + 1
+            for entry in logins:
+                if isinstance(entry, dict) and entry.get("u"):
+                    name = str(entry["u"])[:64]
+                    item["usernames"][name] = item["usernames"].get(name, 0) + 1
+            for tag in set(tags) - {"logged-in"}:
+                item["tags"][tag] = item["tags"].get(tag, 0) + 1
+            for f in files:
+                sha = str(f.get("sha256") or "").lower()
+                if HEX64.match(sha):
+                    item["sample_hashes"].add(sha)
+            item["first_seen"] = min(item["first_seen"], started)
+            item["last_seen"] = max(item["last_seen"], started)
+            if started >= item["last_seen"]:
+                item["latest_session"] = sid
+
+        out = []
+        for ip, item in grouped.items():
+            geo = self.hp._geo(ip)
+            scores = item["scores"]
+            def top(mapping, key_name="name", cap=5):
+                return [{key_name: name, "count": count} for name, count in
+                        sorted(mapping.items(), key=lambda pair: (-pair[1], pair[0]))[:cap]]
+            out.append({
+                "ip": ip, "sessions": item["sessions"], "successful_logins": item["successful_logins"],
+                "login_attempts": item["login_attempts"], "commands": item["commands"], "files": item["files"],
+                "max_score": max(scores, default=0), "average_score": round(sum(scores) / len(scores), 1) if scores else 0,
+                "services": top(item["services"]), "usernames": top(item["usernames"]),
+                "tags": top(item["tags"]), "clients": top(item["clients"]), "hassh": top(item["hassh"]),
+                "sample_hashes": sorted(item["sample_hashes"])[:10],
+                "first_seen": item["first_seen"], "last_seen": item["last_seen"],
+                "latest_session": item["latest_session"],
+                "country": str(geo.get("country") or ""), "iso": str(geo.get("iso") or ""),
+                "city": str(geo.get("city") or ""), "org": str(geo.get("org") or ""),
+                "asn": geo.get("asn"),
+            })
+        out.sort(key=lambda row: (-row["max_score"], -row["sessions"], -row["last_seen"], row["ip"]))
+        return {"profiles": out[:max(1, min(int(limit), 5000))], "total": len(out), "hours": hours,
+                "note": "Profiles summarize observed source-IP activity. IP addresses can be shared, proxied, reassigned, or spoofed; they do not identify a person."}
+
     def campaigns(self, hours: int = 2160, limit: int = 100) -> dict:
         """Correlate observed sessions and samples by exact shared artifacts or behavior.
 
