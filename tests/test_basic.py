@@ -22,6 +22,10 @@ class Signatures(unittest.TestCase):
         self.assertEqual(signatures.msf_for_cve("cve-2020-1938")[0][0], "auxiliary/admin/http/tomcat_ghostcat")
         self.assertEqual(signatures.msf_for_cve(""), [])
         self.assertEqual(signatures.msf_for_cve("CVE-1-1"), [])
+        self.assertEqual(signatures.msf_for_cve("CVE-2012-1823")[0][0], "exploit/multi/http/php_cgi_arg_injection")
+        self.assertEqual(signatures.msf_for_finding("Apache Tomcat Ghostcat")[0][0], "auxiliary/admin/http/tomcat_ghostcat")
+        self.assertEqual(signatures.msf_for_finding("Distributed Ruby (dRuby/DRb) Multiple RCE Vulnerabilities")[0][0], "exploit/linux/misc/drb_remote_codeexec")
+        self.assertEqual(signatures.msf_for_finding("PostgreSQL Default Credentials")[0][0], "auxiliary/scanner/postgres/postgres_login")
 
 
 class OpenVASResults(unittest.TestCase):
@@ -35,6 +39,15 @@ class OpenVASResults(unittest.TestCase):
         root = self._xml("192.168.0.11", "192.168.0.198", "")
         self.assertEqual([i["name"] for i in openvas.parse_results(root, "192.168.0.198")], ["n1", "n2"])
         self.assertEqual(len(openvas.parse_results(root)), 3)
+
+    def test_cves_are_extracted_from_nvt_title_and_description(self):
+        root = ET.fromstring(
+            '<r><result><name>DistCC RCE Vulnerability (CVE-2004-2687)</name>'
+            '<host>192.168.0.11</host><severity>9.3</severity><qod><value>99</value></qod>'
+            '<port>3632/tcp</port><nvt oid="1.2"><name>DistCC RCE</name></nvt>'
+            '<description>Related issue CVE-2012-1823</description></result></r>')
+        rows = openvas.parse_results(root, "192.168.0.11")
+        self.assertEqual(rows[0]["cve"], ["CVE-2004-2687", "CVE-2012-1823"])
 
 
 class HoneypotParsing(unittest.TestCase):

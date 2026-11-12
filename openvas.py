@@ -131,6 +131,9 @@ def parse_results(root: ET.Element, only_host: str = "") -> list[dict]:
                     cves.append(ref.get("id").upper())
             for m in CVE_RE.findall(nvt.findtext("cve") or ""):
                 cves.append(m.upper())
+        raw_desc = r.findtext("description") or ""
+        for match in CVE_RE.findall(f"{name} {raw_desc}"):
+            cves.append(match.upper())
         cves = sorted(set(cves))
         port = 0
         m = re.match(r"(\d+)/", r.findtext("port") or "")
@@ -140,7 +143,7 @@ def parse_results(root: ET.Element, only_host: str = "") -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        desc = re.sub(r"\s+", " ", (r.findtext("description") or "")).strip()[:300]
+        desc = re.sub(r"\s+", " ", raw_desc).strip()[:300]
         out.append({"oid": oid[:80], "name": name, "cve": cves[:12], "port": port, "severity": round(sev, 1),
                     "qod": qod, "desc": desc, "host": host})
     if foreign:

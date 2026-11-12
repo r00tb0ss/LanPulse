@@ -344,7 +344,7 @@ class VulnScanner:
                     with urllib.request.urlopen(urllib.request.Request(MSF_META, headers={"User-Agent": "LanPulse"}), timeout=120) as r:
                         meta = json.loads(r.read(80_000_000))
                     for mod in meta.values():
-                        if mod.get("type") != "exploit":
+                        if mod.get("type") not in ("exploit", "auxiliary"):
                             continue
                         refs = [x for x in mod.get("references") or [] if isinstance(x, str) and x.startswith("CVE-")]
                         for ref in refs:
@@ -541,12 +541,15 @@ class VulnScanner:
                     cid = cve or ("OPENVAS-" + (ov.get("oid", "").split(".")[-1] or "result"))
                     k = self.kev.get(cve) if cve else None
                     x = (self.exploits.get(cve) or {}) if cve else {}
+                    msf = (x.get("m") or signatures.msf_for_cve(cve))[:5]
+                    if not msf and conf == "confirmed":
+                        msf = signatures.msf_for_finding(ov.get("name", ""), ov.get("desc", ""))
                     results.setdefault(d["id"], []).append({
                         "cve": cid, "score": ov.get("severity"), "sev": severity(ov.get("severity")),
                         "desc": ov.get("desc") or ov.get("name", ""), "pub": "", "port": ov.get("port") or 0,
                         "software": ov.get("name", "")[:80], "product": "openvas", "ver": "", "kev": bool(k),
                         "kev_name": (k or {}).get("name", ""), "ransomware": bool(k and k.get("ransomware")),
-                        "distro": False, "msf": (x.get("m") or signatures.msf_for_cve(cve))[:5], "edb": x.get("e", [])[:5], "unverified": False,
+                        "distro": False, "msf": msf, "edb": x.get("e", [])[:5], "unverified": False,
                         "os": False, "confidence": conf, "probe": "openvas"})
         # Curated signatures for classic exploitable services nmap can't give a product ID for (see signatures.py)
         for d in list(self.nm.devices.values()):
@@ -707,6 +710,7 @@ class VulnScanner:
             rows.append({"id": dev_id, "ip": d["ip"], "name": self.nm.label(d), "type": d.get("type", "unknown"),
                          "count": len(items), "kev": sum(f["kev"] for f in items),
                          "exploits": sum(1 for f in items if f.get("msf") or f.get("edb")),
+                         "msf_modules": len({m[0] for f in items for m in f.get("msf", []) if m and m[0]}),
                          "confirmed": sum(1 for f in items if f.get("confidence") == "confirmed"),
                          "critical": sum(f["sev"] == "critical" for f in items),
                          "high": sum(f["sev"] == "high" for f in items),
@@ -743,7 +747,8 @@ class VulnScanner:
                 "devices": rows, "fix": fix, "config": config[:500],
                 "totals": {"cves": len({f["cve"] for f in all_f}), "kev": len({f["cve"] for f in all_f if f["kev"]}),
                            "exploits": len({f["cve"] for f in all_f if f.get("msf") or f.get("edb")}),
-                           "msf": len({f["cve"] for f in all_f if f.get("msf")}),
+                           "msf": len({m[0] for f in all_f for m in f.get("msf", []) if m and m[0]}),
+                           "msf_cves": len({f["cve"] for f in all_f if f.get("msf")}),
                            "confirmed": sum(1 for f in all_f if f.get("confidence") == "confirmed"),
                            "critical": len({f["cve"] for f in all_f if f["sev"] == "critical"}),
                            "devices": len(rows), "scanned": sum(1 for d in devs.values() if d.get("deep_scanned_at"))},
