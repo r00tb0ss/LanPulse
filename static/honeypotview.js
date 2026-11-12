@@ -383,7 +383,8 @@ async function showPotSetup(force) {
     setPotSection(potSection, false);
   }
   const sectionJump = (target, filter) => {
-    if (filter) {
+    if (target === "activity") {
+      filter = filter || "all";
       potAttackType = filter;
       const select = $("potAttackType");
       if (select) select.value = filter;
@@ -394,7 +395,7 @@ async function showPotSetup(force) {
   const kpis = $("potKpis");
   if (kpis) {
     kpis.addEventListener("click", (e) => { const card = e.target.closest("[data-pot-jump]"); if (card) sectionJump(card.dataset.potJump, card.dataset.potFilter); });
-    kpis.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { const card = e.target.closest("[data-pot-jump]"); if (card) { e.preventDefault(); sectionJump(card.dataset.potJump); } } });
+    kpis.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { const card = e.target.closest("[data-pot-jump]"); if (card) { e.preventDefault(); sectionJump(card.dataset.potJump, card.dataset.potFilter); } } });
   }
   const intelCards = $("potIntelCards");
   if (intelCards) intelCards.addEventListener("click", (e) => { const card = e.target.closest("[data-pot-jump]"); if (card) sectionJump(card.dataset.potJump); });
