@@ -392,20 +392,20 @@ def analyze_script(data: bytes) -> dict:
     if re.search(r"\bnohup\b", text) and re.search(r"\brm\s+-rf\s+/tmp/\$?BOT\b", text, re.I):
         add("self-cleanup", "Deletes a temporary bot executable after launching it", "T1070.004", "medium",
             r"nohup\b|rm\s+-rf\s+/tmp/\$?BOT\b")
-    if re.search(r"\\b(?:wget|curl|tftp|ftpget)\\b", text, re.I) and re.search(
-            r"\\b(?:chmod\\s+[+0-7]*x|bash\\s+[^;\\n]+|sh\\s+[^;\\n]+|\\./[\\w.-]+)", text, re.I):
+    if re.search(r"\b(?:wget|curl|tftp|ftpget)\b", text, re.I) and re.search(
+            r"\b(?:chmod\s+[+0-7]*x|bash\s+[^;\n]+|sh\s+[^;\n]+|\./[\w.-]+)", text, re.I):
         add("download-execute", "Downloads and attempts to launch a payload", "T1105 / T1059.004", "medium",
-            r"\\b(?:wget|curl|tftp|ftpget)\\b")
+            r"\b(?:wget|curl|tftp|ftpget)\b")
     add("encoded-payload", "Decodes or evaluates an encoded command", "T1027 / T1059.004", "medium",
-        r"base64\\s+(?:-d|--decode)|openssl\\s+enc\\s+-d|\\beval\\s+")
+        r"base64\s+(?:-d|--decode)|openssl\s+enc\s+-d|\beval\s+")
     add("network-scan", "Scans hosts or network ports", "T1046", "medium",
-        r"\\b(?:nmap|masscan|zmap)\\b|/dev/tcp/[^/\\s]+/\\d+")
+        r"\b(?:nmap|masscan|zmap)\b|/dev/tcp/[^/\s]+/\d+")
     add("credential-access", "Reads local password or SSH private-key material", "T1003.008 / T1552.004", "high",
-        r"(?:cat|grep|awk|sed)\\s+[^;\\n]*(?:/etc/shadow|/root/\\.ssh/id_|/home/[^/\\s]+/\\.ssh/id_)")
+        r"(?:cat|grep|awk|sed)\s+[^;\n]*(?:/etc/shadow|/root/\.ssh/id_|/home/[^/\s]+/\.ssh/id_)")
     add("firewall-tampering", "Attempts to disable or flush firewall protections", "T1562.004", "high",
-        r"ufw\\s+disable|iptables\\s+-F|nft\\s+flush|setenforce\\s+0")
+        r"ufw\s+disable|iptables\s+-F|nft\s+flush|setenforce\s+0")
     add("dns-tampering", "Modifies the system DNS resolver configuration", "T1565.001", "medium",
-        r"/etc/resolv\\.conf")
+        r"/etc/resolv\.conf")
     return {"behaviors": behaviors, "behavior_score": min(100, sum(
         {"high": 25, "medium": 15, "low": 5}.get(x["confidence"], 0) for x in behaviors)),
             "iocs": find_iocs(text)}
