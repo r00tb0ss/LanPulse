@@ -44,6 +44,16 @@ def _signal_quality(dbm) -> str:
         return ""
     return "good" if dbm >= -60 else "fair" if dbm >= -70 else "poor"
 
+def _apply_snmp_host_rates(node: dict, host_rates: dict | None) -> None:
+    """Apply configured host IF-MIB counters even when UniFi also knows this client."""
+    if not host_rates:
+        return
+    node["rate"] = host_rates.get("rate_bps")
+    node["rate_dn"] = host_rates.get("rx_bps")
+    node["rate_up"] = host_rates.get("tx_bps")
+    node["traffic_source"] = "snmp-if-mib"
+    node["traffic_interfaces"] = host_rates.get("interfaces", [])
+
 
 class Topology:
     def __init__(self, nm, path: Path):
@@ -327,12 +337,7 @@ class Topology:
                 parent, n["link"] = snmp_par[nid][0], {**snmp_par[nid][1]}
                 n["source"] = "snmp"
             host_rates = self.snmp_rates.get(n.get("ip", ""))
-            if host_rates and not uclient:
-                n["rate"] = host_rates.get("rate_bps")
-                n["rate_dn"] = host_rates.get("rx_bps")
-                n["rate_up"] = host_rates.get("tx_bps")
-                n["traffic_source"] = "snmp-if-mib"
-                n["traffic_interfaces"] = host_rates.get("interfaces", [])
+            _apply_snmp_host_rates(n, host_rates)
             if man.get("medium") in ("wired", "wifi"):
                 n["link"] = {**n["link"], "medium": man["medium"]}
             if parent is None or parent == nid:
