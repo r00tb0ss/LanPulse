@@ -78,8 +78,10 @@ function topoTraffic(data) {
   // ...but only when several devices report a speed; a lone reading would leave the rest of the map still
   const live = data.nodes.filter((n) => n.kind === "client" && n.rate > 0).length;
   const infraLive = data.nodes.some((n) => n.kind !== "client" && n.uplink_rate > 0);
+  const snmpMonitored = data.nodes.some((n) => n.traffic_source === "snmp-if-mib");
   const snmpLive = data.nodes.some((n) => n.traffic_source === "snmp-if-mib" && n.rate > 0);
-  const rates = snmpLive || (!!(data.sources && data.sources.rates) && (live >= 3 || infraLive || !TOPO.talkers.size));
+  const unifiRates = !!(data.sources && data.sources.rates);
+  const rates = snmpLive || (unifiRates && (live >= 3 || infraLive || !TOPO.talkers.size));
   const own = rates ? new Map(data.nodes.filter((n) => n.rate > 0).map((n) => [n.id, n.rate])) : TOPO.talkers;
   const sub = new Map(), byId = new Map(data.nodes.map((n) => [n.id, n]));
   for (const n of data.nodes) {
@@ -383,7 +385,7 @@ function topoSvg(L, T, opts = {}) {
       ${l.medium === "wifi" ? sigBars(c.x + S.cw - 20, c.y + 26, l.quality, T) : l.medium === "wired" && glyph ? `<text x="${c.x + S.cw - 12}" y="${c.y + 28}" ${FA} font-size="11" fill="${T.dim}" text-anchor="end"></text>` : ""}
       ${TR ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${S.cw - 44}" height="4" rx="2" fill="${T.border}"/>${act ? `<rect x="${c.x + 32}" y="${c.y + S.ch - 7}" width="${(S.cw - 44) * act}" height="4" rx="2" fill="${topoHeat(act)}"/>` : ""}` : ""}
       ${TR && TOPO.spread && TR.dirs.get(n.id) ? topoRateLabel(TR.dirs.get(n.id), c.x + S.cw / 2, c.y + S.ch + 13, "middle", 10) : ""}
-      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${cnt ? TR.fmt(cnt) : l.shared > 1 ? (n.rate_tx != null || n.rate_rx != null ? "idle" : `shares port ${l.port}`) : TR.rates ? "idle" : "no traffic"}</text>` : ""}
+      ${TR && TOPO.spread && !TR.dirs.get(n.id) ? `<text class="tp-d" x="${c.x + S.cw / 2}" y="${c.y + S.ch + 13}" font-size="10" text-anchor="middle" fill="${cnt ? topoHeat(act) : T.dim}">${TR.pdirs.has(n.id) && ((TR.pdirs.get(n.id).dn || 0) > 0 || (TR.pdirs.get(n.id).up || 0) > 0) ? "shared port activity" : cnt ? TR.fmt(cnt) : l.shared > 1 ? (n.rate_tx != null || n.rate_rx != null ? "idle · device" : `shares port ${l.port}`) : TR.rates ? "idle · device" : "no traffic"}</text>` : ""}
       ${!n.online ? `<line x1="${c.x + 6}" y1="${c.y + S.ch - 3}" x2="${c.x + S.cw - 6}" y2="${c.y + S.ch - 3}" stroke="${T.dim}" stroke-dasharray="2 3"/>` : ""}
     </g>`);
   }
@@ -628,7 +630,7 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpZoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
     <button class="btn sm" id="tpFit" title="Fit to screen"><i class="fa-solid fa-expand"></i></button>
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
-    ${TOPO.traffic && topoTraffic(d).rates ? `<span class="tp-src ok" title="Live interface throughput from configured SNMP hosts and/or UniFi. SNMP readings are per monitored host; UniFi readings are shown where available."><i class="fa-solid fa-gauge-high"></i>Live throughput from ${d.nodes.some((n) => n.traffic_source === "snmp-if-mib" && n.rate > 0) ? "SNMP + UniFi" : "UniFi"}</span>` : ""}
+    ${TOPO.traffic && topoTraffic(d).rates ? `<span class="tp-src ok" title="Measured interface throughput. SNMP is per monitored host; UniFi readings are shown where available."><i class="fa-solid fa-gauge-high"></i>Live throughput from ${topoTraffic(d).snmpLive ? (topoTraffic(d).unifiRates ? "SNMP + UniFi" : "SNMP") : topoTraffic(d).snmpMonitored ? "UniFi · SNMP waiting" : "UniFi"}</span>` : TOPO.traffic && topoTraffic(d).snmpMonitored ? `<span class="tp-src warn" title="SNMP is configured for one or more topology devices, but no positive interface rate has been received yet. Rates need two counter samples and traffic crossing the monitored interface."><i class="fa-solid fa-clock"></i>SNMP monitored · waiting for traffic</span>` : ""}
     ${TOPO.traffic && !topoTraffic(d).rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
     ${TOPO.traffic && topoTraffic(d).dirs.size ? `<button class="btn sm ${TOPO.flip ? "on" : ""}" id="tpFlip" title="Upload and download for Wi-Fi devices and switch/AP links come from UniFi, which counts them from the device's side. If they look backwards next to the UniFi app, click to swap them. Wired devices are read at the switch port and aren't affected."><i class="fa-solid fa-arrow-right-arrow-left"></i>Swap ↑↓</button>` : ""}
     <span class="tp-spacer"></span>
