@@ -78,7 +78,8 @@ function topoTraffic(data) {
   // ...but only when several devices report a speed; a lone reading would leave the rest of the map still
   const live = data.nodes.filter((n) => n.kind === "client" && n.rate > 0).length;
   const infraLive = data.nodes.some((n) => n.kind !== "client" && n.uplink_rate > 0);
-  const rates = !!(data.sources && data.sources.rates) && (live >= 3 || infraLive || !TOPO.talkers.size);
+  const snmpLive = data.nodes.some((n) => n.traffic_source === "snmp-if-mib" && n.rate > 0);
+  const rates = snmpLive || (!!(data.sources && data.sources.rates) && (live >= 3 || infraLive || !TOPO.talkers.size));
   const own = rates ? new Map(data.nodes.filter((n) => n.rate > 0).map((n) => [n.id, n.rate])) : TOPO.talkers;
   const sub = new Map(), byId = new Map(data.nodes.map((n) => [n.id, n]));
   for (const n of data.nodes) {
@@ -627,7 +628,7 @@ function renderTopoBar(d) {
     <button class="btn sm" id="tpZoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
     <button class="btn sm" id="tpFit" title="Fit to screen"><i class="fa-solid fa-expand"></i></button>
     <button class="btn sm" id="tpRefresh" title="Refresh from the router"><i class="fa-solid fa-rotate"></i></button>
-    ${TOPO.traffic && topoTraffic(d).rates ? '<span class="tp-src ok" title="Live speeds reported by your UniFi gateway, refreshed about every 5 seconds while this view is open. Cables and bars use a log scale so one busy device doesn\'t hide the rest."><i class="fa-solid fa-gauge-high"></i>Live throughput from UniFi</span>' : ""}
+    ${TOPO.traffic && topoTraffic(d).rates ? `<span class="tp-src ok" title="Live interface throughput from configured SNMP hosts and/or UniFi. SNMP readings are per monitored host; UniFi readings are shown where available."><i class="fa-solid fa-gauge-high"></i>Live throughput from ${d.nodes.some((n) => n.traffic_source === "snmp-if-mib" && n.rate > 0) ? "SNMP + UniFi" : "UniFi"}</span>` : ""}
     ${TOPO.traffic && !topoTraffic(d).rates && !TOPO.talkers.size ? '<span class="tp-src bad" title="LanPulse builds this from your router\'s connection logs. Point the router\'s syslog at LanPulse (Settings > Threats) and it fills in within a minute or two."><i class="fa-solid fa-circle-info"></i>No traffic logged yet. Needs router logs</span>' : ""}
     ${TOPO.traffic && topoTraffic(d).dirs.size ? `<button class="btn sm ${TOPO.flip ? "on" : ""}" id="tpFlip" title="Upload and download for Wi-Fi devices and switch/AP links come from UniFi, which counts them from the device's side. If they look backwards next to the UniFi app, click to swap them. Wired devices are read at the switch port and aren't affected."><i class="fa-solid fa-arrow-right-arrow-left"></i>Swap ↑↓</button>` : ""}
     <span class="tp-spacer"></span>
