@@ -62,7 +62,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.34.18"
+VERSION = "1.34.19"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1274,6 +1274,11 @@ def build_app(nm: LanPulse) -> FastAPI:
         nm.save()
 
     app = FastAPI(title="LanPulse", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
+    @app.exception_handler(json.JSONDecodeError)
+    @app.exception_handler(UnicodeDecodeError)
+    async def bad_json(request: Request, exc):
+        return JSONResponse({"error": "Body must be JSON"}, 400)
+
     secure_cookie = bool(nm.args.cert)
     public = ("/login", "/static/", "/api/threats/ingest", "/api/honeypot/ingest", "/api/honeypot/sensor/installer", "/favicon.ico")
     def extra_hosts() -> set:          # read live, so changes in Settings > System apply straight away
@@ -1289,6 +1294,14 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.middleware("http")
     async def auth_guard(request: Request, call_next):
         path = request.url.path
+        # No JSON request needs to be large. The two upload routes stream their bodies and enforce their own limits.
+        if request.method in ("POST", "PUT", "DELETE") and not path.startswith(("/api/update/upload", "/api/honeypot/ingest/sample")):
+            try:
+                too_big = int(request.headers.get("content-length") or 0) > 2_000_000
+            except ValueError:
+                too_big = True
+            if too_big:
+                return JSONResponse({"error": "Request too large"}, 413)
         if not nm.auth.enabled and not host_ok(request.headers):
             return Response("LanPulse only answers to IP addresses and local names when no login is set. "
                             "Set a login, or add this name under Settings > System > Extra host names", 403, media_type="text/plain")
@@ -1317,7 +1330,10 @@ def build_app(nm: LanPulse) -> FastAPI:
         ip = request.client.host if request.client else "?"
         if nm.auth.throttled(ip):
             return login_page("Too many attempts. Wait 5 minutes and try again.", 429)
-        form = urllib.parse.parse_qs((await request.body()).decode("utf-8", "replace"))
+        raw = await read_capped(request, 8192)       # a sign-in form is tiny; never buffer more than that before checking it
+        if raw is None:
+            return login_page("That sign-in request was too large.", 413)
+        form = urllib.parse.parse_qs(raw.decode("utf-8", "replace"))
         user = form.get("user", [""])[0]
         pw = form.get("password", [""])[0]
         if not await asyncio.to_thread(nm.auth.check, user, pw):      # the password hash is slow on purpose, so keep it off the event loop
@@ -1330,7 +1346,10 @@ def build_app(nm: LanPulse) -> FastAPI:
         return resp
 
     @app.get("/logout")
-    async def logout():
+    async def logout(request: Request):
+        # Signing out ends every session, so a copied cookie stops working too. Only a signed-in browser can do it.
+        if nm.auth.verify(request.cookies.get("nm_session")):
+            await asyncio.to_thread(nm.auth.sign_out_everywhere)
         resp = RedirectResponse("/login" if nm.auth.enabled else "/", 303)
         resp.delete_cookie("nm_session")
         return resp
@@ -1566,6 +1585,13 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.post("/api/account")
     async def account(request: Request):
         body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Expected a JSON object"}, 400)
+        if not nm.auth.enabled and not nm.args.demo and (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+            # Without this, any device on the network could set the first login and take over the dashboard.
+            return JSONResponse({"error": "For safety, the first login can only be set on the LanPulse machine itself. Run: "
+                                          f"sudo {sys.executable} {BASE / 'app.py'} --data-dir {nm.data_dir} --set-password "
+                                          "and then restart LanPulse (sudo systemctl restart lanpulse)."}, 403)
         user = str(body.get("user", "")).strip()
         new = str(body.get("new_password", ""))
         if nm.auth.enabled and not await asyncio.to_thread(nm.auth.check, nm.auth.user, str(body.get("current_password", ""))):
@@ -1634,6 +1660,8 @@ def build_app(nm: LanPulse) -> FastAPI:
     upd_dir = Path(nm.data_dir) / "update"
     updater_unit = Path("/etc/systemd/system/lanpulse-update.path")
 
+    staged_cache: dict = {}
+
     def update_state() -> dict:
         out = {"current": VERSION, "updater": updater_unit.exists() and not nm.args.demo, "login": nm.auth.enabled,
                "state": "", "message": "", "staged": None, "log": ""}
@@ -1666,7 +1694,12 @@ def build_app(nm: LanPulse) -> FastAPI:
         z = upd_dir / "incoming.zip"
         if z.exists() and out["state"] not in ("installing", "queued"):
             try:
-                staged = check_update_zip(z)
+                zs = z.stat()
+                sig = (zs.st_mtime_ns, zs.st_size)
+                if staged_cache.get("sig") != sig:          # only re-read and re-hash the zip when the file changed
+                    staged_cache.clear()
+                    staged_cache.update(sig=sig, info=check_update_zip(z))
+                staged = staged_cache["info"]
                 checksum = (upd_dir / "incoming.zip.sha256").read_text().strip().split()
                 if len(checksum) != 2 or checksum[0] != staged["sha256"] or checksum[1] != "incoming.zip":
                     raise ValueError("Staged update checksum is missing or does not match.")
@@ -1960,7 +1993,8 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.post("/api/quiet")
     async def quiet_set(request: Request):
         body = await request.json()
-        nm.settings["quiet"] = {"until": alerts.quiet_until(body if isinstance(body, dict) else {}, time.time())}
+        nm.settings["quiet"] = {"until": alerts.quiet_until(body if isinstance(body, dict) else {}, time.time(),
+                                                           7 * 1440 if nm.auth.enabled else 1440)}
         alerts.MUTED["count"] = 0
         nm.save_settings()
         return quiet_view()
@@ -2048,7 +2082,8 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.post("/api/threats/syslog-allow")
     async def syslog_allow(request: Request):
-        ip = str((await request.json()).get("ip", "")).strip()
+        body = await request.json()
+        ip = str(body.get("ip", "") if isinstance(body, dict) else "").strip()
         try:
             ip = str(ipaddress.ip_address(ip))
         except ValueError:
@@ -2169,10 +2204,13 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.post("/api/honeypot/ingest")
     async def honeypot_ingest(request: Request):
         key = request.headers.get("X-LanPulse-Key", "") or request.query_params.get("key", "")
+        raw = await read_capped(request, 65536)      # this route is open to the network, so never buffer a large body
+        if raw is None:
+            return JSONResponse({"error": "Too large"}, 413)
         try:
-            payload = await request.json()
-        except Exception:
-            return JSONResponse({"error": "Expected a JSON object"}, 400)
+            payload = json.loads(raw)
+        except ValueError:
+            payload = None
         if not isinstance(payload, dict):
             return JSONResponse({"error": "Expected a JSON object"}, 400)
         ok, msg = await asyncio.to_thread(nm.honeypot.ingest, payload, key)
@@ -2544,7 +2582,7 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     async def change_block(request: Request, block: bool):
         body = await request.json()
-        ip = str(body.get("ip", "")).strip()
+        ip = str(body.get("ip", "") if isinstance(body, dict) else "").strip()
         try:
             a = ipaddress.ip_address(ip)
         except ValueError:

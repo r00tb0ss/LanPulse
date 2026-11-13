@@ -650,7 +650,7 @@ function renderSettings() {
   } else {
     const on = !!meta.auth;
     body.innerHTML = `<p class="hint">${on ? "The dashboard requires a login. Change it here." :
-      "Anyone on your network can open this dashboard. Set a username and password to require a login."}</p>
+      "Anyone on your network can open this dashboard. Set a username and password to require a login. For safety, the first login has to be set on the LanPulse machine itself: the installer offers it, and trying here shows the command to run."}</p>
       <div class="form chan-fields" style="padding:0">
         ${on ? `<label class="full">Current password<input id="aCur" type="password" autocomplete="current-password"></label>` : ""}
         <label class="full">Username<input id="aUser" value="admin" autocomplete="username"></label>
