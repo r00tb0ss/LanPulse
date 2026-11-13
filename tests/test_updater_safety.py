@@ -28,11 +28,11 @@ class UpdaterRollbackSafety(unittest.TestCase):
 
     def test_rollback_archive_is_verified_before_installing(self):
         source = updater_source()
-        archive_create = source.index('tar -czf "\$PREVIOUS_TMP"')
-        archive_readback = source.index('tar -tzf "\$PREVIOUS_TMP"')
+        archive_create = source.index('tar -czf "\\$PREVIOUS_TMP"')
+        archive_readback = source.index('tar -tzf "\\$PREVIOUS_TMP"')
         app_entry_check = source.index("opt/lanpulse/app.py")
-        publish_archive = source.index('mv -f "\$PREVIOUS_TMP" "\$D/previous.tgz"')
-        install_update = source.index('unzip -q "\$D/incoming.zip"')
+        publish_archive = source.index('mv -f "\\$PREVIOUS_TMP" "\\$D/previous.tgz"')
+        install_update = source.index('unzip -q "\\$D/incoming.zip"')
         self.assertLess(archive_create, archive_readback)
         self.assertLess(archive_readback, app_entry_check)
         self.assertLess(app_entry_check, publish_archive)
@@ -42,10 +42,10 @@ class UpdaterRollbackSafety(unittest.TestCase):
         source = updater_source()
         failure = source.index("Could not create and verify the rollback archive")
         stop = source.index("exit 1", failure)
-        unpack = source.index('unzip -q "\$D/incoming.zip"')
+        unpack = source.index('unzip -q "\\$D/incoming.zip"')
         self.assertLess(failure, stop)
         self.assertLess(stop, unpack)
-        self.assertIn('rm -f "\$PREVIOUS_TMP"', source[:failure])
+        self.assertIn('rm -f "\\$PREVIOUS_TMP"', source[:failure])
 
     def test_rollback_archive_includes_python_environment_and_service_configuration(self):
         source = updater_source()
@@ -70,8 +70,8 @@ class UpdaterRollbackSafety(unittest.TestCase):
 
     def test_previous_archive_is_not_written_directly(self):
         source = updater_source()
-        self.assertNotIn('tar -czf "\$D/previous.tgz"', source)
-        self.assertIn('PREVIOUS_TMP="\$D/previous.tgz.tmp.\$\$"', source)
+        self.assertNotIn('tar -czf "\\$D/previous.tgz"', source)
+        self.assertIn('PREVIOUS_TMP="\\$D/previous.tgz.tmp.\\$\\$"', source)
 
 
     def test_generated_updater_passes_bash_syntax_check(self):
