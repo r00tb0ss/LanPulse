@@ -6,9 +6,21 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import snmpdisc
+import topology
 
 
 class SnmpTrafficRates(unittest.TestCase):
+    def test_snmp_host_rates_override_uniFi_client_rates_when_configured(self):
+        node = {"rate": 12, "rate_dn": 5, "rate_up": 7, "source": "unifi"}
+        host_rates = {"rate_bps": 900, "rx_bps": 400, "tx_bps": 500,
+                      "interfaces": [{"name": "vmnic0", "if_index": "1"}]}
+        topology._apply_snmp_host_rates(node, host_rates)
+        self.assertEqual(node["rate"], 900)
+        self.assertEqual(node["rate_dn"], 400)
+        self.assertEqual(node["rate_up"], 500)
+        self.assertEqual(node["traffic_source"], "snmp-if-mib")
+        self.assertEqual(node["traffic_interfaces"], host_rates["interfaces"])
+
     def test_rates_use_only_up_physical_ethernet_interfaces(self):
         previous = {
             "1": {"in": 1000, "out": 2000},
