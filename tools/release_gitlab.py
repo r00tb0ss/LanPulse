@@ -5,6 +5,7 @@
 Run from the repository root after the version change is committed and pushed:
     GITLAB_TOKEN=glpat-... python3 tools/release_gitlab.py
 The token needs the `api` scope. It is read from the environment and never written anywhere."""
+import hashlib
 import json
 import os
 import re
@@ -47,9 +48,18 @@ def main():
     up = call(urllib.request.Request(f"{API}/uploads", data=body, method="POST", headers={
         "PRIVATE-TOKEN": token, "Content-Type": f"multipart/form-data; boundary={b}"}))
     url = HOST + up["full_path"]          # e.g. https://gitlab.com/-/project/123/uploads/<hash>/lanpulse.zip
-    # 2. create the release pointing at that file
+    # 1b. upload the SHA-256 checksum next to it; the in-app updater refuses a release without one
+    b = uuid.uuid4().hex
+    checksum = f"{hashlib.sha256(data).hexdigest()}  lanpulse.zip\n".encode()
+    body = (f'--{b}\r\nContent-Disposition: form-data; name="file"; filename="lanpulse.zip.sha256"\r\n'
+            f'Content-Type: text/plain\r\n\r\n').encode() + checksum + f"\r\n--{b}--\r\n".encode()
+    up = call(urllib.request.Request(f"{API}/uploads", data=body, method="POST", headers={
+        "PRIVATE-TOKEN": token, "Content-Type": f"multipart/form-data; boundary={b}"}))
+    sum_url = HOST + up["full_path"]
+    # 2. create the release pointing at both files
     rel = {"tag_name": tag, "ref": "HEAD", "name": f"LanPulse {ver}", "description": notes,
-           "assets": {"links": [{"name": "lanpulse.zip", "url": url, "link_type": "package"}]}}
+           "assets": {"links": [{"name": "lanpulse.zip", "url": url, "link_type": "package"},
+                                {"name": "lanpulse.zip.sha256", "url": sum_url, "link_type": "package"}]}}
     rel["ref"] = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     out = call(urllib.request.Request(f"{API}/releases", data=json.dumps(rel).encode(), method="POST", headers={
         "PRIVATE-TOKEN": token, "Content-Type": "application/json"}))
