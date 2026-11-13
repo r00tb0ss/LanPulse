@@ -152,10 +152,10 @@ function topoDirs(n) {
 function startTopoTimer() {
   clearInterval(TOPO.timer);
   TOPO.timer = setInterval(() => { if (netLayout === "topo" && view === "net") loadTopology(); }, 30000);
-  // With Traffic on, ask every 5 s while this view is open and visible. The server notices and polls UniFi every 5 s too,
-  // then relaxes back to 30 s once nobody is asking.
+  // While the topology is open and visible, ask every 5 s so SNMP interface counters update even when the Traffic overlay is off.
+  // The server uses these live requests to keep its lightweight SNMP polling active.
   clearInterval(TOPO.liveTimer);
-  TOPO.liveTimer = setInterval(() => { if (TOPO.traffic && netLayout === "topo" && view === "net" && !document.hidden) loadTopology(false, true); }, 5000);
+  TOPO.liveTimer = setInterval(() => { if (netLayout === "topo" && view === "net" && !document.hidden) loadTopology(false, true); }, 5000);
 }
 
 /* ------------------------------------------------------------ colours */
