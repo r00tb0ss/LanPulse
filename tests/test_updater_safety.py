@@ -55,10 +55,10 @@ class UpdaterRollbackSafety(unittest.TestCase):
         self.assertIn("opt/lanpulse etc/default/lanpulse", archive_command)
         self.assertIn("etc/systemd/system/lanpulse.service", archive_command)
         self.assertIn("etc/systemd/system/lanpulse.service.d", archive_command)
-        self.assertIn("grep -q '^opt/lanpulse/venv/'", archive_command)
-        self.assertIn("grep -qx 'etc/default/lanpulse'", archive_command)
-        self.assertIn("grep -qx 'etc/systemd/system/lanpulse.service'", archive_command)
-        self.assertIn("grep -qx 'etc/systemd/system/lanpulse.service.d/hardening.conf'", archive_command)
+        self.assertIn("grep '^opt/lanpulse/venv/' >/dev/null", archive_command)
+        self.assertIn("grep -x 'etc/default/lanpulse' >/dev/null", archive_command)
+        self.assertIn("grep -x 'etc/systemd/system/lanpulse.service' >/dev/null", archive_command)
+        self.assertIn("grep -x 'etc/systemd/system/lanpulse.service.d/hardening.conf' >/dev/null", archive_command)
 
     def test_rollback_reloads_restored_systemd_configuration(self):
         source = updater_source()
