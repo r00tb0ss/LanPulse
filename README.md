@@ -527,7 +527,7 @@ run with administrator rights. The web app itself can't change its own files: a 
 
 ## Security
 
-- **Set a login and use HTTPS.** The installer offers both. Without HTTPS, your password crosses the network in plain text.
+- **Set a login and use HTTPS.** The installer offers both. The first login can only be set on the LanPulse machine itself (the installer, or `app.py --set-password`), never from another device on the network. Without HTTPS, your password crosses the network in plain text.
   Changing the password signs out every other browser session.
 - **Without a login,** LanPulse only answers to IP addresses and local names (`.lan`, `.local`, single-word names). This blocks
   DNS-rebinding attacks from web pages you visit. To use a real domain name, add it under Settings > System >

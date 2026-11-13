@@ -20,6 +20,7 @@ import re
 import socket
 import struct
 import time
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -177,6 +178,17 @@ def txt_dict(items) -> dict:
 
 
 # --------------------------------------------------------------------------- UPnP
+def upnp_url_ok(url: str, ip: str) -> bool:
+    """A device description may only be fetched from the device that announced it. The address is read the way the
+    HTTP client reads it, so "http://<its-ip>:80@other-host/" (a user name, then a different host) is refused."""
+    try:
+        u = urllib.parse.urlsplit(url)
+        u.port                                  # raises ValueError when the port is not a number
+    except ValueError:
+        return False
+    return u.scheme in ("http", "https") and "@" not in u.netloc and u.hostname == ip
+
+
 def parse_upnp_xml(text: str) -> dict:
     if "<!doctype" in text.lower() or "<!entity" in text.lower():
         return {}                         # a device description never needs these; they are how XML expansion bombs are built
@@ -344,8 +356,7 @@ class Discovery:
         out = {}
         for ip, url in locations.items():
             try:
-                host = re.match(r"https?://([^:/]+)", url)
-                if not host or host.group(1) != ip:          # only fetch from the device that answered
+                if not upnp_url_ok(url, ip):                 # only fetch from the device that answered
                     continue
                 with _NO_REDIRECTS.open(urllib.request.Request(url, headers={"User-Agent": "LanPulse"}), timeout=3) as r:
                     text = r.read(65536).decode("utf-8", "replace")

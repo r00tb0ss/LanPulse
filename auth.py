@@ -38,6 +38,15 @@ class Auth:
         salt = os.urandom(16)
         self.data = {"user": user, "salt": salt.hex(), "iter": ITERATIONS, "hash": self._hash(pw, salt, ITERATIONS),
                      "secret": secrets.token_hex(32)}       # new secret signs everyone out
+        self._save()
+
+    def sign_out_everywhere(self):
+        """End every session by replacing the secret that signs session cookies."""
+        if self.enabled:
+            self.data["secret"] = secrets.token_hex(32)
+            self._save()
+
+    def _save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)      # never readable by others, not even briefly

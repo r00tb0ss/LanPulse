@@ -175,6 +175,33 @@ def masked(s: dict) -> dict:
     return out
 
 
+# Where each saved secret is sent. If one of these addresses changes and the secret was not typed in again, the secret
+# is forgotten: otherwise changing only the address would send a stored key or password to a new place.
+_SECRET_TARGETS = (
+    (("channels", "ntfy"), ("url",), ("token",)),
+    (("channels", "email"), ("host",), ("password",)),
+    (("channels", "irc"), ("host",), ("key",)),
+    (("unifi",), ("host",), ("api_key", "password")),
+    (("dns",), ("url",), ("password",)),
+    (("ai",), ("provider", "base_url"), ("api_key",)),
+)
+
+
+def _drop_moved_secrets(current: dict, new: dict, incoming: dict) -> None:
+    for path, where, secret_fields in _SECRET_TARGETS:
+        cur, nw, inc = current, new, incoming
+        for p in path:
+            cur = (cur.get(p) if isinstance(cur, dict) else None) or {}
+            nw = (nw.get(p) if isinstance(nw, dict) else None) or {}
+            inc = (inc.get(p) if isinstance(inc, dict) else None) or {}
+        if not isinstance(nw, dict) or all(cur.get(w) == nw.get(w) for w in where):
+            continue
+        for s in secret_fields:
+            retyped = isinstance(inc, dict) and inc.get(s) not in (None, "", MASK)
+            if cur.get(s) and not retyped:
+                nw[s] = ""
+
+
 def apply_update(current: dict, incoming: dict) -> dict:
     new = copy.deepcopy(current)
     for k, v in (incoming.get("rules") or {}).items():
@@ -197,6 +224,8 @@ def apply_update(current: dict, incoming: dict) -> dict:
                     v = default
             else:
                 v = str(v).strip()
+                if f == "url" and v and not v.lower().startswith(("http://", "https://")):
+                    v = ""                          # alerts only ever go to web addresses
             ch[f] = v
     t = incoming.get("threats")
     if isinstance(t, dict):
@@ -400,6 +429,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
     sv = incoming.get("services")
     if isinstance(sv, dict) and isinstance(sv.get("checks"), list):
         new["services"]["checks"] = [c for c in (clean_check(x) for x in sv["checks"][:50]) if c]
+    _drop_moved_secrets(current, new, incoming)
     return new
 
 
@@ -566,7 +596,7 @@ def quiet_left(settings: dict, now: float | None = None) -> float:
     return max(0.0, until - (now if now is not None else time.time()))
 
 
-def quiet_until(body: dict, now: float) -> float:
+def quiet_until(body: dict, now: float, max_minutes: int = 7 * 1440) -> float:
     """Turn a request from the dashboard into an end time. {off: true} ends quiet mode, {morning: true} lasts until the
     next 8 AM, {minutes: n} lasts n minutes (at most a week)."""
     if body.get("off"):
@@ -581,7 +611,7 @@ def quiet_until(body: dict, now: float) -> float:
         minutes = int(body.get("minutes"))
     except (TypeError, ValueError):
         return 0.0
-    return now + max(1, min(minutes, 7 * 1440)) * 60
+    return now + max(1, min(minutes, max_minutes)) * 60
 
 
 def send_all(settings: dict, title: str, msg: str, priority: int = 3, event=None) -> dict:
