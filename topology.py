@@ -54,6 +54,7 @@ class Topology:
         self.unifi: dict = {}
         self.unifi_status: dict = {"configured": False, "ok": False, "error": "", "t": 0}
         self.snmp: dict = {}
+        self.snmp_rates: dict = {}
         self.snmp_status: dict = {"configured": False, "ok": False, "error": "", "t": 0, "hosts": 0, "links": 0}
         try:
             self.state.update(json.loads(self.path.read_text()))
@@ -113,6 +114,10 @@ class Topology:
         with self.lock:
             self.snmp = data or {}
             self.snmp_status = dict(status)
+
+    def set_snmp_rates(self, rates: dict):
+        with self.lock:
+            self.snmp_rates = rates or {}
 
     def _snmp_parents(self, nodes: dict, by_mac: dict, gateway) -> dict:
         """nid -> (parent nid, link) from SNMP: LLDP neighbours form a graph that is walked outward from the gateway,
@@ -321,6 +326,13 @@ class Topology:
             if parent is None and nid in snmp_par:
                 parent, n["link"] = snmp_par[nid][0], {**snmp_par[nid][1]}
                 n["source"] = "snmp"
+            host_rates = self.snmp_rates.get(n.get("ip", ""))
+            if host_rates and not uclient:
+                n["rate"] = host_rates.get("rate_bps")
+                n["rate_dn"] = host_rates.get("rx_bps")
+                n["rate_up"] = host_rates.get("tx_bps")
+                n["traffic_source"] = "snmp-if-mib"
+                n["traffic_interfaces"] = host_rates.get("interfaces", [])
             if man.get("medium") in ("wired", "wifi"):
                 n["link"] = {**n["link"], "medium": man["medium"]}
             if parent is None or parent == nid:

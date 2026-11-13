@@ -266,11 +266,103 @@ def poll_host(host: str, community: str, timeout: float = 2.0) -> dict:
         c.close()
 
 
+# IF-MIB high-capacity counters and interface metadata.
+IF_TYPE = "1.3.6.1.2.1.2.2.1.3"
+IF_OPER_STATUS = "1.3.6.1.2.1.2.2.1.8"
+IF_HIGH_SPEED = "1.3.6.1.2.1.31.1.1.1.15"
+IF_HC_IN_OCTETS = "1.3.6.1.2.1.31.1.1.1.6"
+IF_HC_OUT_OCTETS = "1.3.6.1.2.1.31.1.1.1.10"
+_VIRTUAL_IFACE = ("lo", "vmbr", "br-", "docker", "veth", "virbr", "vnet", "tap",
+                  "tun", "wg", "vmk", "vswitch", "vSwitch", "bond", "team", "vlan")
+
+
+def _interface_rates(rows: dict, previous: dict, elapsed: float) -> dict:
+    """Calculate physical Ethernet interface rates from two IF-MIB counter samples."""
+    if elapsed <= 0 or elapsed > 300:
+        return {}
+    selected = []
+    for idx, cur in rows.items():
+        name = str(cur.get("name") or "").strip()
+        if not name or any(name.lower().startswith(x.lower()) for x in _VIRTUAL_IFACE):
+            continue
+        if cur.get("type") != 6 or cur.get("oper") != 1:
+            continue
+        old = previous.get(idx) or {}
+        incoming, outgoing = cur.get("in"), cur.get("out")
+        old_in, old_out = old.get("in"), old.get("out")
+        if not all(isinstance(v, int) and v >= 0 for v in (incoming, outgoing, old_in, old_out)):
+            continue
+        if incoming < old_in or outgoing < old_out:
+            continue
+        rx, tx = (incoming - old_in) / elapsed, (outgoing - old_out) / elapsed
+        selected.append({"name": name, "if_index": idx, "rx_bps": rx, "tx_bps": tx,
+                         "speed_mbps": cur.get("speed") or None})
+    if not selected:
+        return {}
+    return {"rx_bps": sum(x["rx_bps"] for x in selected),
+            "tx_bps": sum(x["tx_bps"] for x in selected),
+            "rate_bps": sum(x["rx_bps"] + x["tx_bps"] for x in selected),
+            "interfaces": selected, "sampled": time.time()}
+
+
+def poll_rate_counters(host: str, community: str, timeout: float = 2.0) -> dict:
+    """Read only IF-MIB 64-bit counters; no SNMP SET operations are used."""
+    c = Client(host, community, timeout)
+    try:
+        names = {idx: _txt(v) for idx, v in c.walk(IF_NAME)}
+        if not names:
+            names = {idx: _txt(v) for idx, v in c.walk(IF_DESCR)}
+        types = dict(c.walk(IF_TYPE))
+        ops = dict(c.walk(IF_OPER_STATUS))
+        speeds = dict(c.walk(IF_HIGH_SPEED))
+        incoming = dict(c.walk(IF_HC_IN_OCTETS))
+        outgoing = dict(c.walk(IF_HC_OUT_OCTETS))
+        rows = {}
+        for idx, name in names.items():
+            if name:
+                rows[idx] = {"name": name, "type": types.get(idx), "oper": ops.get(idx),
+                             "speed": speeds.get(idx), "in": incoming.get(idx), "out": outgoing.get(idx)}
+        return rows
+    finally:
+        c.close()
+
+
 class SnmpDiscovery:
     """Holds the latest poll results; the topology builder reads them."""
     def __init__(self):
         self.data: dict[str, dict] = {}
         self.status = {"configured": False, "ok": False, "error": "", "t": 0, "hosts": 0, "links": 0}
+        self.rate_data: dict[str, dict] = {}
+        self._rate_previous: dict[str, dict] = {}
+        self._rate_sampled: dict[str, float] = {}
+        self.rate_status = {"configured": False, "ok": False, "error": "", "t": 0, "hosts": 0}
+
+    def refresh_rates(self, cfg: dict):
+        """Poll configured SNMP hosts for physical-interface throughput. First poll establishes a baseline."""
+        hosts = [h for h in (valid_host(x) for x in (cfg.get("hosts") or [])) if h][:20]
+        if not cfg.get("enabled") or not hosts:
+            self.rate_data = {}
+            self._rate_previous = {}
+            self._rate_sampled = {}
+            self.rate_status = {"configured": False, "ok": False, "error": "", "t": time.time(), "hosts": 0}
+            return
+        community = str(cfg.get("community") or "public")
+        now = time.time()
+        data, errors = {}, []
+        for host in hosts:
+            try:
+                rows = poll_rate_counters(host, community)
+                previous, sampled = self._rate_previous.get(host), self._rate_sampled.get(host)
+                if previous is not None and sampled is not None:
+                    rates = _interface_rates(rows, previous, now - sampled)
+                    if rates:
+                        data[host] = rates
+                self._rate_previous[host], self._rate_sampled[host] = rows, now
+            except (SnmpError, OSError) as exc:
+                errors.append(f"{host}: {exc}")
+        self.rate_data = data
+        self.rate_status = {"configured": True, "ok": bool(data), "error": "; ".join(errors)[:300],
+                            "t": now, "hosts": len(data)}
 
     def refresh(self, cfg: dict):
         hosts = [h for h in (valid_host(x) for x in (cfg.get("hosts") or [])) if h][:20]

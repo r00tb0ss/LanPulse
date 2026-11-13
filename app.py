@@ -2398,10 +2398,17 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def refresh_snmp():
         if nm.args.demo:
             return
+        cfg = nm.settings.get("snmp") or {}
+        if time.time() - nm.snmp.rate_status["t"] >= 5:
+            try:
+                await asyncio.to_thread(nm.snmp.refresh_rates, cfg)
+            except Exception:
+                log.exception("SNMP traffic refresh failed")
+            nm.topology.set_snmp_rates(nm.snmp.rate_data)
         if time.time() - nm.snmp.status["t"] < 110:
-            return                                    # SNMP tables change slowly; poll every ~2 minutes
+            return                                    # LLDP/FDB tables change slowly; poll every ~2 minutes
         try:
-            await asyncio.to_thread(nm.snmp.refresh, nm.settings.get("snmp") or {})
+            await asyncio.to_thread(nm.snmp.refresh, cfg)
         except Exception:
             log.exception("snmp refresh failed")
         nm.topology.set_snmp(nm.snmp.data, nm.snmp.status)
