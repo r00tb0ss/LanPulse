@@ -61,6 +61,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 
 ```bash
 unzip lanpulse.zip && cd lanpulse
+chmod +x install.sh
 sudo ./install.sh
 ```
 
@@ -521,7 +522,7 @@ the previous version is restored automatically and the log is shown. Updates nee
 run with administrator rights. The web app itself can't change its own files: a separate root-only helper
 (`lanpulse-update.path` / `lanpulse-update.service`) does the install when you click Install.
 
-**From the terminal:** `unzip -o lanpulse.zip -d ~ && cd ~/lanpulse && sudo ./install.sh`
+**From the terminal:** `unzip -o lanpulse.zip -d ~ && cd ~/lanpulse && chmod +x install.sh && sudo ./install.sh`
 (add `--upgrade` to skip all questions). Your devices, history, settings, login and certificates are kept either way.
 
 ## Security
