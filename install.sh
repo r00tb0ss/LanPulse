@@ -273,10 +273,13 @@ D=$DEST/data/update
 LOG=\$D/log.txt
 state() { printf '{"state": "%s", "message": "%s", "t": %s}\\n' "\$1" "\$2" "\$(date +%s)" > "\$D/status.json"; }
 rm -f "\$D/request"
+# Start a fresh log for this run, so the dashboard never shows the previous update's output.
+echo "== LanPulse update \$(date) ==" > "\$LOG"
 # Off switch only root can flip: sudo mv /etc/lanpulse/web-updates /etc/lanpulse/web-updates.off  (terminal installs still work)
 [[ -f /etc/lanpulse/web-updates ]] || { state failed "Updates from the dashboard are turned off on this machine (/etc/lanpulse/web-updates is missing)."; exit 1; }
 [[ -f "\$D/incoming.zip" ]] || { state failed "No update file was uploaded."; exit 1; }
 [[ -f "\$D/incoming.zip.sha256" ]] || { state failed "The update has no SHA-256 verification file; it wasn't installed."; exit 1; }
+echo "-- verifying the SHA-256 checksum" >> "\$LOG"
 if ! (cd "\$D" && sha256sum -c incoming.zip.sha256) >> "\$LOG" 2>&1; then
   state failed "The update failed SHA-256 verification and wasn't installed."; exit 1
 fi
@@ -292,12 +295,11 @@ trap 'rm -rf "\$W"' EXIT
 state installing "Installing the update. LanPulse will restart in a minute or two."
 (
   set -e
-  echo "== LanPulse update \$(date) =="
 # Create the rollback archive separately and verify it before replacing the
 # last known-good archive or touching the installed application.
 PREVIOUS_TMP="\$D/previous.tgz.tmp.\$\$"
 rm -f "\$PREVIOUS_TMP"
-echo "-- creating and verifying the rollback archive"
+echo "-- creating and verifying the rollback archive (this can take a minute)" >> "\$LOG"
 if ! tar -czf "\$PREVIOUS_TMP" -C / --exclude=opt/lanpulse/data opt/lanpulse etc/default/lanpulse etc/systemd/system/lanpulse.service etc/systemd/system/lanpulse.service.d >> "\$LOG" 2>&1 \
   || ! tar -tzf "\$PREVIOUS_TMP" >/dev/null 2>> "\$LOG" \
   || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -qx 'opt/lanpulse/app.py' \
@@ -323,7 +325,7 @@ if (
   echo "-- installing"
   cd "\$W/lanpulse"
   bash ./install.sh --upgrade
-) > "\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then
+) >> "\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then
   rm -f "\$D/incoming.zip" "\$D/incoming.zip.sha256"
   state done "Update installed."
 else

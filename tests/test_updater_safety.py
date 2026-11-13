@@ -107,7 +107,7 @@ class UpdaterRollbackSafety(unittest.TestCase):
     def test_update_failure_verifies_rollback_files_and_service(self):
         source = updater_source()
         self.assertIn(
-            ') > "\\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then',
+            ') >> "\\$LOG" 2>&1 && systemctl is-active --quiet lanpulse; then',
             source,
         )
         restore = source.index(r'tar -xzf "\$D/previous.tgz"')
@@ -121,6 +121,13 @@ class UpdaterRollbackSafety(unittest.TestCase):
         self.assertLess(restart, active)
         self.assertIn("The previous version was restored and verified", source)
         self.assertIn("automatic rollback could not be verified", source)
+
+    def test_update_log_is_reset_once_at_the_start_of_a_run(self):
+        source = updater_source()
+        reset = source.index('echo "== LanPulse update \\$(date) ==" > "\\$LOG"')
+        self.assertLess(reset, source.index('sha256sum -c incoming.zip.sha256'))
+        # Everything after the reset appends, so earlier progress lines are never wiped mid-run.
+        self.assertEqual(len(re.findall(r'(?<!>)> "\\\$LOG"', source)), 1)
 
     def test_installer_never_disables_hardening_after_start_failure(self):
         startup = INSTALL.split("systemctl enable lanpulse.service", 1)[1]
