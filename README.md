@@ -514,7 +514,7 @@ it last reported and a hint about what to check.
 
 ## Updating
 
-**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse looks at the [latest release](https://gitlab.com/r00tb0ss/lanpulse/-/releases) on GitLab (and on GitHub as a fallback), shows what's new, downloads it, and you click Install. Each release is published with a SHA-256 checksum: LanPulse checks the download against it, and the root-only helper checks the staged file again just before installing. A file that doesn't match is refused. This is an integrity check, not a publisher signature. Only the app's own files are replaced; your data and OpenVAS are untouched.
+**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse looks at the [latest release](https://gitlab.com/r00tb0ss/lanpulse/-/releases) on GitLab and on GitHub and takes whichever is newer, shows what's new, downloads it, and you click Install. Each release is published with a SHA-256 checksum: LanPulse checks the download against it, and the root-only helper checks the staged file again just before installing. A file that doesn't match is refused. This is an integrity check, not a publisher signature. Only the app's own files are replaced; your data and OpenVAS are untouched.
 
 **From the dashboard, manual:** download `lanpulse.zip` from the latest release, then Settings > Update, choose it, check the version shown, and click Install.
 LanPulse backs up the current version, installs the update, restarts, and reloads the page. If the install fails,
