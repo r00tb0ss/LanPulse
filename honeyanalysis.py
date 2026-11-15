@@ -29,6 +29,7 @@ import threading
 import time
 
 import staticlook
+import yaralook
 
 log = logging.getLogger("lanpulse.honeyanalysis")
 
@@ -683,6 +684,7 @@ class HoneyAnalysis:
         self._added = 0
         self._touched: dict[str, float] = {}
         self.dir = d / ("demo-honeypot-samples" if self.demo else "honeypot-samples")
+        self.yara = yaralook.YaraRules(d / "yara-rules")      # optional: only rule files the owner put there are used
         try:
             self.dir.mkdir(mode=0o700, exist_ok=True)
             os.chmod(self.dir, 0o700)
@@ -1284,15 +1286,19 @@ class HoneyAnalysis:
     def _closer_look(self, sha: str, kind) -> dict:
         """Extra read-only detail worked out from the stored file each time it is opened, so it also covers files
         captured before this existed: decoded hidden content for scripts, header structure for Linux programs."""
+        out: dict = {}
         try:
             data = (self.dir / sha).read_bytes()[:MAX_SAMPLE]
             if kind == "elf":
-                return {"elf": staticlook.elf_details(data)}
-            if kind in ("script", "text", "web"):
-                return {"decoded": decoded_view(data[:400_000].decode("latin-1", "replace"))}
+                out["elf"] = staticlook.elf_details(data)
+            elif kind in ("script", "text", "web"):
+                out["decoded"] = decoded_view(data[:400_000].decode("latin-1", "replace"))
+            y = self.yara.scan(data)
+            if y["files"]:                      # nothing is shown unless the owner has put rule files in the folder
+                out["yara"] = y
         except Exception:
             log.debug("closer look at a sample failed", exc_info=True)
-        return {}
+        return out
 
     def sample_content(self, sha: str, offset: int = 0, mode: str = "auto") -> dict | None:
         """One page of a stored file for reading in the dashboard: text for scripts and text files, a hex listing for
