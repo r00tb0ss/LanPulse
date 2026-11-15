@@ -302,11 +302,11 @@ rm -f "\$PREVIOUS_TMP"
 echo "-- creating and verifying the rollback archive (this can take a minute)" >> "\$LOG"
 if ! tar -czf "\$PREVIOUS_TMP" -C / --exclude=opt/lanpulse/data opt/lanpulse etc/default/lanpulse etc/systemd/system/lanpulse.service etc/systemd/system/lanpulse.service.d >> "\$LOG" 2>&1 \
   || ! tar -tzf "\$PREVIOUS_TMP" >/dev/null 2>> "\$LOG" \
-  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -x 'opt/lanpulse/app.py' >/dev/null \
-  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep '^opt/lanpulse/venv/' >/dev/null \
-  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -x 'etc/default/lanpulse' >/dev/null \
-  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -x 'etc/systemd/system/lanpulse.service' >/dev/null \
-  || ! tar -tzf "\$PREVIOUS_TMP" 2>> "\$LOG" | grep -x 'etc/systemd/system/lanpulse.service.d/hardening.conf' >/dev/null; then
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>/dev/null | grep -x 'opt/lanpulse/app.py' >/dev/null \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>/dev/null | grep '^opt/lanpulse/venv/' >/dev/null \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>/dev/null | grep -x 'etc/default/lanpulse' >/dev/null \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>/dev/null | grep -x 'etc/systemd/system/lanpulse.service' >/dev/null \
+  || ! tar -tzf "\$PREVIOUS_TMP" 2>/dev/null | grep -x 'etc/systemd/system/lanpulse.service.d/hardening.conf' >/dev/null; then
   rm -f "\$PREVIOUS_TMP"
   state failed "Could not create and verify the rollback archive. No application files were changed."
   exit 1

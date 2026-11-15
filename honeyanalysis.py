@@ -28,6 +28,8 @@ import struct
 import threading
 import time
 
+import staticlook
+
 log = logging.getLogger("lanpulse.honeyanalysis")
 
 MAX_SAMPLE = 20 * 1024 * 1024         # largest file stored (bytes)
@@ -494,6 +496,28 @@ def analyze_sample(data: bytes) -> dict:
             "entropy": ent, "families": families, "notes": notes, "tags": tags, "score": score,
             "iocs": script_analysis.get("iocs", find_iocs(blob)), "script_analysis": script_analysis,
             "strings": strs[:150]}
+
+
+def decoded_view(text: str) -> list[dict]:
+    """Content hidden by encoding in a script or in typed commands, decoded and described. The decoded bytes are data:
+    they are classified with the same read-only rules as everything else and are never run."""
+    out = []
+    for b in staticlook.decode_blobs(text):
+        d = b["data"]
+        ident = identify(d)
+        readable = ident["kind"] in ("script", "text", "web")
+        item = {"how": b["how"], "line": b["line"], "encoded_chars": b["encoded_chars"], "size": len(d),
+                "type": ident["detail"], "sha256": hashlib.sha256(d).hexdigest(), "tags": [], "iocs": [],
+                "readable": readable, "text": inert_text(d[:20000]) if readable else hexdump(d[:256]),
+                "truncated": len(d) > (20000 if readable else 256)}
+        if readable:
+            body = d[:200_000].decode("latin-1", "replace")
+            tags = {t for line in body.splitlines()[:MAX_CMDS] for t in classify_command(line[:MAX_CMD_LEN])}
+            item["tags"] = sorted(tags, key=lambda t: -TAG_INFO[t]["weight"])
+            found = find_iocs(body, 10)
+            item["iocs"] = [x["defanged"] for x in found["urls"] + found["ips"] + found["domains"]]
+        out.append(item)
+    return out
 
 
 # ------------------------------------------------------------------ Add sensor: installer and one-line command
@@ -1219,6 +1243,7 @@ class HoneyAnalysis:
                 "duration": round(max(0, end - start), 1), "client": client, "hassh": hassh,
                 "logins": logins_data, "commands": ca["commands"], "iocs": ca["iocs"],
                 "ai_attack_intelligence": intelligence, "timeline": timeline,
+                "decoded": decoded_view("\n".join(cmds)),
                 "timeline_note": "Sequence is reconstructed from available session fields; exact cross-event ordering and per-command timestamps were not supplied.",
                 "files": files, "tags": json.loads(tags or "[]"), "score": score, "tag_info": TAG_INFO,
                 **{k: v for k, v in self.hp._geo(ip).items() if k in ("iso", "country", "city", "org", "asn")}}
@@ -1248,11 +1273,26 @@ class HoneyAnalysis:
             return None
         first, last, seen, ips, urls, names, an, stored = r
         a = json.loads(an or "{}")
+        if stored:
+            a.update(self._closer_look(sha, a.get("kind")))
         urls = json.loads(urls or "[]")
         return {**a, "first_seen": first, "last_seen": last, "seen": seen, "ips": json.loads(ips or "[]"),
                 "urls": [{"value": u, "defanged": defang(u)} for u in urls], "names": json.loads(names or "[]"),
                 "stored": bool(stored), "sessions": [{"id": i, "ip": ip, "start": t} for i, ip, t in sess],
                 "vt_link": f"https://www.virustotal.com/gui/file/{sha}"}
+
+    def _closer_look(self, sha: str, kind) -> dict:
+        """Extra read-only detail worked out from the stored file each time it is opened, so it also covers files
+        captured before this existed: decoded hidden content for scripts, header structure for Linux programs."""
+        try:
+            data = (self.dir / sha).read_bytes()[:MAX_SAMPLE]
+            if kind == "elf":
+                return {"elf": staticlook.elf_details(data)}
+            if kind in ("script", "text", "web"):
+                return {"decoded": decoded_view(data[:400_000].decode("latin-1", "replace"))}
+        except Exception:
+            log.debug("closer look at a sample failed", exc_info=True)
+        return {}
 
     def sample_content(self, sha: str, offset: int = 0, mode: str = "auto") -> dict | None:
         """One page of a stored file for reading in the dashboard: text for scripts and text files, a hex listing for
