@@ -19,7 +19,7 @@ Settings come from environment variables (the installer writes /etc/lanpulse-tra
   TRAP_HTTP_PORT          0 = off (default)
   TRAP_BIND               default 0.0.0.0
   TRAP_FTP_BANNER         default "(vsFTPd 3.0.3)"
-  TRAP_MAX_FILE_MB        default 5 (LanPulse stores nothing larger)
+  TRAP_MAX_FILE_MB        default 5 (LanPulse stores nothing larger than 20)
   TRAP_MAX_STORE_MB       default 500: stop keeping files when the folder is this big
   TRAP_MAX_SESSIONS_PER_MIN  default 30: most sessions written per minute, so a flood cannot drown LanPulse
 """

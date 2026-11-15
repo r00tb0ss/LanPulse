@@ -9,7 +9,8 @@ and explains them: what the commands were trying to do, and what is inside each 
 
 SAFETY: analysis is STATIC ONLY. A captured file is read as bytes and inspected (hashes, file type, printable
 strings, addresses and URLs inside it). It is never executed, never opened by an interpreter and never served back
-to a browser. It is stored under a hash-only file name in a private folder.
+to a browser as a file. The dashboard can show its contents as inert text or a hex listing (sample_content), which the
+page inserts as plain text. It is stored under a hash-only file name in a private folder.
 """
 from __future__ import annotations
 
@@ -29,10 +30,12 @@ import time
 
 log = logging.getLogger("lanpulse.honeyanalysis")
 
-MAX_SAMPLE = 5 * 1024 * 1024          # largest file stored (bytes)
-MAX_SAMPLES = 500                      # files kept; the least recently seen are dropped first
-MAX_STORE = 300 * 1024 * 1024          # total bytes of stored files
-MAX_LOGINS, MAX_CMDS, MAX_CMD_LEN, MAX_FILES = 200, 300, 1000, 20
+MAX_SAMPLE = 20 * 1024 * 1024         # largest file stored (bytes)
+MAX_SAMPLES = 2000                     # files kept; the least recently seen are dropped first
+MAX_STORE = 1024 * 1024 * 1024         # total bytes of stored files
+MAX_LOGINS, MAX_CMDS, MAX_CMD_LEN, MAX_FILES = 200, 300, 8000, 20
+MAX_CMD_TOTAL = 300_000                # characters of commands kept per session; later commands are cut to 200
+VIEW_TEXT, VIEW_HEX = 256 * 1024, 16 * 1024    # bytes of a captured file shown per page
 RETENTION_DAYS = 90
 MAX_SESSIONS = 20000                   # sessions kept; the oldest are dropped first
 MAX_SENSORS = 20
@@ -65,6 +68,24 @@ def defang(s: str) -> str:
     """Make a URL or address harmless to read and copy: hxxp://evil[.]com"""
     s = re.sub(r"^(\w+)://", lambda m: m.group(1).replace("t", "x", 2) + "://" if m.group(1).lower() in ("http", "https") else m.group(0), s)
     return s.replace(".", "[.]")
+
+
+# Characters that could hide or reorder what an investigator reads: control codes, zero-width and direction marks.
+_UNSAFE_TEXT = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏ -‮⁦-⁩﻿]")
+
+
+def inert_text(data: bytes) -> str:
+    """A captured file as readable text. Nothing is interpreted; hidden and control characters become a visible mark."""
+    return _UNSAFE_TEXT.sub("�", data.decode("utf-8", "replace").replace("\r\n", "\n"))
+
+
+def hexdump(data: bytes, offset: int = 0) -> str:
+    lines = []
+    for i in range(0, len(data), 16):
+        row = data[i:i + 16]
+        hexes = " ".join(f"{b:02x}" for b in row)
+        lines.append(f"{offset + i:08x}  {hexes:<47}  |{''.join(chr(b) if 32 <= b < 127 else '.' for b in row)}|")
+    return "\n".join(lines)
 
 
 def entropy(data: bytes) -> float:
@@ -604,7 +625,7 @@ def sensor_options(raw, kind: str = "pi") -> list[str]:
             raise ValueError(f"Unknown {label}")
         if v and v != "default":
             out.append(f"{key}={v}")
-    for key, label, lo, hi, pi_only in (("file_mb", "The largest file to keep", 1, 5, False), ("mem_mb", "The memory limit", 64, 4096, False),
+    for key, label, lo, hi, pi_only in (("file_mb", "The largest file to keep", 1, 20, False), ("mem_mb", "The memory limit", 64, 4096, False),
                                         ("cpu_pct", "The CPU limit", 10, 100, False), ("keep_days", "Days to keep captures", 1, 365, True),
                                         ("disk_mb", "The disk limit", 100, 100000, True)):
         n = num(key, label, lo, hi)
@@ -754,7 +775,12 @@ class HoneyAnalysis:
         for x in (p.get("logins") or [])[:MAX_LOGINS]:
             if isinstance(x, dict):
                 logins.append({"u": self._clean_str(x.get("u"), 64), "p": self._clean_str(x.get("p"), 64), "ok": bool(x.get("ok"))})
-        cmds = [self._clean_str(c, MAX_CMD_LEN) for c in (p.get("commands") or [])[:MAX_CMDS] if isinstance(c, str)]
+        cmds, budget = [], MAX_CMD_TOTAL
+        for c in (p.get("commands") or [])[:MAX_CMDS]:
+            if isinstance(c, str):
+                c = self._clean_str(c, MAX_CMD_LEN if budget > 0 else 200)
+                cmds.append(c)
+                budget -= len(c)
         files = []
         for f in (p.get("files") or [])[:MAX_FILES]:
             if isinstance(f, dict) and HEX64.match(str(f.get("sha256") or "").lower()):
@@ -1227,6 +1253,38 @@ class HoneyAnalysis:
                 "urls": [{"value": u, "defanged": defang(u)} for u in urls], "names": json.loads(names or "[]"),
                 "stored": bool(stored), "sessions": [{"id": i, "ip": ip, "start": t} for i, ip, t in sess],
                 "vt_link": f"https://www.virustotal.com/gui/file/{sha}"}
+
+    def sample_content(self, sha: str, offset: int = 0, mode: str = "auto") -> dict | None:
+        """One page of a stored file for reading in the dashboard: text for scripts and text files, a hex listing for
+        everything else. The bytes are only read and re-encoded; nothing is run or parsed."""
+        sha = str(sha).lower()
+        if not HEX64.match(sha):
+            return None
+        with self.lock:
+            r = self.db.execute("SELECT kind, size, stored FROM samples WHERE sha256=?", (sha,)).fetchone()
+        if not r:
+            return None
+        kind, size, stored = r
+        path = self.dir / sha
+        try:
+            size = path.stat().st_size if stored else size
+            if not stored:
+                raise OSError("not stored")
+            mode = mode if mode in ("text", "hex") else ("text" if kind in ("script", "text", "web") else "hex")
+            offset = max(0, min(int(offset), size))
+            with open(path, "rb") as f:
+                f.seek(offset)
+                data = f.read(VIEW_TEXT if mode == "text" else VIEW_HEX)
+        except (OSError, ValueError, TypeError):
+            return {"sha256": sha, "stored": False, "size": size}
+        if mode == "text" and offset + len(data) < size:        # end the page on a line break so no line or character is split
+            cut = data.rfind(b"\n")
+            if cut > len(data) // 2:
+                data = data[:cut + 1]
+        nxt = offset + len(data)
+        return {"sha256": sha, "stored": True, "size": size, "mode": mode, "offset": offset,
+                "next": nxt if nxt < size else None, "path": str(path),
+                "text": inert_text(data) if mode == "text" else hexdump(data, offset)}
 
     # -------------------------------------------------------- demo
     def seed_demo(self):

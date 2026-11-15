@@ -34,7 +34,9 @@ import urllib.parse
 from datetime import datetime, timezone
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-MAX_FILE = 5 * 1024 * 1024
+MAX_FILE = 20 * 1024 * 1024
+MAX_CMD = 8000              # characters kept of one command, so a script pasted or echoed into the shell survives
+MAX_CMD_TOTAL = 250_000     # characters of commands kept per session; later commands are cut to 200
 IDLE_FLUSH = 600            # send a session that never got a "closed" event after this many quiet seconds
 HELLO_EVERY = 60            # seconds between 'I am alive' messages
 MAX_OPEN = 2000
@@ -81,7 +83,10 @@ class Sessions:
             s["logins"].append({"u": str(ev.get("username", ""))[:64], "p": str(ev.get("password", ev.get("fingerprint", "")))[:64],
                                 "ok": eid.endswith("success")})
         elif eid == "cowrie.command.input":
-            s["commands"].append(str(ev.get("input", ""))[:1000])
+            used = s.get("_cmd_chars", 0)
+            text = str(ev.get("input", ""))[:MAX_CMD if used < MAX_CMD_TOTAL else 200]
+            s["commands"].append(text)
+            s["_cmd_chars"] = used + len(text)
         elif eid in ("cowrie.session.file_download", "cowrie.session.file_upload"):
             sha = str(ev.get("shasum", "")).lower()
             if HEX64.match(sha):
