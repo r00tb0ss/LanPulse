@@ -16,7 +16,7 @@
 #   hostname=NAME                  name the attacker sees in the shell prompt (default svr04)
 #   profile=debian12|debian11|ubuntu2204   what uname and the SSH banner claim (default: Cowrie's own)
 #   login=any|random|weak          any = every login works; random = works after 2-5 tries; weak = only common passwords
-#   file_mb=N                      biggest file to keep, 1-5 MB
+#   file_mb=N                      biggest file to keep, 1-20 MB
 #   mem_mb=N  cpu_pct=N            cap Cowrie's memory (64-4096 MB) and CPU (10-100 %)
 # Running the command again with different settings changes them.
 set -euo pipefail
@@ -56,7 +56,7 @@ for kv in "$@"; do
                  [ "${#v}" -le 32 ] || bad "$kv"; FAKE_HOST="$v";;
     profile)     case "$v" in default|debian12|debian11|ubuntu2204) PROFILE="$v";; *) bad "$kv";; esac;;
     login)       case "$v" in default|any|random|weak) LOGIN="$v";; *) bad "$kv";; esac;;
-    file_mb)     num "$k" "$v" 1 5; FILE_MB="$v";;
+    file_mb)     num "$k" "$v" 1 20; FILE_MB="$v";;
     mem_mb)      num "$k" "$v" 64 4096; MEM_MB="$v";;
     cpu_pct)     num "$k" "$v" 10 100; CPU_PCT="$v";;
     keep_days|disk_mb) ;;                 # captures live in Docker volumes; clean those up with docker if you need to

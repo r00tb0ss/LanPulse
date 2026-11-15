@@ -95,7 +95,7 @@ and certificate fingerprint (use `''` for the fingerprint if you do not pin one)
 | `login=any` | Every username and password gets in (most sessions, most captured malware). | Cowrie's default (almost any login) |
 | `login=random` | Logins fail for the first 2 to 5 tries, then work. Looks more like a real machine. | |
 | `login=weak` | Only common default logins work (`root/root`, `admin/admin`, `pi/raspberry`, ...). | |
-| `file_mb=N` | Biggest file kept, 1 to 5 MB (LanPulse stores nothing larger). | Cowrie's limit |
+| `file_mb=N` | Biggest file kept, 1 to 20 MB (LanPulse stores nothing larger). | Cowrie's limit |
 | `mem_mb=N`, `cpu_pct=N` | Cap Cowrie's memory (64-4096 MB) and CPU (10-100 %). Useful on a small Pi. | no cap |
 | `keep_days=N` | Delete captured files, replay logs and old logs after N days (Pi install). | 30 |
 | `disk_mb=N` | Keep captures under N MB by deleting the oldest first (Pi install; checked every hour). | no cap |

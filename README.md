@@ -371,7 +371,7 @@ For a more realistic trap, add a **sensor**: a Raspberry Pi, any Linux box or a 
 On the Honeypot tab open **Sensors > Add sensor**, pick the kind and paste the one-line
 command on the sensor. LanPulse then shows every attacker **session** (logins tried, a command-by-command replay, tags
 mapped to MITRE ATT&CK) and every **file** they drop, analysed statically: hashes, file type and CPU, entropy, readable
-strings, addresses and wallets inside, and family hints. Captured files are never run and never offered for download,
+strings, addresses and wallets inside, and family hints. Captured files are never run and never offered for download (you can read a whole file in the dashboard as plain text or a hex listing),
 and addresses are shown defanged. The built-in honeypot above keeps working with or without a sensor. Put the sensor on
 its own network away from your LAN; see [tools/pi-honeypot/README.md](tools/pi-honeypot/README.md).
 

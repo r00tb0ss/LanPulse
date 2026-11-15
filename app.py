@@ -62,7 +62,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.34.19"
+VERSION = "1.35.0"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -2285,6 +2285,11 @@ def build_app(nm: LanPulse) -> FastAPI:
         r = await asyncio.to_thread(nm.honeyan.sample, sha)
         return r if r else JSONResponse({"error": "File not found"}, 404)
 
+    @app.get("/api/honeypot/sample/content")
+    async def honeypot_sample_content(sha: str, offset: int = 0, mode: str = "auto"):
+        r = await asyncio.to_thread(nm.honeyan.sample_content, sha, offset, mode)
+        return r if r else JSONResponse({"error": "File not found"}, 404)
+
     @app.post("/api/honeypot/ingest/hello")
     async def honeypot_hello(request: Request):
         who = sensor_who(request)
@@ -2298,7 +2303,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         who = sensor_who(request)
         if not who:
             return JSONResponse({"error": "Wrong sensor key"}, 403)
-        raw = await read_capped(request, 1_000_000)
+        raw = await read_capped(request, 1_900_000)
         if raw is None:
             return JSONResponse({"error": "Too large"}, 413)
         try:
