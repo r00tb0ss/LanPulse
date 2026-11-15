@@ -7,9 +7,9 @@ alert the moment something inside your network is compromised.
 
 [![Support LanPulse on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20LanPulse-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/r00tb0ss)
 
-> **Source code and releases:** https://gitlab.com/r00tb0ss/lanpulse
+> **Source code and releases:** https://github.com/r00tb0ss/LanPulse
 >
-> **Project page with full feature tour and screenshots:** https://r00tb0ss.gitlab.io/lanpulse/
+> **Project page with full feature tour and screenshots:** https://r00tb0ss.github.io/LanPulse/
 
 ![LanPulse operations-center view](docs/images/noc.png)
 
@@ -32,7 +32,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Trusted devices**: anything new shows a red dashed ring until you trust it
 - **Watched devices**: get an alert when an important device goes offline or comes back
 - **Threats view**: live world attack map of who is hitting your public IP, which LAN device they target, and an investigation panel for each attacker (location, ISP/ASN, abuse score, Shodan data, what they tried, block rules)
-- **Four map views**, opening on **Topology** (internet, gateway, switches, access points, then the devices on each, with Wi-Fi signal, SSIDs, ports and VLAN zones; UniFi is read automatically, any other router works by choosing where a device connects; exports to SVG, PNG, draw.io and CSV) plus rings, tiles and a sortable table
+- **Four map views**, opening on **Topology** (internet, gateway, switches, access points, then the devices on each, with Wi-Fi signal, SSIDs, ports and VLAN zones; UniFi is read automatically, compatible routers and switches can provide read-only SNMP v2c / LLDP neighbour and port data, and manual connections remain available as a fallback; exports to SVG, PNG, draw.io and CSV) plus rings, tiles and a sortable table
 - **Inside-the-LAN detection**: network sweeps (nmap/Fing), router impersonation (ARP spoofing), IP conflicts, port scans against the LanPulse server, and any LAN device touching a honeypot
 - **One-click blocking** of attackers on your UniFi gateway (UDM, UDM Pro, UCG) through an IP group
 - **Research-scanner tagging**: Shodan, Censys, Shadowserver and others are verified by forward-confirmed reverse DNS (plus GreyNoise) and shown in grey
@@ -40,6 +40,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Honeypot**: built-in decoy Telnet, FTP, SMB, RDP and MySQL (optional SSH and HTTP) that log probes and credentials; a hit from inside your LAN flags a likely-compromised device
 - **Honeypot sensors**: add a Raspberry Pi, Linux box or container running Cowrie (SSH/Telnet) with optional FTP and web decoys from a one-line command; every attacker session is recorded and every captured file is analysed statically (never run)
 - **Honeypot investigation intelligence**: grouped credential analytics, captured-file hash intelligence (SHA-256, SHA-1 and MD5), static malware analysis, SSH HASSH client-fingerprint summaries, related-session navigation, score-band filters and sorting for captured sessions and samples, and compact recent-results lists with in-panel View all expansion. HASSH groups SSH client handshakes; it is not proof of a unique identity.
+- **Automated YARA malware matching**: installs YARA with LanPulse, provisions the curated YARA Forge Core rules, verifies and validates each package before activation, checks for updates weekly, preserves your custom rules separately and keeps the last working package if an update fails. Captured files are scanned as bytes and never executed; a match is an investigation lead, not proof of malware.
 - **AI Attack Intelligence**: adds a separate behavioral assessment to detailed honeypot sessions, distinguishing automated activity from potentially AI-assisted behavior, with a score, confidence and evidence. It is deliberately conservative and does not claim AI use from a connection or a few commands; it does not change the existing danger score or automatically block anyone. Requires command/session telemetry such as Cowrie.
 - **Honeypot intelligence workspace**: the Honeypot tab is organized into Overview, Activity, Sessions, Attackers, Campaigns, Artifacts and Sensors. Attacker profiles summarize each source IP with its full session history, campaign correlation links sources that share observable evidence (a captured file, an SSH client fingerprint, an SSH key or a file-transfer host), session timelines are reconstructed from the recorded evidence, and captured shell scripts get static behavior findings with the source lines behind them. All of it describes observed evidence, not who is behind an address.
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
@@ -514,7 +515,7 @@ it last reported and a hint about what to check.
 
 ## Updating
 
-**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse looks at the [latest release](https://gitlab.com/r00tb0ss/lanpulse/-/releases) on GitLab and on GitHub and takes whichever is newer, shows what's new, downloads it, and you click Install. Each release is published with a SHA-256 checksum: LanPulse checks the download against it, and the root-only helper checks the staged file again just before installing. A file that doesn't match is refused. This is an integrity check, not a publisher signature. Only the app's own files are replaced; your data and OpenVAS are untouched.
+**From the dashboard, automatic:** Settings > Update > **Check for updates**. LanPulse checks the [GitHub releases](https://github.com/r00tb0ss/LanPulse/releases), shows what's new, downloads the selected release and lets you click Install. GitHub is the primary source for current releases and the maintained `main` branch. Each release is published with a SHA-256 checksum: LanPulse checks the download against it, and the root-only helper checks the staged file again just before installing. A file that doesn't match is refused. This is an integrity check, not a publisher signature. Only the app's own files are replaced; your data and OpenVAS are untouched.
 
 **From the dashboard, manual:** download `lanpulse.zip` from the latest release, then Settings > Update, choose it, check the version shown, and click Install.
 LanPulse backs up the current version, installs the update, restarts, and reloads the page. If the install fails,
