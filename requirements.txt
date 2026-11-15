@@ -1,3 +1,4 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 scapy>=2.5
+yara-python>=4.5.1
