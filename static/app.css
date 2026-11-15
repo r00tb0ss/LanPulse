@@ -1287,6 +1287,8 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-cmd{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:3px 0;border-bottom:1px dashed #1b2742}
 .pot-cmd:last-child{border-bottom:0}.pot-cmd code{font:12px var(--mono,monospace);color:#bfe9d6;word-break:break-all}
 .pot-cred-chip.ok{border-color:#9f1239;color:#fda4af}
+.pot-file-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.pot-file-more{margin:8px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pot-strings.pot-file{max-height:62vh;word-break:normal;overflow-wrap:anywhere;tab-size:4}.pot-strings.pot-file.hex{white-space:pre;overflow-wrap:normal}
 .pot-strings{max-height:260px;overflow:auto;font:11px var(--mono,monospace);white-space:pre-wrap;word-break:break-all;background:#0a1122;padding:8px;border-radius:8px}
 #potMalDetail{margin-top:14px;border-top:1px solid var(--line,#2a3858);padding-top:12px}
 .pot-sensor-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}

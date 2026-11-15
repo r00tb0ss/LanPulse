@@ -598,7 +598,7 @@ class SensorOptions(unittest.TestCase):
     def test_bad_settings(self):
         for bad in ({"ssh": False, "telnet": False}, {"ssh_port": "80"}, {"ssh_port": "70000"}, {"ssh_port": "2300", "telnet_port": "2300"},
                     {"ssh_port": "22x"}, {"ssh_port": True}, {"hostname": "a;b"}, {"hostname": "1abc"}, {"hostname": "-a"}, {"hostname": "a" * 40},
-                    {"profile": "windows"}, {"login": "x"}, {"file_mb": "9"}, {"mem_mb": "1"}, {"cpu_pct": "1e3"}, {"keep_days": "0"},
+                    {"profile": "windows"}, {"login": "x"}, {"file_mb": "21"}, {"mem_mb": "1"}, {"cpu_pct": "1e3"}, {"keep_days": "0"},
                     {"disk_mb": "99"}, "root", ["ssh"]):
             with self.assertRaises(ValueError, msg=bad):
                 ha.sensor_options(bad)
