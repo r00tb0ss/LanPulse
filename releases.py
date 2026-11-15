@@ -2,7 +2,8 @@
 # Copyright (C) 2026 The LanPulse authors
 """Find and download the newest LanPulse release (used by Settings > Update).
 
-Releases are looked up on GitLab first and on GitHub as a fallback. Only the project's own releases are used, over HTTPS,
+Releases are looked up on both GitLab and GitHub, and the newest version found is used, so an update published on only
+one of them is still found. Only the project's own releases are used, over HTTPS,
 and every redirect must stay on those hosts. The downloaded file goes through the same checks as a manually uploaded zip
 before anything is installed."""
 from __future__ import annotations
@@ -76,12 +77,14 @@ def _parse(kind: str, j: dict) -> dict:
 
 
 def latest(current: str, force: bool = False) -> dict:
-    """Newest published release: {tag, version, notes, newer, asset_url, size, source, error}. Tries each source in turn;
-    the newest version found wins."""
+    """Newest published release: {tag, version, notes, newer, asset_url, size, source, error}. Asks GitLab and GitHub;
+    the newest version found wins, and GitLab is kept when both have the same one."""
     if not force and _cache["data"] and time.time() - _cache["t"] < 600:
         return {**_cache["data"], "newer": version_tuple(_cache["data"]["version"]) > version_tuple(current)}
-    best, errors, limited = None, [], False
+    best, errors, limited, pages_answered = None, [], False, False
     for label, kind, api in SOURCES:
+        if kind == "gitlab" and pages_answered:
+            continue    # Pages already gave GitLab's answer; don't spend the rate-limited API on the same thing
         try:
             with _open(api, 15) as r:
                 d = _parse(kind, json.loads(r.read(2_000_000)))
@@ -114,7 +117,7 @@ def latest(current: str, force: bool = False) -> dict:
         if best is None or version_tuple(d["version"]) > version_tuple(best["version"]):
             best = d
         if kind == "pages":
-            break   # Pages answered; don't spend the rate-limited API
+            pages_answered = True
     if best is None and limited and _cache["data"]:
         return {**_cache["data"], "newer": version_tuple(_cache["data"]["version"]) > version_tuple(current)}
     if best is None:

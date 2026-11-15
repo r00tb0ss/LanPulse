@@ -121,7 +121,8 @@ class ReleaseSources(unittest.TestCase):
             releases._open = orig
             releases._cache.update(t=0.0, data=None)
         self.assertEqual((r["version"], r["source"], r["newer"]), ("1.25.37", "GitLab Pages", True))
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 2)                              # Pages, then GitHub
+        self.assertFalse(any("/api/v4/" in c for c in calls))       # the GitLab API is not asked once Pages answers
 
     def test_only_release_hosts_are_allowed(self):
         with self.assertRaises(Exception):
