@@ -27,7 +27,7 @@ CDN=https://cdnjs.cloudflare.com/ajax/libs
 echo "==> Installing system packages"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-venv python3-pip nmap avahi-utils \
-  samba-common-bin curl openssl unzip >/dev/null
+  samba-common-bin curl openssl unzip build-essential python3-dev >/dev/null
 
 # ---- upgrade from the old NetMapper name: keep devices, history, settings, login and certificates
 if [[ -d /opt/netmapper/data && ! -d "$DEST/data" ]]; then
@@ -121,6 +121,49 @@ cat > /etc/cron.monthly/lanpulse-geoip <<'CRON'
 /usr/local/sbin/lanpulse-geoip >/dev/null 2>&1 && systemctl restart lanpulse
 CRON
 chmod +x /etc/cron.monthly/lanpulse-geoip
+
+# ---- Managed YARA rules (YARA Forge Core). Custom rules in data/yara-rules stay untouched.
+echo "==> Installing managed YARA rule updater"
+install -m 755 "$DEST/yara_manager.py" /usr/local/lib/lanpulse-yara-manager.py
+cat > /usr/local/sbin/lanpulse-yara-update <<'YARA'
+#!/usr/bin/env bash
+set -euo pipefail
+exec /opt/lanpulse/venv/bin/python /usr/local/lib/lanpulse-yara-manager.py --data-dir /opt/lanpulse/data "$@"
+YARA
+chmod 755 /usr/local/sbin/lanpulse-yara-update
+cat > /etc/systemd/system/lanpulse-yara-update.service <<'UNIT'
+[Unit]
+Description=Update LanPulse managed YARA Forge Core rules
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lanpulse-yara-update
+User=root
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/lanpulse/data
+TimeoutStartSec=5min
+UNIT
+cat > /etc/systemd/system/lanpulse-yara-update.timer <<'UNIT'
+[Unit]
+Description=Weekly LanPulse YARA Forge rule updates
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=2h
+Persistent=true
+Unit=lanpulse-yara-update.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now lanpulse-yara-update.timer >/dev/null 2>&1
 
 echo "==> Creating Python environment"
 python3 -m venv "$DEST/venv"
