@@ -62,7 +62,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.36.0"
+VERSION = "1.36.1"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -2279,6 +2279,10 @@ def build_app(nm: LanPulse) -> FastAPI:
     @app.get("/api/honeypot/samples")
     async def honeypot_samples(limit: int = 100):
         return await asyncio.to_thread(nm.honeyan.samples, max(1, min(limit, 2000)))
+
+    @app.get("/api/honeypot/yara/status")
+    async def honeypot_yara_status():
+        return await asyncio.to_thread(nm.honeyan.yara.status)
 
     @app.get("/api/honeypot/sample")
     async def honeypot_sample(sha: str):
