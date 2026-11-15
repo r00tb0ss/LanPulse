@@ -41,6 +41,7 @@ class YaraRules:
         self._errors: list[str] = []
         self._managed_files = 0
         self._custom_files = 0
+        self._loaded_files = 0
 
     def _files(self):
         managed, custom = [], []
@@ -80,12 +81,14 @@ class YaraRules:
         if label == "YARA Forge Core":
             try:
                 self._rules.append((label, yara.compile(filepaths=paths, includes=False)))
+                self._loaded_files += len(paths)
             except Exception as e:
                 self._errors.append(f"{label}: {_short(e, 180)}")
             return total
         for name, path in paths.items():
             try:
                 self._rules.append((pathlib.Path(path).name, yara.compile(filepath=path, includes=False)))
+                self._loaded_files += 1
             except Exception as e:
                 self._errors.append(f"{pathlib.Path(path).name}: {_short(e, 160)}")
         return total
@@ -101,6 +104,7 @@ class YaraRules:
             return
         self._sig, self._rules, self._errors = sig, [], []
         self._managed_files, self._custom_files = len(managed), len(custom)
+        self._loaded_files = 0
         if yara is None:
             return
         total = self._compile_group(managed, "YARA Forge Core", 0)
@@ -119,7 +123,7 @@ class YaraRules:
             pass
         return {"available": yara is not None, "files": self._managed_files + self._custom_files,
                 "managed_files": self._managed_files, "custom_files": self._custom_files,
-                "loaded": len(self._rules), "errors": self._errors[:20], "managed": meta}
+                "loaded": self._loaded_files, "groups": len(self._rules), "errors": self._errors[:20], "managed": meta}
 
     def scan(self, data: bytes) -> dict:
         out = self.status()
