@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LanPulse — real-time LAN security dashboard</title>
-<meta name="description" content="LanPulse is a self-hosted, real-time map of your home or lab network: live device and traffic map, attack map, built-in honeypot with behavioral attack intelligence, vulnerability scanning with OpenVAS, DNS and service monitoring, verified data backup and restore, red-team tooling, attacker OSINT, compromised-device detection and a network security score.">
+<meta name="description" content="LanPulse is a self-hosted, real-time map of your home or lab network: live device and traffic map, attack map, built-in honeypot with behavioral attack intelligence and automated YARA malware matching, vulnerability scanning with OpenVAS, DNS and service monitoring, verified data backup and restore, red-team tooling, attacker OSINT, compromised-device detection and a network security score.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -139,7 +139,7 @@
 </div></div>
 
 <header class="hero"><div class="wrap">
-  <span class="pill"><span class="dot"></span>Self-hosted · real-time · open source (GPL-2.0)</span>
+  <span class="pill"><span class="dot"></span>Self-hosted · real-time · open source (GPL-2.0) · automated YARA analysis</span>
   <h1>See your whole network.<br><span class="g">Catch what's attacking it.</span></h1>
   <p class="lead">LanPulse is a real-time map and security dashboard for your home or lab network. It discovers every
     device and shows how they connect, with live traffic on each link. It watches attacks land on a world map, catches
@@ -260,6 +260,7 @@
         <li><b>Add a sensor</b> (Raspberry Pi, Linux box or container) with one command: a Cowrie SSH/Telnet trap plus optional <b>FTP and web decoys</b> that keep what attackers upload. Every session is replayed command by command, and every captured file is analysed statically — never run.</li>
         <li><b>AI Attack Intelligence</b> — detailed Cowrie sessions get a separate behavioral assessment with classification, intelligence score, confidence and visible evidence. It distinguishes automation from potentially AI-assisted behavior conservatively; it does not alter the existing danger score or auto-block. Command/session telemetry is required.</li>
         <li><b>Investigation intelligence</b> groups credential analytics and adds captured-file hash intelligence (SHA-256, SHA-1 and MD5), static analysis, metadata, entropy, related sessions and VirusTotal lookup.</li>
+        <li><b>Automated YARA malware matching</b> — YARA Forge Core rules are installed with LanPulse, verified and compiled before activation, then checked for updates weekly. Add your own rules separately; failed updates preserve the last working managed package. Captured files are scanned as data and never executed. A match is an investigation lead, not proof of malware.</li>
         <li><b>SSH HASSH summaries</b> group client handshakes with first/last seen, session counts, source context, client software and related-session navigation. A fingerprint is not proof of a unique identity.</li>
         <li>Long investigation lists stay compact by default, with <b>View all</b> expansion inside bounded, scrollable panels.</li>
         <li><b>Intelligence workspace</b> — Overview, Activity, Sessions, Attackers, Campaigns, Artifacts and Sensors each have their own section, with attack-type filters and the hosts behind every decoy hit.</li>
@@ -329,6 +330,7 @@
     <div class="card"><div class="ic">💾</div><h4>Verified data backups</h4><p>Create a verified backup from Settings, then list and download completed archives. SQLite snapshots are consistent; restore is a deliberate maintenance operation that verifies the archive and preserves the previous data directory. Creating a backup needs a dashboard login. No automatic schedule is enabled.</p></div>
     <div class="card"><div class="ic">🍯</div><h4>Honeypot</h4><p>Decoy services that log every probe and the credentials tried; a hit from inside your LAN flags a likely-compromised device.</p></div>
     <div class="card"><div class="ic">🧪</div><h4>Sensors and malware analysis</h4><p>Add a Pi or container as a Cowrie trap with FTP and web decoys. Attacker sessions are recorded and dropped files are analysed statically, never run.</p></div>
+    <div class="card"><div class="ic">🧬</div><h4>Automated YARA detection</h4><p>YARA Forge Core rules are installed and refreshed weekly. The managed package is verified and validated before activation; custom rules are kept separate and failed updates preserve the last working set.</p></div>
     <div class="card"><div class="ic">🖥</div><h4>Pick the operating system</h4><p>When a scan can't tell Windows 11 from Server 2019, choose the real OS from a drop-down of Windows and Linux versions. Your choice sticks.</p></div>
     <div class="card"><div class="ic">✅</div><h4>Confirmed vulnerabilities</h4><p>Safe active checks prove flaws that version matching misses, like missing SMB patches on old Windows.</p></div>
     <div class="card"><div class="ic">🤖</div><h4>AI analyst (bring your own)</h4><p>Ask questions in plain language with Ollama, an OpenAI-compatible server or Anthropic. Read-only, grounded in your data.</p></div>
@@ -543,7 +545,7 @@ https://&lt;the-box-ip&gt;:8080</pre>
       install from Settings &gt; Update. Full setup notes are in the README.</p>
   </div>
   <div class="center" style="margin-top:30px">
-    <a class="btn primary" href="https://gitlab.com/r00tb0ss/lanpulse">View the repository</a>
+    <a class="btn primary" href="https://github.com/r00tb0ss/LanPulse">View the GitHub repository</a>
     <a class="btn" href="https://ko-fi.com/r00tb0ss" rel="noopener">&#9749; Support LanPulse on Ko-fi</a>
   </div>
   
