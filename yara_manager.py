@@ -32,7 +32,7 @@ ASSET = "yara-forge-rules-core.zip"
 MAX_ARCHIVE = 20 * 1024 * 1024
 MAX_EXPANDED = 50 * 1024 * 1024
 MAX_RULE_FILES = 6000
-MAX_RULE_FILE = 2 * 1024 * 1024
+MAX_RULE_FILE = 8 * 1024 * 1024
 USER_AGENT = "LanPulse-YARA-Manager"
 
 
