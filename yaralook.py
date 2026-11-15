@@ -16,7 +16,7 @@ import pathlib
 log = logging.getLogger("lanpulse.yaralook")
 
 MAX_RULE_FILES = 6000
-MAX_RULE_BYTES = 2_000_000
+MAX_RULE_BYTES = 8 * 1024 * 1024
 MAX_RULE_TOTAL = 50_000_000
 SCAN_SECONDS = 10
 MAX_MATCHES = 100
