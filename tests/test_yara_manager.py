@@ -30,6 +30,19 @@ class YaraManagerTests(unittest.TestCase):
             with self.assertRaises(yara_manager.UpdateError):
                 yara_manager._safe_extract_rules(bad, root / "bad-stage")
 
+    def test_accepts_rule_file_larger_than_old_two_mib_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            archive, stage = root / "large.zip", root / "stage"
+            stage.mkdir()
+            payload = b"x" * (2 * 1024 * 1024 + 1)
+            with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as z:
+                z.writestr("packages/core/large.yar", payload)
+            files, total = yara_manager._safe_extract_rules(archive, stage)
+            self.assertEqual(len(files), 1)
+            self.assertEqual(files[0].stat().st_size, len(payload))
+            self.assertEqual(total, len(payload))
+
     def test_empty_archive_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
