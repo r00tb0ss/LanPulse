@@ -169,6 +169,10 @@ echo "==> Creating Python environment"
 python3 -m venv "$DEST/venv"
 "$DEST/venv/bin/pip" install -q --upgrade pip
 "$DEST/venv/bin/pip" install -q -r "$DEST/requirements.txt"
+# Populate YARA Forge Core on first install/upgrade; keep the install working if upstream is temporarily unavailable.
+if ! /usr/local/sbin/lanpulse-yara-update; then
+  echo "    warning: YARA rules could not be downloaded now; the weekly updater will retry."
+fi
 
 # ---- login
 if [[ ! -f "$DEST/data/auth.json" && -z "$UPGRADE" ]]; then
