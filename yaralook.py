@@ -1,31 +1,29 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 The LanPulse authors
-"""
-Optional YARA rule matching for captured honeypot files.
+"""Bounded, static YARA matching for captured honeypot files.
 
-Off unless two things are true: the `yara-python` package is installed, and there are rule files in the
-`yara-rules` folder inside LanPulse's data folder. LanPulse never downloads rules and never takes a rule from a
-capture; only files the owner put in that folder are used.
-
-SAFETY: a captured file is only ever handed to the YARA scanner as bytes. Nothing is executed. Rule files are read
-with `include` directives disabled, so a rule cannot pull in other files from the disk, and every scan has a time limit.
+Managed YARA Forge rules live under yara-rules/managed and are compiled as a
+single package so cross-file rule dependencies work. Owner-created rules remain
+outside that folder and are compiled independently. Captured files are bytes;
+they are never executed. Rule includes are disabled.
 """
 from __future__ import annotations
 
+import json
 import logging
 import pathlib
 
 log = logging.getLogger("lanpulse.yaralook")
 
-MAX_RULE_FILES = 200
-MAX_RULE_BYTES = 1_000_000      # one rule file
-MAX_RULE_TOTAL = 20_000_000     # all rule files together
+MAX_RULE_FILES = 6000
+MAX_RULE_BYTES = 2_000_000
+MAX_RULE_TOTAL = 50_000_000
 SCAN_SECONDS = 10
-MAX_MATCHES = 25
+MAX_MATCHES = 100
 
-try:                            # the package is optional
+try:
     import yara
-except Exception:               # not installed, or it failed to load
+except Exception:
     yara = None
 
 
@@ -34,54 +32,96 @@ def _short(v, n: int = 200) -> str:
 
 
 class YaraRules:
-    """Loads rule files from one folder, compiles each separately (so one broken file cannot hide the rest) and caches
-    the result until a file in the folder changes."""
+    """Load and cache managed and custom rules, refreshing when their files change."""
 
     def __init__(self, folder: pathlib.Path):
         self.folder = pathlib.Path(folder)
         self._sig = None
-        self._rules: list = []          # [(file name, compiled rules)]
+        self._rules: list = []
         self._errors: list[str] = []
+        self._managed_files = 0
+        self._custom_files = 0
 
-    def _files(self) -> list[pathlib.Path]:
+    def _files(self):
+        managed, custom = [], []
         try:
-            found = [p for p in sorted(self.folder.iterdir())
-                     if p.suffix.lower() in (".yar", ".yara") and p.is_file() and not p.is_symlink()]
+            paths = sorted(self.folder.rglob("*"))
         except OSError:
-            return []
-        return found[:MAX_RULE_FILES]
+            return managed, custom
+        for p in paths:
+            try:
+                if p.is_symlink() or not p.is_file() or p.suffix.lower() not in (".yar", ".yara"):
+                    continue
+                rel = p.relative_to(self.folder)
+                (managed if rel.parts and rel.parts[0] == "managed" else custom).append(p)
+            except (OSError, ValueError):
+                continue
+        return managed[:MAX_RULE_FILES], custom[:MAX_RULE_FILES]
+
+    def _compile_group(self, files, label, total):
+        if not files:
+            return total
+        if len(files) > MAX_RULE_FILES:
+            self._errors.append(f"{label}: too many rule files")
+            return total
+        paths = {}
+        for i, p in enumerate(files):
+            try:
+                size = p.stat().st_size
+                if size <= 0 or size > MAX_RULE_BYTES or total + size > MAX_RULE_TOTAL:
+                    self._errors.append(f"{p.name}: skipped, too large or package limit reached")
+                    continue
+                total += size
+                paths[f"lp_{i:05d}"] = str(p)
+            except OSError:
+                self._errors.append(f"{p.name}: cannot read rule file")
+        if not paths:
+            return total
+        if label == "YARA Forge Core":
+            try:
+                self._rules.append((label, yara.compile(filepaths=paths, includes=False)))
+            except Exception as e:
+                self._errors.append(f"{label}: {_short(e, 180)}")
+            return total
+        for name, path in paths.items():
+            try:
+                self._rules.append((pathlib.Path(path).name, yara.compile(filepath=path, includes=False)))
+            except Exception as e:
+                self._errors.append(f"{pathlib.Path(path).name}: {_short(e, 160)}")
+        return total
 
     def _load(self):
-        files = self._files()
+        managed, custom = self._files()
+        all_files = managed + custom
         try:
-            sig = tuple((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in files)
+            sig = tuple((str(p.relative_to(self.folder)), p.stat().st_mtime_ns, p.stat().st_size) for p in all_files)
         except OSError:
             sig = ()
         if sig == self._sig:
             return
         self._sig, self._rules, self._errors = sig, [], []
+        self._managed_files, self._custom_files = len(managed), len(custom)
         if yara is None:
             return
-        total = 0
-        for p in files:
-            size = p.stat().st_size
-            total += size
-            if size > MAX_RULE_BYTES or total > MAX_RULE_TOTAL:
-                self._errors.append(f"{p.name}: skipped, too large")
-                continue
-            try:
-                self._rules.append((p.name, yara.compile(filepath=str(p), includes=False)))
-            except Exception as e:                  # a syntax error in one file
-                self._errors.append(f"{p.name}: {_short(e, 160)}")
+        total = self._compile_group(managed, "YARA Forge Core", 0)
+        self._compile_group(custom, "custom rule", total)
 
     def status(self) -> dict:
         self._load()
-        return {"available": yara is not None, "files": len(self._sig or ()), "loaded": len(self._rules),
-                "errors": self._errors[:10]}
+        meta = {}
+        try:
+            p = self.folder.parent / "yara-status.json"
+            obj = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(obj, dict):
+                meta = {k: obj.get(k) for k in ("package", "version", "status", "rule_count", "rule_files",
+                                                   "updated_at", "checked_at", "last_error") if obj.get(k) is not None}
+        except (OSError, ValueError):
+            pass
+        return {"available": yara is not None, "files": self._managed_files + self._custom_files,
+                "managed_files": self._managed_files, "custom_files": self._custom_files,
+                "loaded": len(self._rules), "errors": self._errors[:20], "managed": meta}
 
     def scan(self, data: bytes) -> dict:
-        """Rules matched by `data`: {available, files, loaded, errors, matches:[{rule, file, tags, description, hits}]}.
-        An empty result when YARA or the rules are not there."""
         out = self.status()
         out["matches"] = []
         if yara is None or not self._rules:
@@ -89,7 +129,7 @@ class YaraRules:
         for name, rules in self._rules:
             try:
                 found = rules.match(data=data, timeout=SCAN_SECONDS)
-            except Exception as e:                  # timeout or a scanner error: report, keep going
+            except Exception as e:
                 out["errors"].append(f"{name}: scan stopped ({_short(e, 80)})")
                 continue
             for m in found:
