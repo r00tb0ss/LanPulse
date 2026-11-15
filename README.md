@@ -371,7 +371,7 @@ For a more realistic trap, add a **sensor**: a Raspberry Pi, any Linux box or a 
 On the Honeypot tab open **Sensors > Add sensor**, pick the kind and paste the one-line
 command on the sensor. LanPulse then shows every attacker **session** (logins tried, a command-by-command replay, tags
 mapped to MITRE ATT&CK) and every **file** they drop, analysed statically: hashes, file type and CPU, entropy, readable
-strings, addresses and wallets inside, and family hints. Captured files are never run and never offered for download (you can read a whole file in the dashboard as plain text or a hex listing; content hidden with base64 or `\x` escapes is decoded for you, Linux programs show their libraries and imported functions, and optional YARA rules you provide are matched),
+strings, addresses and wallets inside, and family hints. Captured files are never run and never offered for download (you can read a whole file in the dashboard as plain text or a hex listing; content hidden with base64 or `\x` escapes is decoded for you, Linux programs show their libraries and imported functions, and YARA Forge Core rules are installed and updated automatically, with your own custom rules supported separately),
 and addresses are shown defanged. The built-in honeypot above keeps working with or without a sensor. Put the sensor on
 its own network away from your LAN; see [tools/pi-honeypot/README.md](tools/pi-honeypot/README.md).
 
@@ -395,7 +395,7 @@ The Honeypot tab is split into sections:
 - **Sensors**: add, check and revoke sensors.
 - **Score filters and sorting**: narrow captured sessions and malware samples by score band (0–19 Low, 20–39 Guarded, 40–59 Elevated, 60–79 High, 80–100 Critical), then sort by newest, highest score or lowest score. This helps triage large collections; a score is an assessment, not proof of compromise.
 
-Captured files are only ever inspected as bytes. They are never run.
+Captured files are only ever inspected as bytes. They are never run. YARA Forge Core is installed with LanPulse, checked during installation, and refreshed weekly by a systemd timer. The managed package is SHA-256 verified and compiled before activation; failed updates preserve the last working rule set. Your own `.yar` and `.yara` files can be placed in `/opt/lanpulse/data/yara-rules/` (outside the `managed` subfolder) and are preserved during managed updates. The Honeypot captured-file view shows YARA engine status, managed/custom rule counts, package version and update errors. A YARA match is a lead for investigation, not a verdict.
 
 ![Honeypot](docs/images/honeypot.png)
 
