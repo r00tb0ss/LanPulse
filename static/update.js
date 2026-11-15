@@ -48,7 +48,7 @@ function drawUpdate(body, u, staged = u.staged, note = "") {
       </div>` : ""}
     ${!busy ? `<div class="upd-latest" id="updLatest">
         <button class="btn" id="updCheck" ${blocked ? "disabled" : ""}><i class="fa-solid fa-cloud-arrow-down"></i>Check for updates</button>
-        <span class="muted">Looks at the LanPulse releases on GitLab (and GitHub). Or choose a file yourself below.</span></div>` : ""}
+        <span class="muted">Looks at the LanPulse releases on GitLab and GitHub and offers the newest. Or choose a file yourself below.</span></div>` : ""}
     ${!busy ? `<label class="upd-drop ${blocked ? "off" : ""}" id="updDrop">
         <input type="file" id="updFile" accept=".zip,application/zip" ${blocked ? "disabled" : ""}>
         <i class="fa-solid fa-file-zipper"></i>

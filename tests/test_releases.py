@@ -3,6 +3,7 @@
 """Release metadata and download integrity checks."""
 import hashlib
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,6 +34,54 @@ class ReleaseChecksumTests(unittest.TestCase):
         })
         self.assertEqual(parsed["asset_url"], "https://gitlab.com/lanpulse.zip")
         self.assertEqual(parsed["checksum_url"], "https://gitlab.com/lanpulse.zip.sha256")
+
+    SUM_URL = "https://github.com/lanpulse.zip.sha256"
+
+    def tearDown(self):
+        releases._cache.update(t=0.0, data=None)
+
+    def _sources(self, answers):
+        """Make latest() see the given answer per source; an Exception stands for a source that can't be reached."""
+        asked = []
+
+        def fake_open(url, timeout):
+            if url == self.SUM_URL:
+                return io.BytesIO(b"b" * 64 + b"  lanpulse.zip\n")
+            kind = next(k for _l, k, u in releases.SOURCES if u == url)
+            asked.append(kind)
+            if isinstance(answers[kind], Exception):
+                raise answers[kind]
+            return io.BytesIO(json.dumps(answers[kind]).encode())
+        return asked, patch.object(releases, "_open", side_effect=fake_open)
+
+    @staticmethod
+    def _pages(v):
+        return {"tag": "v" + v, "version": v, "asset_url": "https://gitlab.com/lanpulse.zip", "sha256": "a" * 64}
+
+    def _github(self, v):
+        return {"tag_name": "v" + v, "assets": [
+            {"name": "lanpulse.zip", "browser_download_url": "https://github.com/lanpulse.zip"},
+            {"name": "lanpulse.zip.sha256", "browser_download_url": self.SUM_URL}]}
+
+    def test_a_newer_release_on_github_is_found_when_gitlab_is_behind(self):
+        asked, opened = self._sources({"pages": self._pages("1.35.0"), "github": self._github("1.35.2")})
+        with opened:
+            r = releases.latest("1.35.0", force=True)
+        self.assertEqual((r["version"], r["source"], r["newer"], r["sha256"]), ("1.35.2", "GitHub", True, "b" * 64))
+        self.assertEqual(asked, ["pages", "github"])               # GitLab's API is not asked again after Pages answers
+
+    def test_gitlab_is_kept_when_github_has_the_same_or_older_or_is_down(self):
+        for github in (self._github("1.35.2"), self._github("1.35.0"), OSError("down")):
+            asked, opened = self._sources({"pages": self._pages("1.35.2"), "github": github})
+            with opened:
+                r = releases.latest("1.35.0", force=True)
+            self.assertEqual((r["version"], r["source"], r["sha256"]), ("1.35.2", "GitLab Pages", "a" * 64))
+
+    def test_github_alone_is_enough_when_gitlab_cannot_be_reached(self):
+        asked, opened = self._sources({"pages": OSError("down"), "gitlab": OSError("down"), "github": self._github("1.35.2")})
+        with opened:
+            r = releases.latest("1.35.1", force=True)
+        self.assertEqual((r["version"], r["source"], asked), ("1.35.2", "GitHub", ["pages", "gitlab", "github"]))
 
     def test_download_accepts_matching_checksum(self):
         payload = b"trusted release archive"
