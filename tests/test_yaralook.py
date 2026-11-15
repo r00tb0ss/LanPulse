@@ -87,6 +87,13 @@ class Rules(unittest.TestCase):
             (self.dir / "b.yar").write_text("rule b { condition: true }")
             self.assertEqual(r.status()["loaded"], 2)
 
+    def test_rule_file_larger_than_old_two_megabyte_limit_is_loaded(self):
+        (self.dir / "large.yar").write_bytes(b"x" * (2 * 1024 * 1024 + 1))
+        with patch.object(yaralook, "yara", FAKE):
+            s = yaralook.YaraRules(self.dir).status()
+        self.assertEqual((s["files"], s["loaded"]), (1, 1))
+        self.assertEqual(s["errors"], [])
+
     def test_oversized_and_linked_rule_files_are_skipped(self):
         (self.dir / "big.yar").write_bytes(b"x" * (yaralook.MAX_RULE_BYTES + 1))
         (self.dir / "real.txt").write_text("x")
