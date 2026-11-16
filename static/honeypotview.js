@@ -22,7 +22,7 @@ let potSection = (() => {
 })();
 
 function setPotSection(section, persist = true) {
-  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors"];
+  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors", "yara"];
   potSection = valid.includes(section) ? section : "overview";
   const investigation = ["sessions", "profiles", "campaigns", "artifacts", "sensors"].includes(potSection);
   const tabs = $("potSectionTabs");
