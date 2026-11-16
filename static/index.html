@@ -35,6 +35,7 @@
     <button id="vSvc" role="tab" aria-selected="false" title="Services"><i class="fa-solid fa-heart-pulse"></i><span>Services</span><b class="tbadge hidden" id="svcBadge">0</b></button>
     <button id="vRed" role="tab" aria-selected="false" title="Red Team"><i class="fa-solid fa-crosshairs"></i><span>Red Team</span></button>
     <button id="vPot" role="tab" aria-selected="false" title="Honeypot"><i class="fa-solid fa-jar"></i><span>Honeypot</span><b class="tbadge hidden" id="potBadge">0</b></button>
+    <button id="vYara" role="tab" aria-selected="false" title="YARA Scanner"><i class="fa-solid fa-dna"></i><span>YARA</span></button>
   </div>
   <div class="chips net-only">
     <span class="chip"><i class="fa-solid fa-sitemap"></i><span id="mSubnet">—</span></span>
@@ -324,6 +325,23 @@
   </div>
 </section>
 
+<section class="tview hidden" id="yaraView" aria-label="YARA Scanner">
+  <div class="v-head"><div><h2><i class="fa-solid fa-dna"></i>YARA Scanner</h2>
+    <span class="muted">rule engine health and detections from captured honeypot files</span></div>
+    <div class="v-tools">
+      <button class="btn sm ghost" id="yaraRefresh"><i class="fa-solid fa-rotate"></i>Refresh</button>
+      <button class="btn sm ghost" id="yaraArtifacts"><i class="fa-solid fa-folder-open"></i>Honeypot artifacts</button>
+    </div></div>
+  <div class="v-note" id="yaraNotice">Loading YARA engine status…</div>
+  <div class="t-kpis four" id="yaraKpis"></div>
+  <div class="v-grid two">
+    <div class="t-card wide"><h4><span>Captured-file scan results</span><span class="muted" id="yaraFilesMeta">latest files</span></h4>
+      <div id="yaraResults"><div class="muted">Loading captured-file results…</div></div></div>
+    <div class="t-card"><h4><span>Rule package</span></h4><div id="yaraPackage"></div></div>
+  </div>
+  <p class="v-foot">YARA checks captured files as data only; LanPulse never executes uploaded or captured samples. A rule match is an investigation lead, not proof of malware. Custom rules currently remain managed on the server under <code>/opt/lanpulse/data/yara-rules/</code>; managed Forge Core updates run automatically each week.</p>
+</section>
+
   <aside class="panel" id="panel" aria-hidden="true">
     <button class="icon-btn close" id="btnClose" title="Close"><i class="fa-solid fa-xmark"></i></button>
     <div id="panelBody"></div>
@@ -416,6 +434,7 @@
 <script src="/static/redteamview.js"></script>
 <script src="/static/honeypotview.js"></script>
 <script src="/static/malwareview.js"></script>
+<script src="/static/yara.js"></script>
 <script src="/static/score.js"></script>
 <script src="/static/noc.js"></script>
 <script src="/static/analyst.js"></script>
