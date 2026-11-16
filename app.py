@@ -2297,11 +2297,14 @@ def build_app(nm: LanPulse) -> FastAPI:
                 task = {}
         except (OSError, ValueError):
             task = {}
-        timer = await asyncio.to_thread(subprocess.run, ["systemctl", "is-enabled", "lanpulse-yara-update.timer"],
-                                        capture_output=True, text=True, timeout=5)
+        try:
+            timer = await asyncio.to_thread(subprocess.run, ["systemctl", "is-enabled", "lanpulse-yara-update.timer"],
+                                            capture_output=True, text=True, timeout=5)
+            task["schedule_enabled"] = timer.returncode == 0 and timer.stdout.strip() == "enabled"
+        except (OSError, subprocess.SubprocessError):
+            task["schedule_enabled"] = False
         task["helper_installed"] = yara_helper_unit.exists() and not nm.args.demo
         task["login"] = nm.auth.enabled
-        task["schedule_enabled"] = timer.returncode == 0 and timer.stdout.strip() == "enabled"
         try:
             task["log"] = (yara_manage_dir / "log.txt").read_text(encoding="utf-8", errors="replace")[-12000:]
         except OSError:
@@ -2329,14 +2332,15 @@ def build_app(nm: LanPulse) -> FastAPI:
             current = {}
         if current.get("state") in ("installing", "queued") or request_file.exists():
             return JSONResponse({"error": "A YARA setup task is already in progress."}, 409)
-        tmp = yara_manage_dir / "request.tmp"
-        tmp.write_text(json.dumps({"action": action, "t": time.time()}), encoding="utf-8")
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, request_file)
         status_tmp = yara_manage_dir / "status.json.tmp"
         status_tmp.write_text(json.dumps({"state": "queued", "message": "Starting YARA task…", "t": time.time()}), encoding="utf-8")
         os.chmod(status_tmp, 0o600)
         os.replace(status_tmp, status_file)
+        # Publish the watched request last, so the helper cannot finish before the queued state is written.
+        tmp = yara_manage_dir / "request.tmp"
+        tmp.write_text(json.dumps({"action": action, "t": time.time()}), encoding="utf-8")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, request_file)
         log.info("YARA %s requested from the dashboard", action)
         return {"ok": True}
 
