@@ -2284,6 +2284,61 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def honeypot_yara_status():
         return await asyncio.to_thread(nm.honeyan.yara.status)
 
+    # YARA management is delegated to a root-owned systemd path helper. The web process
+    # can only request a small allow-listed action; it never runs pip or systemctl itself.
+    yara_manage_dir = Path(nm.data_dir) / "yara"
+    yara_helper_unit = Path("/etc/systemd/system/lanpulse-yara.path")
+
+    @app.get("/api/yara/manage/status")
+    async def yara_manage_status():
+        try:
+            task = json.loads((yara_manage_dir / "status.json").read_text(encoding="utf-8"))
+            if not isinstance(task, dict):
+                task = {}
+        except (OSError, ValueError):
+            task = {}
+        timer = await asyncio.to_thread(subprocess.run, ["systemctl", "is-enabled", "lanpulse-yara-update.timer"],
+                                        capture_output=True, text=True, timeout=5)
+        task["helper_installed"] = yara_helper_unit.exists() and not nm.args.demo
+        task["schedule_enabled"] = timer.returncode == 0 and timer.stdout.strip() == "enabled"
+        try:
+            task["log"] = (yara_manage_dir / "log.txt").read_text(encoding="utf-8", errors="replace")[-12000:]
+        except OSError:
+            task["log"] = ""
+        return task
+
+    @app.post("/api/yara/manage")
+    async def yara_manage(request: Request):
+        body = await request.json()
+        action = body.get("action") if isinstance(body, dict) else ""
+        if action not in ("install", "repair", "update", "schedule_on", "schedule_off"):
+            return JSONResponse({"error": "Unknown YARA action."}, 400)
+        if nm.args.demo:
+            return JSONResponse({"error": "Not available in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a dashboard login first. YARA setup changes system packages and services, so administrator authentication is required."}, 403)
+        if not yara_helper_unit.exists():
+            return JSONResponse({"error": "The YARA Settings helper isn't installed yet. Re-run install.sh --upgrade from the terminal once."}, 400)
+        yara_manage_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        request_file = yara_manage_dir / "request"
+        status_file = yara_manage_dir / "status.json"
+        try:
+            current = json.loads(status_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            current = {}
+        if current.get("state") in ("installing", "queued") or request_file.exists():
+            return JSONResponse({"error": "A YARA setup task is already in progress."}, 409)
+        tmp = yara_manage_dir / "request.tmp"
+        tmp.write_text(json.dumps({"action": action, "t": time.time()}), encoding="utf-8")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, request_file)
+        status_tmp = yara_manage_dir / "status.json.tmp"
+        status_tmp.write_text(json.dumps({"state": "queued", "message": "Starting YARA task…", "t": time.time()}), encoding="utf-8")
+        os.chmod(status_tmp, 0o600)
+        os.replace(status_tmp, status_file)
+        log.info("YARA %s requested from the dashboard", action)
+        return {"ok": True}
+
     @app.get("/api/honeypot/sample")
     async def honeypot_sample(sha: str):
         r = await asyncio.to_thread(nm.honeyan.sample, sha)
