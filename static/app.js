@@ -639,6 +639,8 @@ function renderSettings() {
     renderUnifiSettings(body);
   } else if (setTab === "scanner") {
     renderScanner(body);
+  } else if (setTab === "yara") {
+    renderYaraSettings(body);
   } else if (setTab === "backup") {
     renderBackupSettings(body);
   } else if (setTab === "update") {
