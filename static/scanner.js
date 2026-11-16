@@ -92,3 +92,87 @@ function drawScanner(body, s) {
     if (r) { toast("Scan started"); renderScanner(body); }
   });
 }
+
+
+/* Settings > YARA: install/repair the engine and manage the verified Forge Core rule feed. */
+let yaraSettingsPoll = null;
+function yaraSettingsOpen() {
+  return !$("settings").classList.contains("hidden") && setTab === "yara";
+}
+async function renderYaraSettings(body) {
+  clearInterval(yaraSettingsPoll);
+  body.innerHTML = `<div class="loading-line"><i class="fa-solid fa-spinner fa-spin"></i>Checking YARA…</div>`;
+  const [engine, task] = await Promise.all([
+    api("/api/honeypot/yara/status", "GET"),
+    api("/api/yara/manage/status", "GET")
+  ]);
+  if (!yaraSettingsOpen()) return;
+  if (!engine || !task) {
+    body.innerHTML = `<p class="hint">Couldn't retrieve YARA status. Check the LanPulse service and try again.</p>`;
+    return;
+  }
+  drawYaraSettings(body, engine, task);
+}
+function drawYaraSettings(body, engine, task) {
+  const running = ["queued", "installing"].includes(task.state);
+  const available = !!engine.available;
+  const helper = !!task.helper_installed;
+  const login = !!task.login;
+  const schedule = !!task.schedule_enabled;
+  const managed = engine.managed || {};
+  const errors = [...(engine.errors || [])];
+  if (managed.last_error) errors.push(managed.last_error);
+  const stamp = (v) => v ? esc(v.replace("T", " ").replace("Z", " UTC")) : "Not available";
+  body.innerHTML = `
+    <div class="upd-head"><i class="fa-solid fa-dna"></i><div><b>YARA malware rule scanner</b>
+      <span>${available ? "engine available" : "engine unavailable"} · ${Number(engine.loaded || 0).toLocaleString()} rule files loaded</span></div></div>
+    <p class="hint">YARA statically checks captured honeypot files against detection rules. LanPulse never executes captured samples.
+      New installations install the engine and managed YARA Forge Core rules automatically. Use these controls to install, repair, or update them later.</p>
+    ${!helper ? `<div class="upd-note warn"><i class="fa-solid fa-circle-info"></i><div><b>Settings management helper not installed.</b>
+      Run <code>sudo ./install.sh --upgrade</code> on the LanPulse server once. This installs the restricted root helper and systemd watcher.</div></div>` : ""}
+    ${!login ? `<div class="upd-note warn"><i class="fa-solid fa-lock"></i><div><b>Set a dashboard login first.</b>
+      YARA setup changes system packages and services. These administrator actions are available only when LanPulse has a password-protected dashboard.</div></div>` : ""}
+    ${task.message ? `<div class="upd-note ${task.state === "failed" ? "bad" : task.state === "done" ? "ok" : "busy"}"><i class="fa-solid fa-circle-info"></i><div><b>${esc(task.message)}</b></div></div>` : ""}
+    <div class="chan"><div class="chan-head"><i class="fa-solid fa-shield-halved ci"></i><div class="txt"><b>Engine and managed rules</b>
+      <small>${esc(managed.package || "YARA Forge Core")} · ${esc(managed.version || "not installed")}</small></div></div>
+      <div class="chan-fields">
+        <div><b>Engine</b><div class="muted">${available ? "Available" : "Not available"}</div></div>
+        <div><b>Rules loaded</b><div class="muted">${Number(engine.loaded || 0).toLocaleString()} files · ${Number(managed.rule_count || 0).toLocaleString()} rules in package</div></div>
+        <div><b>Rule files</b><div class="muted">${Number(engine.managed_files || 0)} managed · ${Number(engine.custom_files || 0)} custom</div></div>
+        <div><b>Last updated</b><div class="muted">${stamp(managed.updated_at)}</div></div>
+        <div><b>Last checked</b><div class="muted">${stamp(managed.checked_at)}</div></div>
+        <div><b>Weekly updates</b><div class="muted">${schedule ? "Enabled" : "Disabled"}</div></div>
+      </div>
+      ${errors.length ? `<div class="upd-note bad" style="margin-top:10px"><b>Reported issues</b><div>${errors.map(esc).join("<br>")}</div></div>` : `<div class="upd-note ok" style="margin-top:10px"><i class="fa-solid fa-circle-check"></i><b>No YARA loading errors reported.</b></div>`}
+      <div class="btns" style="margin-top:12px">
+        <button class="btn primary" id="yaraInstall" ${!helper || !login || running ? "disabled" : ""}><i class="fa-solid fa-screwdriver-wrench"></i>Install / Repair</button>
+        <button class="btn" id="yaraUpdate" ${!helper || !login || running || !available ? "disabled" : ""}><i class="fa-solid fa-rotate"></i>Update rules now</button>
+      </div>
+    </div>
+    <div class="chan"><div class="chan-head"><i class="fa-solid fa-calendar-week ci"></i><div class="txt"><b>Automatic rule updates</b>
+      <small>Managed YARA Forge Core rules are checked weekly by a systemd timer.</small></div></div>
+      <div class="btns"><button class="btn" id="yaraSchedule" ${!helper || !login || running ? "disabled" : ""}>
+        ${schedule ? "Disable weekly updates" : "Enable weekly updates"}</button></div>
+    </div>
+    ${task.log ? `<details class="upd-log" ${task.state === "failed" ? "open" : ""}><summary>YARA setup log</summary><pre>${esc(task.log)}</pre></details>` : ""}
+    <p class="hint">Custom rules are kept separately under <code>/opt/lanpulse/data/yara-rules/</code>. Repairing or updating managed rules does not replace custom rules or the last known-good managed package if validation fails.</p>
+  `;
+  const send = async (action, prompt) => {
+    if (prompt && !confirm(prompt)) return;
+    const result = await api("/api/yara/manage", "POST", {action});
+    if (result) {
+      toast("YARA task queued");
+      renderYaraSettings(body);
+    }
+  };
+  $("yaraInstall")?.addEventListener("click", () => send("install",
+    "Install or repair yara-python, validate the managed YARA Forge Core rules, and enable weekly updates?"));
+  $("yaraUpdate")?.addEventListener("click", () => send("update",
+    "Download and validate the latest YARA Forge Core rule package now?"));
+  $("yaraSchedule")?.addEventListener("click", () => send(schedule ? "schedule_off" : "schedule_on",
+    schedule ? "Disable automatic weekly YARA rule updates?" : "Enable automatic weekly YARA rule updates?"));
+  if (running) yaraSettingsPoll = setInterval(() => {
+    if (yaraSettingsOpen()) renderYaraSettings(body);
+    else clearInterval(yaraSettingsPoll);
+  }, 5000);
+}
