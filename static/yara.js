@@ -14,14 +14,14 @@ async function loadYaraView() {
     api("/api/honeypot/yara/status", "GET"),
     api("/api/honeypot/samples?limit=200", "GET")
   ]);
-  if (view !== "yara") return;
+  if (view !== "honeypot" || potSection !== "yara") return;
   yaraStatus = status || {};
   const rows = (samples && samples.samples) || [];
   const details = await Promise.all(rows.slice(0, 40).map(async (row) => {
     const detail = await api("/api/honeypot/sample?sha=" + encodeURIComponent(row.sha256), "GET");
     return {row, detail: detail || {}};
   }));
-  if (view !== "yara") return;
+  if (view !== "honeypot" || potSection !== "yara") return;
   yaraSamples = details;
   renderYaraView(samples && samples.total || rows.length);
 }
@@ -57,25 +57,31 @@ function renderYaraView(total = yaraSamples.length) {
     const y = detail.yara || {};
     const matches = y.matches || [];
     const name = (detail.names || []).join(", ") || row.name || row.sha256;
-    return `<div class="pot-hash-row">
-      <div class="pot-hash-main"><b>${esc(name)}</b>
+    const hasMatch = matches.length > 0;
+    return `<details class="pot-hash-row yara-result-row">
+      <summary class="pot-hash-main">
+        <b>${esc(name)}</b>
         <span class="muted mono">${esc(row.sha256)}</span>
         <span class="muted">${esc(row.kind || row.type || "file")} · ${Number(row.size || 0).toLocaleString()} bytes · score ${Number(row.score || 0)}/100</span>
+        <span class="pot-hash-meta">${hasMatch ? `<span class="tagchip bad">${matches.length} YARA match${matches.length === 1 ? "" : "es"}</span>` :
+          y.files ? '<span class="tagchip">No YARA match</span>' : '<span class="tagchip">No scan details available</span>'}</span>
+      </summary>
+      <div class="yara-result-detail">
+        <div><b>SHA-256</b><div class="mono">${esc(row.sha256)}</div></div>
+        <div><b>File</b><div>${esc(name)}</div></div>
+        <div><b>Type and size</b><div>${esc(row.kind || row.type || "file")} · ${Number(row.size || 0).toLocaleString()} bytes</div></div>
+        <div><b>Honeypot score</b><div>${Number(row.score || 0)}/100</div></div>
+        <div><b>YARA rule files scanned</b><div>${Number(y.files || 0).toLocaleString()}</div></div>
+        <div><b>YARA matches</b><div>${hasMatch ? matches.map(m => `<div class="yara-rule-detail"><b class="mono">${esc(m.rule)}</b><div>${esc(m.file || "Rule file")}${(m.tags || []).length ? " · Tags: " + esc(m.tags.join(", ")) : ""}</div>${m.description ? `<p>${esc(m.description)}</p>` : ""}</div>`).join("") : "No matching rules were reported for this file."}</div></div>
       </div>
-      <div class="pot-hash-meta">
-        ${matches.length ? `<span class="tagchip bad">${matches.length} YARA match${matches.length === 1 ? "" : "es"}</span>` :
-          y.files ? '<span class="tagchip">No YARA match</span>' : '<span class="tagchip">No scan details available</span>'}
-        ${matches.map(m => `<div class="muted"><b class="mono">${esc(m.rule)}</b> · ${esc(m.file || "rule")} ${(m.tags || []).length ? "· " + esc(m.tags.join(", ")) : ""}${m.description ? "<br>" + esc(m.description) : ""}</div>`).join("")}
-      </div>
-    </div>`;
+    </details>`;
   }).join("")}</div>` : '<div class="muted">No captured files yet. Files dropped during honeypot sessions will appear here after LanPulse records them.</div>';
 }
 
 document.addEventListener("click", (e) => {
   if (e.target.closest("#yaraRefresh")) loadYaraView();
   if (e.target.closest("#yaraArtifacts")) {
-    setView("honeypot");
     if (typeof setPotSection === "function") setPotSection("artifacts");
   }
 });
-if (typeof viewHooks !== "undefined") viewHooks.yara = loadYaraView;
+
