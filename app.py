@@ -2300,6 +2300,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         timer = await asyncio.to_thread(subprocess.run, ["systemctl", "is-enabled", "lanpulse-yara-update.timer"],
                                         capture_output=True, text=True, timeout=5)
         task["helper_installed"] = yara_helper_unit.exists() and not nm.args.demo
+        task["login"] = nm.auth.enabled
         task["schedule_enabled"] = timer.returncode == 0 and timer.stdout.strip() == "enabled"
         try:
             task["log"] = (yara_manage_dir / "log.txt").read_text(encoding="utf-8", errors="replace")[-12000:]
