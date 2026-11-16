@@ -165,6 +165,32 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now lanpulse-yara-update.timer >/dev/null 2>&1
 
+# ---- Settings > Scanner > YARA management (root-only helper + request path unit)
+mkdir -p "$DEST/data/yara"
+install -m 755 "$DEST/yara-helper.sh" /usr/local/sbin/lanpulse-yara
+cat > /etc/systemd/system/lanpulse-yara.service <<UNIT
+[Unit]
+Description=LanPulse YARA engine and rule manager
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lanpulse-yara
+TimeoutStartSec=10min
+UNIT
+cat > /etc/systemd/system/lanpulse-yara.path <<UNIT
+[Unit]
+Description=Watch for LanPulse YARA setup requests
+
+[Path]
+PathExists=$DEST/data/yara/request
+Unit=lanpulse-yara.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now lanpulse-yara.path >/dev/null 2>&1 || true
+
 echo "==> Creating Python environment"
 python3 -m venv "$DEST/venv"
 "$DEST/venv/bin/pip" install -q --upgrade pip
