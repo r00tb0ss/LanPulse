@@ -9,7 +9,7 @@ let potHours = 168;
 let potAttackType = "all";
 let potSelectedService = "";
 let potSection = (() => {
-  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors"];
+  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors", "yara"];
   try {
     const saved = localStorage.getItem("lp_pot_section");
     if (valid.includes(saved)) return saved;
@@ -35,10 +35,12 @@ function setPotSection(section, persist = true) {
   $("potOverviewPane")?.classList.toggle("hidden", potSection !== "overview");
   $("potActivityPane")?.classList.toggle("hidden", potSection !== "activity");
   $("potInvestigationPane")?.classList.toggle("hidden", !investigation);
+  $("potYaraPane")?.classList.toggle("hidden", potSection !== "yara");
   $("potMalware")?.classList.toggle("hidden", potSection === "artifacts");
   $("potHashIntel")?.classList.toggle("hidden", potSection !== "artifacts");
   $("potMalDetail")?.classList.add("hidden");
   if (persist) { try { localStorage.setItem("lp_pot_section", potSection); } catch (_) {} }
+  if (potSection === "yara" && typeof loadYaraView === "function") loadYaraView();
   if (investigation) {
     const title = $("potMalTitle");
     if (title && potSection !== "artifacts") title.textContent = ({sessions:"Attack sessions",profiles:"Attacker profiles",campaigns:"Campaign correlations",sensors:"Honeypot sensors"})[potSection] || "Investigation";
