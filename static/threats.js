@@ -34,7 +34,7 @@ const MAP_NAMES = {"South Korea": "Korea", "North Korea": "Dem. Rep. Korea", "Cz
 /* ------------------------------------------------------------ view switching */
 const VIEWS = [["vNet", "net", "netView"], ["vThreat", "threats", "threatView"], ["vDns", "dns", "dnsView"],
   ["vVuln", "vulns", "vulnView"], ["vSvc", "svc", "svcView"], ["vRed", "redteam", "redView"],
-  ["vPot", "honeypot", "potView"]];
+  ["vPot", "honeypot", "potView"], ["vYara", "yara", "yaraView"]];
 const viewHooks = {};            // view name -> function run when it opens (registered by each view's script)
 
 function setView(v) {
