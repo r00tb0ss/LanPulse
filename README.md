@@ -461,6 +461,16 @@ auto-refreshing. Press **Esc** to exit.
 **Crimson Noir** (the newest theme: pure black, white text, one red accent, square corners).
 The choice is saved in your browser.
 
+## Reports
+
+Every tab has a professional, print-ready report, from the **Reports** button in the top bar or the **Report** button on the tab itself. The menu puts the current tab's report first.
+
+- **Executive security report:** the score, what needs attention, and a short summary of every tab.
+- **Network, Threats, DNS, Vulnerabilities, Services and Red Team:** one detailed report each.
+- **Honeypot:** attacks, captured sessions (with attack timelines), attacker profiles, campaigns and shared evidence, malware samples with static analysis and YARA matches, and sensors.
+
+Reports open as a clean page with a Print button (use **Save as PDF** in the print dialog), and download as a PDF when the optional `reportlab` package is installed (`sudo /opt/lanpulse/venv/bin/pip install reportlab`, then restart LanPulse). They are made from data LanPulse already holds: nothing is scanned or run, captured files are never executed, and indicators are defanged. A report contains real IP addresses and device names, so treat it as internal.
+
 ## Red Team
 
 The **Red Team** tab turns what LanPulse already found into an offensive-recon workflow — it maps and plans only, and

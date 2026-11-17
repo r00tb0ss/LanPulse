@@ -72,3 +72,7 @@ If you sell or run LanPulse commercially, check the terms of the online services
 
 MITRE ATT&CK® is a registered trademark of The MITRE Corporation. LanPulse references ATT&CK technique names and IDs for
 educational mapping only and is not affiliated with or endorsed by MITRE. Metasploit® is a trademark of Rapid7, Inc.
+
+## ReportLab (optional)
+
+PDF reports use the optional `reportlab` package (BSD license, https://www.reportlab.com/). It is installed separately and is not required.
