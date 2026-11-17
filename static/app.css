@@ -1705,3 +1705,44 @@ html[data-pretheme="sand"]{background:#f4efe6}
   .kv{grid-template-columns:76px minmax(0,1fr);font-size:12px}
   .kv dd{font-size:11.5px}
 }
+
+
+/* Phone navigation: keep every section reachable without squeezing seven tabs into tiny labels. */
+@media(max-width:640px){
+  .views{
+    display:flex;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;padding:5px 6px calc(5px + env(safe-area-inset-bottom,0px));
+  }
+  .views::-webkit-scrollbar{display:none}
+  .views button{
+    flex:0 0 64px;width:64px;min-width:64px;min-height:46px;
+    scroll-snap-align:start;white-space:normal;
+  }
+  .views button span{
+    display:block!important;max-width:62px;overflow:hidden;text-overflow:ellipsis;
+    white-space:normal;line-height:1.1;text-align:center;font-size:9px;
+  }
+  .views button i{font-size:15px}
+  .views .tbadge{right:5px;top:0}
+  /* Topology controls remain reachable; selected-node details stay above the map. */
+  .topo{padding-top:56px}
+  .topo-bar{gap:6px;padding:7px 9px;max-height:30%;overflow-y:auto;overscroll-behavior:contain}
+  .topo-bar button,.topo-bar select,.topo-bar .btn{min-height:38px;max-width:100%}
+  .topo-info{
+    left:8px;right:8px;bottom:8px;top:auto;width:auto;
+    max-height:48%;padding:10px;border-radius:11px;
+    padding-bottom:max(10px,env(safe-area-inset-bottom,0px));
+  }
+  .topo-info .btns{gap:7px}
+  .topo-info .btns .btn{min-height:38px;flex:1 1 auto}
+  .topo-mini{display:none}
+  .topo-stage{min-height:240px}
+  #topoSvg{touch-action:none}
+}
+@media(max-width:380px){
+  .views button{flex-basis:60px;width:60px;min-width:60px}
+  .views button span{font-size:8.5px}
+  .topo-bar{padding-left:7px;padding-right:7px}
+  .topo-info{left:6px;right:6px;bottom:6px;max-height:45%}
+}
