@@ -160,8 +160,8 @@ function renderHoneypot() {
   if (!s.enabled) {
     note.className = "v-note";
     note.classList.remove("hidden");
-    note.innerHTML = `<i class="fa-solid fa-circle-info"></i> The honeypot is off. Turn it on in
-      <button class="linkbtn" id="potOnLink">Settings</button> to start catching probes and brute-force attempts.`;
+    note.innerHTML = `<i class="fa-solid fa-circle-info"></i><span>The honeypot is off. Turn it on in
+      <button class="linkbtn inline" id="potOnLink">Settings</button> to start catching probes and brute-force attempts.</span>`;
   } else {
     note.classList.add("hidden");
   }
