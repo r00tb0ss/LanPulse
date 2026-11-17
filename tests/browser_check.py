@@ -112,6 +112,18 @@ def check_contrast(page, problems):
                 problems.append(f"[{theme} settings {tab}] hard to read: {item}")
         page.keyboard.press("Escape")
         page.wait_for_timeout(300)
+        # The side panels: the attacker IP box and a device
+        page.evaluate("() => document.getElementById('vThreat').click()")
+        page.wait_for_timeout(800)
+        page.evaluate("() => openIp('198.51.100.7')")
+        page.wait_for_timeout(2500)
+        for item in page.evaluate(CONTRAST_JS):
+            problems.append(f"[{theme} IP box] hard to read: {item}")
+        page.evaluate("() => { const d = [...devices.values()][0]; if (d && typeof openPanel === 'function') openPanel(d.id); }")
+        page.wait_for_timeout(1500)
+        for item in page.evaluate(CONTRAST_JS):
+            problems.append(f"[{theme} device panel] hard to read: {item}")
+        page.evaluate("() => document.getElementById('btnClose').click()")
     page.evaluate("() => document.body.removeAttribute('data-theme')")
 
 
