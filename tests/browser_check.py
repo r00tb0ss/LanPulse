@@ -48,6 +48,84 @@ def check_delivery(problems):
     if "immutable" not in cache:
         problems.append(f"[delivery] a version-stamped file should be cached long-term, got {cache!r}")
 
+CONTRAST_JS = """() => {
+  const hex = (h) => { h = h.trim().replace('#', ''); if (h.length === 3) h = [...h].map((x) => x + x).join(''); return h.length === 6 ? {r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16), a: 1} : null; };
+  const parse = (c) => { if (!c) return null; c = c.trim(); if (c[0] === '#') return hex(c); const m = c.match(/rgba?\\(([^)]+)\\)/); if (!m) return null;
+    const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(parseFloat); return {r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1}; };
+  const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const lum = (c) => 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+  const over = (top, bot) => ({r: top.r * top.a + bot.r * (1 - top.a), g: top.g * top.a + bot.g * (1 - top.a), b: top.b * top.a + bot.b * (1 - top.a), a: 1});
+  const mapArea = parse(getComputedStyle(document.body).getPropertyValue('--map-area')) || {r: 26, g: 39, b: 66, a: 1};
+  const bgOf = (el) => {
+    const layers = [];
+    for (let e = el; e; e = e.parentElement) {
+      const cs = getComputedStyle(e), c = parse(cs.backgroundColor);
+      if (e.classList && (e.classList.contains('t-mapcard') || e.classList.contains('mapwrap'))) { layers.push(mapArea); break; }
+      if (cs.backgroundImage !== 'none' && (!c || c.a < 1)) return null;          // a gradient or picture: cannot be judged
+      if (c && c.a > 0) { layers.push(c); if (c.a >= 1) break; }
+    }
+    let out = {r: 255, g: 255, b: 255, a: 1};
+    const bodyBg = parse(getComputedStyle(document.body).backgroundColor); if (bodyBg && bodyBg.a > 0) out = over(bodyBg, out);
+    for (const l of layers.reverse()) out = over(l, out);
+    return out;
+  };
+  const seen = new Set(), bad = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('svg,canvas,script,style,#panel:not(.open)') || el.disabled || el.closest(':disabled')) continue;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim().length > 1).map((n) => n.textContent.trim()).join(' ');
+    if (!own) continue;
+    const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    if (r.width < 2 || r.height < 2 || cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
+    if (r.bottom < 0 || r.top > innerHeight * 3) continue;
+    const fg = parse(cs.color), bg = bgOf(el);
+    if (!fg || !bg) continue;
+    const f = fg.a < 1 ? over(fg, bg) : fg, l1 = lum(f), l2 = lum(bg), ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    if (ratio < 3) {
+      const name = (el.id ? '#' + el.id : el.tagName.toLowerCase()) + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '');
+      const key = name + own.slice(0, 20);
+      if (!seen.has(key)) { seen.add(key); bad.push(name + ' "' + own.slice(0, 32) + '" ' + ratio.toFixed(1) + ':1'); }
+    }
+  }
+  return bad.slice(0, 14);
+}"""
+
+
+def check_contrast(page, problems):
+    """Light themes keep a few dark areas (the map). Text must stay readable everywhere, in every tab and settings page."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(BASE, wait_until="domcontentloaded")
+    page.wait_for_selector("#vNet", timeout=20000)
+    page.wait_for_timeout(1500)
+    for theme in ("light", "sand"):
+        page.evaluate("t => document.body.setAttribute('data-theme', t)", theme)
+        for vid in VIEWS:
+            page.evaluate("id => document.getElementById(id).click()", vid)
+            page.wait_for_timeout(1200)
+            for item in page.evaluate(CONTRAST_JS):
+                problems.append(f"[{theme} {vid}] hard to read: {item}")
+        page.evaluate("() => document.getElementById('btnSettings').click()")
+        page.wait_for_timeout(600)
+        for tab in page.evaluate("() => [...document.querySelectorAll('#setTabs button')].map((b) => b.dataset.tab)"):
+            page.evaluate("t => document.querySelector(`#setTabs button[data-tab=\"${t}\"]`).click()", tab)
+            page.wait_for_timeout(700)
+            for item in page.evaluate(CONTRAST_JS):
+                problems.append(f"[{theme} settings {tab}] hard to read: {item}")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(300)
+        # The side panels: the attacker IP box and a device
+        page.evaluate("() => document.getElementById('vThreat').click()")
+        page.wait_for_timeout(800)
+        page.evaluate("() => openIp('198.51.100.7')")
+        page.wait_for_timeout(2500)
+        for item in page.evaluate(CONTRAST_JS):
+            problems.append(f"[{theme} IP box] hard to read: {item}")
+        page.evaluate("() => { const d = [...devices.values()][0]; if (d && typeof openPanel === 'function') openPanel(d.id); }")
+        page.wait_for_timeout(1500)
+        for item in page.evaluate(CONTRAST_JS):
+            problems.append(f"[{theme} device panel] hard to read: {item}")
+        page.evaluate("() => document.getElementById('btnClose').click()")
+    page.evaluate("() => document.body.removeAttribute('data-theme')")
+
 
 def main() -> int:
     from playwright.sync_api import sync_playwright
@@ -169,6 +247,7 @@ def main() -> int:
                     if over["wide"]:
                         problems.append(f"[phone {vid}] wider than the screen: {', '.join(over['wide'])}")
                     page.screenshot(path=os.path.join(ROOT, f"browser-phone-{vid}.png"))
+                check_contrast(page, problems)
                 browser.close()
         finally:
             proc.terminate()
