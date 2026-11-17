@@ -127,6 +127,32 @@ def check_contrast(page, problems):
     page.evaluate("() => document.body.removeAttribute('data-theme')")
 
 
+def check_arcs(page, problems):
+    """Traffic arcs must stay on the map: a long route to the southern hemisphere used to swing below the bottom edge."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(BASE, wait_until="domcontentloaded")
+    page.wait_for_selector("#vNet", timeout=20000)
+    page.evaluate("() => document.getElementById('vThreat').click()")
+    page.wait_for_timeout(3000)
+    worst = page.evaluate("""() => {
+      if (typeof tChart === 'undefined' || !tChart || typeof homeCoord !== 'function' || !homeCoord()) return null;
+      const home = homeCoord(), h = tChart.getHeight();
+      const far = [[151, -33], [-70, -50], [20, -34], [139, 35], [-5, 50], [175, -41], [-58, -34]];
+      let over = -1e9;
+      for (const p of far) for (const coords of [[home, p], [p, home]]) {
+        const a = tChart.convertToPixel('geo', coords[0]), b = tChart.convertToPixel('geo', coords[1]);
+        if (!a || !b) continue;
+        const c = arcCurve(coords), cy = (a[1] + b[1]) / 2 - (b[0] - a[0]) * c;
+        over = Math.max(over, (0.25 * a[1] + 0.5 * cy + 0.25 * b[1]) - h);       // how far the arc's middle sags below the map
+      }
+      return over;
+    }""")
+    if worst is None:
+        problems.append("[map arcs] the live map did not start, so the arc check could not run")
+    elif worst > 0:
+        problems.append(f"[map arcs] an arc to a far southern place swings {worst:.0f}px below the bottom of the map")
+
+
 def main() -> int:
     from playwright.sync_api import sync_playwright
     problems = []
@@ -247,6 +273,7 @@ def main() -> int:
                     if over["wide"]:
                         problems.append(f"[phone {vid}] wider than the screen: {', '.join(over['wide'])}")
                     page.screenshot(path=os.path.join(ROOT, f"browser-phone-{vid}.png"))
+                check_arcs(page, problems)
                 check_contrast(page, problems)
                 browser.close()
         finally:
