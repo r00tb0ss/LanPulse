@@ -90,14 +90,14 @@ def build(nm, now: float | None = None) -> dict:
         cfg, st = nm.settings.get("dns", {}), nm.dns.status
         last = st.get("last_poll") or 0
         if not cfg.get("enabled"):
-            items.append(_item("dns", "Pi-hole DNS", "fa-globe", "off", "Not connected", None, "Settings > DNS shows what devices look up."))
+            items.append(_item("dns", "DNS source", "fa-globe", "off", "Not connected", None, "The DNS tab shows what devices look up."))
         elif st.get("state") == "error":
-            items.append(_item("dns", "Pi-hole DNS", "fa-globe", "bad", st.get("error") or "The last poll failed", last,
+            items.append(_item("dns", "DNS source", "fa-globe", "bad", st.get("error") or "The last poll failed", last,
                                "Check the address and password in Settings."))
         elif last and now - last > STALE_LIVE:
-            items.append(_item("dns", "Pi-hole DNS", "fa-globe", "warn", f"No poll for {_span(now - last)}", last))
+            items.append(_item("dns", "DNS source", "fa-globe", "warn", f"No poll for {_span(now - last)}", last))
         else:
-            items.append(_item("dns", "Pi-hole DNS", "fa-globe", "ok", "Reading the query log", last))
+            items.append(_item("dns", "DNS source", "fa-globe", "ok", "Reading the query log", last))
 
     def vulns():
         cfg, st = nm.settings.get("vulns", {}), nm.vulns.status
