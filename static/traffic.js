@@ -83,7 +83,7 @@ function drawFlowArcs(now) {
   if (now) { clearTimeout(flowDrawTimer); flowDrawTimer = 0; }
   else if (flowDrawTimer) return;
   else { flowDrawTimer = setTimeout(() => drawFlowArcs(true), 350); return; }
-  tChart.setOption({series: [{id: "flowArcs", data: flowArcs.map(({coords, lineStyle}) => ({coords, lineStyle}))}]});
+  tChart.setOption({series: [{id: "flowArcs", data: flowArcs.map(({coords, lineStyle}) => ({coords, lineStyle: {...lineStyle, curveness: arcCurve(coords)}}))}]});
 }
 setInterval(() => {
   const n = flowArcs.length;

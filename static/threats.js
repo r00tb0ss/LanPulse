@@ -356,6 +356,13 @@ function updateCountryLabels() {
   tChart.setOption({geo: {label: {show: false}}, series: [{id: "labels", data: pts}]});
 }
 
+// Every arc bulges toward the north, like a flight path. A fixed curve sends arcs travelling one way south, and on a long
+// route (the US to Australia) they swing below the bottom of the map and come back up. Very long routes bulge less.
+function arcCurve(coords) {
+  const dx = coords[1][0] - coords[0][0];
+  return (dx >= 0 ? 1 : -1) * (Math.abs(dx) > 120 ? 0.14 : 0.24);
+}
+
 function pushArc(ev) {
   const home = homeCoord();
   if (!tChart || !home || ev.lat == null || (hideScanners && isScanner(ev))) return;
@@ -372,7 +379,7 @@ function drawArcs(now) {
   if (now) { clearTimeout(arcDrawTimer); arcDrawTimer = 0; }
   else if (arcDrawTimer) return;                       // a redraw is already queued: this arc rides along
   else { arcDrawTimer = setTimeout(() => drawArcs(true), 250); return; }
-  tChart.setOption({series: [{id: "arcs", data: arcs.map(({coords, lineStyle}) => ({coords, lineStyle}))}]});
+  tChart.setOption({series: [{id: "arcs", data: arcs.map(({coords, lineStyle}) => ({coords, lineStyle: {...lineStyle, curveness: arcCurve(coords)}}))}]});
 }
 setInterval(() => {
   const before = arcs.length;
