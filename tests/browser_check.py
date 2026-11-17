@@ -157,7 +157,7 @@ def main() -> int:
                       const w = window.innerWidth, wide = [];
                       for (const el of document.querySelectorAll('body *')) {
                         const r = el.getBoundingClientRect();
-                        if (r.width > 0 && r.right > w + 2 && getComputedStyle(el).position !== 'fixed' && !el.closest('.vis-network,canvas,svg,.topo-stage,.t-map,#map,.scroll-x,.table-wrap,.atk-table,pre,.tabs,.views')) {
+                        if (r.width > 0 && r.right > w + 2 && getComputedStyle(el).position !== 'fixed' && !el.closest('#panel,.vis-network,canvas,svg,.topo-stage,.t-map,#map,.scroll-x,.table-wrap,.atk-table,pre,.tabs,.views')) {
                           wide.push((el.id ? '#' + el.id : el.tagName.toLowerCase() + '.' + String(el.className).split(' ')[0]) + ' ' + Math.round(r.right - w) + 'px');
                           if (wide.length >= 4) break;
                         }
