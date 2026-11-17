@@ -22,6 +22,7 @@ from test_honeyanalysis import FakeHp  # noqa: E402
 CASES = [
     ("tagged research scanner", {"count": 400, "ports": 30, "tag": "Shodan"}, "Research scanner"),
     ("scanner that also reached an open service", {"count": 400, "ports": 30, "tag": "Shodan", "reached": 2, "hits_on_open": 1}, "Reached a real service"),
+    ("scanner with interactive decoy commands", {"count": 400, "ports": 30, "tag": "Shodan", "pot_commands": 2}, "Interactive honeypot activity"),
     ("greynoise benign", {"count": 20, "ports": 3, "gn_class": "benign"}, "Research scanner"),
     ("honeypot intruder", {"count": 9, "ports": 1, "pot_commands": 6}, "Interactive honeypot activity"),
     ("successful login without commands", {"count": 1, "ports": 1, "pot_logged_in": True}, "Interactive honeypot activity"),
