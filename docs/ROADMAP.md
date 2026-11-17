@@ -26,7 +26,6 @@ What is planned next, in the order it is likely to ship. Releases are small and 
 - Grouped alerts, a test button for every channel, and a small settings export and import file.
 
 ## 5. Everyday use
-- A layout pass for phones and tablets on the busiest views.
 - A first-run checklist driven by the health board.
 - Search across devices, addresses, sessions and findings from one box.
 
@@ -34,4 +33,4 @@ What is planned next, in the order it is likely to ship. Releases are small and 
 User roles, an audit log, optional two-factor login, a combined incident view, API tokens, a metrics endpoint, several sites in one dashboard, Docker and Debian packages, a written threat model with a security policy, and an independent security test.
 
 ## Already shipped recently
-Health board, quiet mode, verified backups with a restore tool, honeypot hash and SSH fingerprint intelligence, and honeypot attack filters with per-service host details. Password changes rotate the session signing secret; other existing sessions are invalidated while the changing browser receives a fresh session. Backups need a login and run one at a time, downloaded updates are verified against a published SHA-256 checksum before installation, and the Honeypot tab has attacker profiles, campaign correlation and a sectioned intelligence workspace.
+Health board, quiet mode, verified backups with a restore tool, honeypot hash and SSH fingerprint intelligence, honeypot attack filters with per-service host details, grouped threat-feed events with expandable evidence, and responsive phone/tablet layouts across the dashboard and topology. Password changes rotate the session signing secret; other existing sessions are invalidated while the changing browser receives a fresh session. Backups need a login and run one at a time, downloaded updates are verified against a published SHA-256 checksum before installation, and the Honeypot tab has attacker profiles, campaign correlation and a sectioned intelligence workspace.
