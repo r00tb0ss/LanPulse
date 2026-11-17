@@ -29,6 +29,7 @@ class FlowStore:
             self.db.execute("CREATE TABLE IF NOT EXISTS flows (m INTEGER, src TEXT, dst TEXT, dport INT, proto TEXT,"
                             " n INT, nb INT, PRIMARY KEY (m, src, dst, dport, proto)) WITHOUT ROWID")
             self.db.execute("CREATE INDEX IF NOT EXISTS flows_src ON flows (src, m)")
+            self.db.execute("CREATE INDEX IF NOT EXISTS flows_dst ON flows (dst, m)")     # "which of my devices talked to this address?"
             # per-device baseline: which countries each device normally talks to, and since when (for anomaly alerts)
             self.db.execute("CREATE TABLE IF NOT EXISTS dev_geo (src TEXT, iso TEXT, first REAL, PRIMARY KEY (src, iso)) WITHOUT ROWID")
             self.db.commit()
@@ -218,6 +219,21 @@ class FlowStore:
             self.db.commit()
 
     # ---- reporting
+    def to_dest(self, dst: str, hours: int = 168) -> dict:
+        """Which of your devices connected OUT to this address, how often, on which ports, and when."""
+        self.flush(force=True)
+        since = int(time.time() // 60) - hours * 60
+        with self.lock:
+            rows = self.db.execute("SELECT src, SUM(n), GROUP_CONCAT(DISTINCT dport), MIN(m), MAX(m), SUM(nb) FROM flows "
+                                   "WHERE dst = ? AND m >= ? GROUP BY src ORDER BY SUM(n) DESC LIMIT 20", (dst, since)).fetchall()
+        by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
+        devices = [{"ip": src, "id": by_ip.get(src, {}).get("id", ""),
+                    "name": self.nm.label(by_ip[src]) if src in by_ip else src,
+                    "count": n or 0, "blocked": nb or 0,
+                    "ports": sorted({int(p) for p in (ports or "").split(",") if p.isdigit()})[:8],
+                    "first": (first or 0) * 60, "last": (last or 0) * 60} for src, n, ports, first, last, nb in rows]
+        return {"hours": hours, "devices": devices, "total": sum(d["count"] for d in devices)}
+
     def summary(self, hours: int = 24, device_ip: str = "", talkers: int = 12) -> dict:
         self.flush(force=True)
         since = int(time.time() // 60) - hours * 60

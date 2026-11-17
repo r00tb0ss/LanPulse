@@ -715,6 +715,44 @@ function blockRules(ip) {
   };
 }
 
+// The extra context the server adds to an IP: how it behaves, whether your network called it, and what the honeypot saw
+function ipContextHtml(d) {
+  const c = d.context || {}, b = c.behaviour, o = c.outbound, h = c.honeypot, nb = c.neighbours || [];
+  const out = [];
+  if (b) {
+    out.push(`<div class="p-sec ctx-read ${esc(b.level)}"><h4>Targeted or background noise?</h4>
+      <div class="ctx-verdict"><b>${esc(b.label)}</b><span class="ctx-conf">${esc(b.confidence)} confidence</span></div>
+      <ul class="ctx-why">${(b.evidence || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">${esc(b.note || "")}</p></div>`);
+  }
+  if (o) {
+    const devs = o.devices || [];
+    out.push(`<div class="p-sec ${devs.length ? "ctx-warn" : ""}"><h4>Did your network talk to it?</h4>
+      ${devs.length ? `<div class="ctx-alert"><i class="fa-solid fa-triangle-exclamation"></i>${devs.length} of your devices connected out to this address in the last ${Math.round(o.hours / 24)} days. Check them.</div>
+        ${devs.map((x) => `<div class="tgt-row" ${x.id ? `data-dev="${esc(x.id)}"` : ""}><div><b>${esc(x.name)}</b>
+          <div class="muted" style="font:11px var(--mono)">${esc(x.ip)} · ports ${esc(x.ports.join(", ") || "—")} · last ${x.last ? ago(x.last) : "—"}</div></div>
+          <span class="ct">×${fmtN(x.count)}</span></div>`).join("")}`
+        : `<div class="ok-line"><i class="fa-solid fa-shield-halved"></i>No device on your network connected out to it in the last ${Math.round(o.hours / 24)} days.</div>`}
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Based on the traffic LanPulse records. It cannot see connections that bypass your router.</p></div>`);
+  }
+  if (h || nb.length) {
+    out.push(`<div class="p-sec"><h4>Everything we know about it</h4>
+      ${h ? `<dl class="kv">
+        <dt>Honeypot</dt><dd>${fmtN(h.total)} session${h.total === 1 ? "" : "s"}${h.logged_in ? ' · <span style="color:#fca5a5">logged in</span>' : ""}${h.commands ? ` · ${fmtN(h.commands)} commands` : ""}</dd>
+        ${h.hassh.length ? `<dt>SSH fingerprint</dt><dd class="chips-wrap">${h.hassh.map((x) => `<span class="pchip" title="${esc(x.value)}">${esc(x.value.slice(0, 12))}…<b>×${x.count}</b></span>`).join("")}</dd>` : ""}
+        ${h.samples.length ? `<dt>Captured files</dt><dd>${h.samples.map((x) => `<div style="font:11px var(--mono);word-break:break-all">${esc(x.name || "file")} · ${esc(x.sha256.slice(0, 16))}…</div>`).join("")}</dd>` : ""}
+        ${h.campaigns.length ? `<dt>Linked to</dt><dd>${h.campaigns.map((x) => `<div>${esc(x.kind)}: ${x.others.length ? `also seen from ${x.others.map((i) => esc(i)).join(", ")}` : "no other sources"}</div>`).join("")}</dd>` : ""}
+      </dl>` : ""}
+      ${nb.length ? `<p class="muted" style="font-size:12px;margin:${h ? "8px" : "0"} 0 4px">Same /24 block, also attacking you (30 days):</p>
+        <div class="chips-wrap">${nb.map((x) => `<span class="pchip" style="font-family:var(--mono)">${esc(x.ip)}<b>×${fmtN(x.count)}</b></span>`).join("")}</div>` : ""}</div>`);
+  }
+  if (h && h.sequence.length) {
+    out.push(`<div class="p-sec"><h4>Attack sequence</h4><ol class="ctx-seq">${h.sequence.map((x) =>
+      `<li><b>${esc(x.stage)}</b><span>${esc(x.summary)}</span>${x.evidence ? `<code>${esc(x.evidence)}</code>` : ""}</li>`).join("")}</ol></div>`);
+  }
+  return out.join("");
+}
+
 function renderIpPanel(d) {
   const g = d.geo || {}, it = d.intel || {}, ab = it.abuse, sh = it.shodan;
   const score = ab && ab.score != null ? ab.score : null;
@@ -752,6 +790,7 @@ function renderIpPanel(d) {
     </div>
     ${d.tag ? `<p class="muted" style="font-size:12px;margin:8px 0 0">Research scanners map the whole internet and rarely mean harm. Blocking them is optional.</p>` : ""}</div>
 
+    ${ipContextHtml(d)}
     <div class="p-sec"><h4>What it tried</h4>
       <div class="chips-wrap">${d.ports.map((p) => `<span class="pchip">${esc(p.service)} :${p.port ?? "—"}<b>×${fmtN(p.count)}</b></span>`).join("") || '<span class="muted">—</span>'}</div>
       ${(() => {            // one list: service, what it sent or tried, and how many times (identical lines are added up)
