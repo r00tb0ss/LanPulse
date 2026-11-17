@@ -82,6 +82,30 @@ def main() -> int:
                     if shown < 200:
                         problems.append(f"[{vid}] the page looks blank ({shown} characters of text)")
                     page.screenshot(path=os.path.join(ROOT, f"browser-{vid}.png"))
+                # Phone layout: a device card with many tags must keep a readable name column (it once became one letter wide).
+                page.set_viewport_size({"width": 390, "height": 800})
+                current["view"] = "phone vulns"
+                page.goto(BASE, wait_until="domcontentloaded")
+                page.wait_for_selector("#vVuln", timeout=20000)
+                page.evaluate("document.getElementById('vVuln').click()")
+                page.wait_for_timeout(1500)
+                widths = page.evaluate("""() => {
+                  const host = document.getElementById('vulnFix'); const dev = document.getElementById('vulnDevs');
+                  host.innerHTML = `<div class="fixdev open"><button class="fixdev-head"><span class="score-chip">10.0</span>
+                    <span class="fix-main"><b>METASPLOITABLE</b> <span class="muted mono">192.168.0.11</span><br><span class="fix-dev">69 services with flaws</span></span>
+                    <span class="fix-tags"><span class="tagchip confirmed">56 confirmed</span><span class="tagchip msf">12 Metasploit</span><span class="tagchip">7 CVEs + 64 other</span></span>
+                    <i class="fa-solid fa-chevron-down chev"></i></button></div>`;
+                  dev.innerHTML = `<div class="rk click vd"><span class="ico"></span><span class="nm">METASPLOITABLE</span><span class="ct">71 findings</span>
+                    <div class="vd-meta"><span class="vd-facts">56 confirmed · 10 Metasploit modules · 12 with public code</span>
+                    <span class="vd-acts"><button class="btn sm">OpenVAS scan</button><button class="btn sm">Attack view</button></span></div><div class="bar"><i style="width:50%"></i></div></div>`;
+                  return {main: host.querySelector('.fix-main').getBoundingClientRect().width,
+                          name: dev.querySelector('.nm').getBoundingClientRect().width};
+                }""")
+                if widths["main"] < 120:
+                    problems.append(f"[phone vulns] the device name column is only {widths['main']:.0f}px wide")
+                if widths["name"] < 100:
+                    problems.append(f"[phone vulns] the device list name is only {widths['name']:.0f}px wide")
+                page.screenshot(path=os.path.join(ROOT, "browser-phone-vulns.png"))
                 browser.close()
         finally:
             proc.terminate()
