@@ -37,3 +37,24 @@ jobs:
         run: |
           VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
           [ -f "docs/releases/$VER.md" ] || { echo "Missing docs/releases/$VER.md for version $VER"; exit 1; }
+  browser:
+    # Opens every main view of a demo-mode LanPulse in a real browser; fails on script errors, failed requests or blank views.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install requirements and a browser
+        run: |
+          pip install -r requirements.txt playwright
+          playwright install --with-deps chromium
+      - name: Open every view
+        run: python tests/browser_check.py
+      - name: Keep screenshots of every view
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: view-screenshots
+          path: browser-*.png
+          if-no-files-found: ignore
