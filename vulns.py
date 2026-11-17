@@ -62,31 +62,31 @@ NAME_MAP = [(re.compile(rx, re.I), prods) for rx, prods in [
     (r"^samba smbd", [("samba", "samba")]),
     (r"^proftpd", [("proftpd", "proftpd")]),
     (r"^pure-?ftpd", [("pureftpd", "pure-ftpd")]),
-    (r"^mysql", [("mysql", "mysql"), ("oracle", "mysql")]),
+    (r"^mysql\b(?!\s+router)", [("mysql", "mysql"), ("oracle", "mysql")]),
     (r"^mariadb", [("mariadb", "mariadb")]),
     (r"^postgresql", [("postgresql", "postgresql")]),
     (r"^unrealircd", [("unrealircd", "unrealircd")]),
     (r"^distccd", [("samba", "distcc")]),       # nmap reports distcc's protocol version, not the software version
     (r"^postfix", [("postfix", "postfix")]),
-    (r"^exim", [("exim", "exim")]),
+    (r"^exim\b", [("exim", "exim")]),
     (r"^dovecot", [("dovecot", "dovecot")]),
     (r"^isc bind", [("isc", "bind")]),
     (r"^dnsmasq", [("thekelleys", "dnsmasq")]),
     (r"^nginx", [("f5", "nginx"), ("nginx", "nginx")]),
     (r"^lighttpd", [("lighttpd", "lighttpd")]),
     (r"^microsoft iis", [("microsoft", "internet_information_services")]),
-    (r"^squid", [("squid-cache", "squid")]),
+    (r"^squid\b(?!\s+cache\s+manager)", [("squid-cache", "squid")]),
     (r"^jetty", [("eclipse", "jetty")]),
     (r"^werkzeug", [("palletsprojects", "werkzeug")]),
     (r"^miniupnpd", [("miniupnp_project", "miniupnpd")]),
     (r"^cups", [("apple", "cups"), ("openprinting", "cups")]),
-    (r"^redis", [("redis", "redis")]),
+    (r"^redis\b", [("redis", "redis")]),
     (r"^mongodb", [("mongodb", "mongodb")]),
     (r"^elasticsearch", [("elastic", "elasticsearch")]),
     (r"^memcached", [("memcached", "memcached")]),
     (r"^openssl", [("openssl", "openssl")]),
     (r"^webmin|^miniserv", [("webmin", "webmin")]),
-    (r"^php", [("php", "php")]),
+    (r"^php\b", [("php", "php")]),
     (r"^wing ftp", [("wftpserver", "wing_ftp_server")]),
     (r"^filezilla ftpd", [("filezilla-project", "filezilla_server")]),
     (r"^microsoft sql server", []),
@@ -163,9 +163,12 @@ PRE = {"alpha": -4, "a": -4, "beta": -3, "b": -3, "pre": -2, "rc": -2, "dev": -5
 def vparts(v: str) -> tuple:
     """'7.9p1' -> [7, 9, 'p', 1]; pre-release words sort before the release ('1.0rc1' < '1.0')."""
     out = []
-    for tok in re.findall(r"\d+|[a-z]+", (v or "").lower()):
+    toks = re.findall(r"\d+|[a-z]+", (v or "").lower())
+    for i, tok in enumerate(toks):
         if tok.isdigit():
             out.append(int(tok))
+        elif tok in ("a", "b") and not (i + 1 < len(toks) and toks[i + 1].isdigit()):
+            out.append(tok)                 # a patch letter ('1.0.2a', OpenSSL style) is newer than '1.0.2'; only '2.0b1' is a beta
         elif tok in PRE:
             out.append(PRE[tok])
         else:
@@ -178,12 +181,16 @@ def vcmp(a: str, b: str) -> int:
     for i in range(max(len(x), len(y))):
         p = x[i] if i < len(x) else None
         q = y[i] if i < len(y) else None
+        if p is None and isinstance(q, int):
+            p = 0                           # '1.0' equals '1.0.0', and is newer than '1.0.0-rc1'
+        elif q is None and isinstance(p, int):
+            q = 0
         if p == q:
             continue
-        if p is None:                       # '7.9' vs '7.9p1': shorter is older, unless the rest is a pre-release
-            return 1 if isinstance(q, int) and q < 0 else -1
+        if p is None:                       # '7.9' vs '7.9p1': the one without the letter suffix is older
+            return -1
         if q is None:
-            return -1 if isinstance(p, int) and p < 0 else 1
+            return 1
         if isinstance(p, int) and isinstance(q, int):
             return 1 if p > q else -1
         if isinstance(p, str) and isinstance(q, str):
@@ -194,10 +201,13 @@ def vcmp(a: str, b: str) -> int:
 
 def clean_version(v: str) -> str:
     """'7.9p1 Debian 10+deb10u2' -> '7.9p1'; '3.0.20-Debian' -> '3.0.20'; keeps '1.0-rc1'."""
-    m = re.match(r"\s*v?(\d[\w.\-+~]*)", v or "")
+    m = re.match(r"\s*v?(\d[\w.\-+~]*)", v or "") or re.match(r"\s*[A-Za-z][A-Za-z-]*[_/ ]v?(\d[\w.\-+~]*)", v or "")
     if not m:
         return ""
+    packaged = "~" in m.group(1) or "+" in m.group(1)
     out = m.group(1).split("+")[0].split("~")[0]
+    if packaged:
+        out = re.sub(r"-\d+$", "", out)               # '9.18.12-1~deb12u1': the '-1' is the distribution's package revision
     out = re.sub(r"[-_](?!(?:rc|beta|alpha|pre|p)\d*\b)[a-z][\w.-]*$", "", out, flags=re.I)
     out = re.sub(r"-\d+(?:ubuntu|debian|deb|build|el|fc|bpo)[\w.~+-]*$", "", out, flags=re.I)   # distro package revision
     return out.rstrip(".-")
