@@ -651,9 +651,14 @@ function renderLocalCard() {
   });
   const rows = [...grouped.values()].sort((a, b) => (b[0].t || 0) - (a[0].t || 0)).slice(0, 12).map((items) => {
     if (items.length === 1) return localRow(items[0]);
-    const summary = localRow(items[0]).replace('class="lrow ', 'class="lrow lrow-summary ')
-      .replace(/ data-src="[^"]*"/, "");
-    return `<details class="lgroup"><summary>${summary}<span class="lgroup-count">${fmtN(items.length)} events</span></summary>
+    const e = items[0], who = e.src_name || e.src || e.mac || "Unknown device", tgt = e.target_name || e.target;
+    return `<details class="lgroup"><summary class="lgroup-summary">
+      <span class="lgroup-icon"><i class="fa-solid ${LOCAL_ICON[e.kind] || "fa-triangle-exclamation"}"></i></span>
+      <span class="lgroup-main"><b>${esc(e.title || e.kind)}</b> <span class="sev ${esc(e.severity)}">${esc(e.severity)}</span>
+        <span class="lgroup-who"><span class="mono">${esc(who)}</span>${tgt ? ` → <span class="mono">${esc(tgt)}</span>` : ""}${e.dport ? ` :${e.dport}` : ""}</span>
+        ${e.detail ? `<span class="muted lgroup-detail">${esc(e.detail)}</span>` : ""}
+        <span class="lgroup-count">${fmtN(items.length)} events</span></span>
+      <time>${ago(e.t)}</time></summary>
       <div class="lgroup-items">${items.map(localRow).join("")}</div></details>`;
   });
   $("tLocal").innerHTML = (rows.length ? rows.join("")
