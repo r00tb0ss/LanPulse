@@ -20,6 +20,7 @@ let localSummary = null;
 const isScanner = (x) => !!(x && x.tag);
 const SCANNER_COLOR = "#7c8aa5";
 const feedKeys = new Set();
+let feedEvents = []; // newest-first in-memory feed window; individual events remain available inside grouped rows
 
 const flag = (iso) => iso && /^[A-Za-z]{2}$/.test(iso)
   ? String.fromCodePoint(...[...iso.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : "";
@@ -567,10 +568,31 @@ function feedItem(e) {
     <span class="flag">${flagHtml(e.iso)}</span><span class="ip">${esc(e.src)}${isScanner(e) ? ` <span class="tagchip">${esc(e.tag.label)}</span>` : ""}${blockChip(e.src)}</span><span class="when">${clock(e.t)}</span>
     <span class="what"><b>${esc(e.service)}</b>${e.dport ? ` :${e.dport}` : ""} → <span class="tgt">${target}</span>${e.detail ? ` · ${esc(e.detail)}` : ""}</span></button>`;
 }
+function feedGroupKey(e) {
+  return [e.src, e.dport || "", e.service || "", e.action || "", e.lan_id || e.lan_name || e.lan || ""].join("|");
+}
 function renderFeed(list, full) {
+  feedEvents = list.slice(0, 80);
   feedKeys.clear();
-  list.forEach((e) => feedKeys.add(`${e.t}|${e.src}|${e.dport}`));
-  $("tFeed").innerHTML = list.filter((e) => !(hideScanners && isScanner(e))).map(feedItem).join("") || `<div class="muted" style="padding:6px">Waiting for attacks…</div>`;
+  feedEvents.forEach((e) => feedKeys.add(`${e.t}|${e.src}|${e.dport}`));
+  const visible = feedEvents.filter((e) => !(hideScanners && isScanner(e)));
+  const groups = new Map();
+  visible.forEach((e) => {
+    const key = feedGroupKey(e);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  });
+  const rows = [...groups.values()].sort((a, b) => (b[0].t || 0) - (a[0].t || 0)).map((events) => {
+    if (events.length === 1) return feedItem(events[0]);
+    const e = events[0], reached = isReached(e);
+    const target = e.lan_name ? esc(e.lan_name) : e.lan ? esc(e.lan) : e.action === "blocked" ? "blocked at router" : "your router";
+    return `<details class="fi-group ${reached ? "reached" : ""}">
+      <summary><span class="flag">${flagHtml(e.iso)}</span><span class="ip">${esc(e.src)}${isScanner(e) ? ` <span class="tagchip">${esc(e.tag.label)}</span>` : ""}${blockChip(e.src)}</span>
+      <span class="when">${clock(e.t)}</span><span class="what"><b>${esc(e.service)}</b>${e.dport ? ` :${e.dport}` : ""} → <span class="tgt">${target}</span></span>
+      <span class="fi-count">${fmtN(events.length)} attempts</span></summary>
+      <div class="fi-group-items">${events.map(feedItem).join("")}</div></details>`;
+  });
+  $("tFeed").innerHTML = rows.join("") || `<div class="muted" style="padding:6px">Waiting for attacks…</div>`;
   leakNote();
 }
 
@@ -583,11 +605,11 @@ function addThreatEvent(ev) {
   feedKeys.add(key);
   if (view !== "threats") { if (!isScanner(ev)) { unseen++; updateBadge(); } return; }
   if (hideScanners && isScanner(ev)) return;
-  const feed = $("tFeed");
-  if (!feed.querySelector(".fi")) feed.innerHTML = "";
-  feed.insertAdjacentHTML("afterbegin", feedItem(ev));
-  feed.firstElementChild.classList.add("fresh");
-  while (feed.childElementCount > 80) feed.lastElementChild.remove();
+  feedEvents.unshift(ev);
+  feedEvents = feedEvents.slice(0, 80);
+  renderFeed(feedEvents, false);
+  const first = $("tFeed").firstElementChild;
+  if (first) first.classList.add("fresh");
   pushArc(ev);
   if (tSummary) {        // keep the headline numbers moving between summaries
     tSummary.total++; if (ev.action === "blocked") tSummary.blocked++;
