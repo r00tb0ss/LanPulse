@@ -228,6 +228,7 @@ class AdGuardHome:
             self.ctx.verify_mode = ssl.CERT_NONE
         self.sid = None
         self.version = None
+        self.pagination_truncated = False
 
     def _get(self, path: str, timeout: int = 20):
         headers = {"Accept": "application/json", "User-Agent": "LanPulse"}
@@ -261,6 +262,7 @@ class AdGuardHome:
         if self.version is None:
             self.login()
         out, older = [], ""
+        self.pagination_truncated = False
         for _ in range(self.MAX_PAGES):
             q = {"limit": self.PAGE}
             if older:
@@ -286,6 +288,10 @@ class AdGuardHome:
             older = str(data.get("oldest") or "")
             if not page or not older or oldest_t is None or oldest_t < since or len(page) < self.PAGE:
                 break
+        else:
+            # We hit the safety ceiling while the source still has older pages.
+            # Return what we collected, but expose that the requested window is incomplete.
+            self.pagination_truncated = bool(page and len(page) >= self.PAGE and older)
         out.sort(key=lambda r: r["t"])
         return out
 
@@ -426,7 +432,9 @@ class DnsMonitor:
             self.client.version = None
             return []
         self.status.update(state="ok", error="", last_poll=now, version=self.client.version,
-                           source=SOURCES.get(self.cfg.get("provider"), "Pi-hole"))
+                           source=SOURCES.get(self.cfg.get("provider"), "Pi-hole"),
+                           warning=("AdGuard query log reached the 10,000-record page limit; this poll may be incomplete."
+                                    if getattr(self.client, "pagination_truncated", False) else ""))
         return rows
 
     def ingest(self, rows: list[dict]):
