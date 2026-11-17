@@ -135,3 +135,11 @@ class EveryKind(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReadableLabels(unittest.TestCase):
+    def test_device_types_read_like_words(self):
+        self.assertEqual(reports.type_label("nas"), "NAS")
+        self.assertEqual(reports.type_label("raspberrypi"), "Raspberry Pi")
+        self.assertEqual(reports.type_label("printer"), "Printer")
+        self.assertEqual(reports.type_label(None), "Unknown")
