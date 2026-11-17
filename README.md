@@ -11,17 +11,11 @@ alert the moment something inside your network is compromised.
 >
 > **Project page with full feature tour and screenshots:** https://r00tb0ss.github.io/LanPulse/
 
-![Illustrative LanPulse operations-center preview using synthetic demo data](docs/images/demo-overview.svg)
 
-![Illustrative network topology preview using synthetic demo data](docs/images/demo-topology.svg)
 
-![Illustrative threats dashboard preview using synthetic demo data](docs/images/demo-security.svg)
 
-![Illustrative honeypot preview using synthetic demo data](docs/images/demo-honeypot.svg)
 
-![Illustrative AI Security Analyst preview using synthetic demo data](docs/images/demo-generic.svg)
 
-> **Image note:** The project-page and README visuals are illustrative previews populated with synthetic demo data. They are not screenshots from a live installation.
 
 Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberry Pi.
 
@@ -103,7 +97,6 @@ Attackers are placed on the map with the free DB-IP City Lite database (refreshe
 
 ## Network topology
 
-![Illustrative network topology preview using synthetic demo data](docs/images/demo-topology.svg)
 
 The **Network** tab opens on a topology map: Internet, gateway, switches, access points, then every device on its own
 cable.
@@ -129,7 +122,6 @@ cable.
   devices. **Changes** lists what joined, left, moved or roamed.
 - **Export** to SVG, PNG (icons are left out), draw.io or CSV.
 
-![Illustrative topology details preview using synthetic demo data](docs/images/demo-topology.svg)
 
 ## Device traffic layer
 
@@ -340,7 +332,6 @@ adds serious (CVSS 7+) CVEs the NVD match missed. These are version-based, so th
 Confirmed. Only the service's version identifier (CPE) is sent to vulners.com, never your IPs or device names; if the
 LanPulse box has no internet access, the lookup is simply skipped.
 
-![Illustrative vulnerability dashboard preview using synthetic demo data](docs/images/demo-security.svg)
 
 ### OpenVAS (accurate scanning)
 
@@ -356,7 +347,6 @@ once so the install helper is set up.
 LanPulse also ships curated signatures for classic lab flaws (vsftpd 2.3.4 backdoor, UnrealIRCd 3.2.8.1 backdoor, distccd,
 Samba usermap script, ProFTPD 1.3.3c, Java RMI, bindshell, DRb and r-services).
 
-![Illustrative scanner dashboard preview using synthetic demo data](docs/images/demo-security.svg)
 
 ## Honeypot
 
@@ -402,7 +392,6 @@ The Honeypot tab is split into sections:
 
 Captured files are only ever inspected as bytes. They are never run. YARA Forge Core is installed with LanPulse, checked during installation, and refreshed weekly by a systemd timer. The managed package is SHA-256 verified and compiled before activation; failed updates preserve the last working rule set. Your own `.yar` and `.yara` files can be placed in `/opt/lanpulse/data/yara-rules/` (outside the `managed` subfolder) and are preserved during managed updates. The Honeypot captured-file view shows YARA engine status, managed/custom rule counts, package version and update errors. A YARA match is a lead for investigation, not a verdict.
 
-![Honeypot](docs/images/demo-honeypot.svg)
 
 ## AI Security Analyst
 
@@ -425,7 +414,6 @@ With Ollama, LanPulse asks for a larger context window so none of this is silent
 hidden until you tap **Show suggested questions**. Device names and banners are treated as untrusted data. With a cloud provider, that summary is sent to
 them with each question, and the panel says so. API keys are stored on the LanPulse box and masked in settings.
 
-![AI Security Analyst](docs/images/demo-generic.svg)
 
 ## Risk Profile (network security score)
 
