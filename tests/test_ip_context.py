@@ -21,8 +21,10 @@ from test_honeyanalysis import FakeHp  # noqa: E402
 # (label of the case, facts, expected label)
 CASES = [
     ("tagged research scanner", {"count": 400, "ports": 30, "tag": "Shodan"}, "Research scanner"),
+    ("scanner that also reached an open service", {"count": 400, "ports": 30, "tag": "Shodan", "reached": 2, "hits_on_open": 1}, "Reached a real service"),
     ("greynoise benign", {"count": 20, "ports": 3, "gn_class": "benign"}, "Research scanner"),
-    ("honeypot intruder", {"count": 9, "ports": 1, "pot_commands": 6}, "Interactive attacker (decoy only)"),
+    ("honeypot intruder", {"count": 9, "ports": 1, "pot_commands": 6}, "Interactive honeypot activity"),
+    ("successful login without commands", {"count": 1, "ports": 1, "pot_logged_in": True}, "Interactive honeypot activity"),
     ("got through to an open port", {"count": 4, "ports": 1, "reached": 2, "hits_on_open": 2}, "Reached a real service"),
     ("got through but port not open", {"count": 2, "ports": 1, "reached": 2, "hits_on_open": 0}, "One-off probe"),
     ("hammering one service", {"count": 40, "ports": 1, "targets": 1, "max_repeat": 40, "days": 1}, "Persistent"),
