@@ -50,16 +50,7 @@ jobs:
           pip install -r requirements.txt playwright
           playwright install --with-deps chromium
       - name: Open every view
-        id: bc
-        continue-on-error: true
         run: python tests/browser_check.py
-      - name: TEMP dump phone screenshots
-        if: always()
-        run: |
-          for f in browser-phone-v*.png; do echo "IMG-BEGIN $f"; base64 -w0 "$f"; echo; echo "IMG-END"; done
-      - name: Fail if the check failed
-        if: steps.bc.outcome == 'failure'
-        run: exit 1
       - name: Keep screenshots of every view
         if: always()
         uses: actions/upload-artifact@v4
