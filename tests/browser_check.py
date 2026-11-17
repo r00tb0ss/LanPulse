@@ -35,6 +35,8 @@ def main() -> int:
     from playwright.sync_api import sync_playwright
     problems = []
     with tempfile.TemporaryDirectory() as data:
+        with open(os.path.join(data, "settings.json"), "w") as fh:
+            fh.write('{"wizard": {"done": true}}')          # skip the first-run guide, which covers the page
         proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "app.py"), "--demo", "--data-dir", data], cwd=ROOT)
         try:
             wait_up(proc)
@@ -48,6 +50,9 @@ def main() -> int:
                 page.goto(BASE, wait_until="domcontentloaded")
                 page.wait_for_selector("#vNet", timeout=20000)
                 page.wait_for_timeout(2500)
+                if page.is_visible("#wizSkipAll"):
+                    page.click("#wizSkipAll")
+                    page.wait_for_timeout(500)
                 for vid in VIEWS:
                     current["view"] = vid
                     page.click("#" + vid)
