@@ -106,6 +106,31 @@ def main() -> int:
                 if widths["name"] < 100:
                     problems.append(f"[phone vulns] the device list name is only {widths['name']:.0f}px wide")
                 page.screenshot(path=os.path.join(ROOT, "browser-phone-vulns.png"))
+                # Tablet layout: Topology must sit right under the view buttons and clear of the bottom search bar.
+                page.set_viewport_size({"width": 840, "height": 900})
+                current["view"] = "tablet topology"
+                page.goto(BASE, wait_until="domcontentloaded")
+                page.wait_for_selector("#vNet", timeout=20000)
+                page.wait_for_timeout(1500)
+                geo = page.evaluate("""async () => {
+                  for (const b of document.querySelectorAll('#layoutPick button')) {
+                    b.click(); await new Promise(r => setTimeout(r, 700));
+                    if (document.querySelector('.topo-bar')) break;
+                  }
+                  const bar = document.querySelector('.topo-bar'), pick = document.getElementById('layoutPick'),
+                        stage = document.querySelector('.topo-stage'), find = document.getElementById('mapFind');
+                  if (!bar) return null;
+                  return {gap: bar.getBoundingClientRect().top - pick.getBoundingClientRect().bottom,
+                          overlap: stage.getBoundingClientRect().bottom - find.getBoundingClientRect().top};
+                }""")
+                if geo is None:
+                    problems.append("[tablet topology] the topology view did not open")
+                else:
+                    if geo["gap"] > 40:
+                        problems.append(f"[tablet topology] {geo['gap']:.0f}px of empty space above the toolbar")
+                    if geo["overlap"] > 4:
+                        problems.append(f"[tablet topology] the search bar covers the bottom {geo['overlap']:.0f}px of the diagram")
+                page.screenshot(path=os.path.join(ROOT, "browser-tablet-topology.png"))
                 browser.close()
         finally:
             proc.terminate()
