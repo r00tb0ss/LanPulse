@@ -94,9 +94,15 @@ function renderVulns() {
   for (const key of vulnOpen) fillFixDetail(key);
 
   const dmax = Math.max(1, ...s.devices.map((d) => d.count));
-  $("vulnDevs").innerHTML = s.devices.map((d) => { const ty = TYPES[d.type] || TYPES.unknown; return `<div class="rk click" data-dev-id="${esc(d.id)}">
+  $("vulnDevs").innerHTML = s.devices.map((d) => { const ty = TYPES[d.type] || TYPES.unknown;
+    const facts = [d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed</span>` : "",
+      d.kev ? `<span style="color:#fca5a5">${d.kev} exploited</span>` : "",
+      d.msf_modules ? `<span style="color:#fdba74">${d.msf_modules} Metasploit modules</span>` : "",
+      d.exploits ? `<span style="color:#fdba74">${d.exploits} with public code</span>` : ""].filter(Boolean).join('<span class="vd-sep"> · </span>');
+    return `<div class="rk click vd" data-dev-id="${esc(d.id)}">
       <span class="ico"><i class="${faClass(ty)}" style="color:${ty.color}"></i></span><span class="nm">${esc(d.name)}</span>
-      <span class="ct">${ovBtn(devices.get(d.id)?.ip)}${xBtn("redteam", d.id)}${d.confirmed ? `<span style="color:#fecaca;font-weight:700">${d.confirmed} confirmed · </span>` : ""}${d.kev ? `<span style="color:#fca5a5">${d.kev} exploited · </span>` : ""}${d.msf_modules ? `<span style="color:#fdba74">${d.msf_modules} Metasploit modules · </span>` : ""}${d.exploits ? `<span style="color:#fdba74">${d.exploits} findings with public code · </span>` : ""}${d.count}</span>
+      <span class="ct" title="Findings for this device">${d.count}<span class="vd-unit"> finding${d.count === 1 ? "" : "s"}</span></span>
+      <div class="vd-meta"><span class="vd-facts">${facts}</span><span class="vd-acts">${ovBtn(devices.get(d.id)?.ip)}${xBtn("redteam", d.id)}</span></div>
       <div class="bar"><i style="width:${(100 * d.count / dmax).toFixed(1)}%;background:${SEV_COLOR[sevOf(d.max)]}"></i></div></div>`; }).join("")
     || `<div class="muted">No affected devices.</div>`;
 
