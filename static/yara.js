@@ -26,6 +26,15 @@ async function loadYaraView() {
   renderYaraView(samples && samples.total || rows.length);
 }
 
+function formatYaraPackageDate(value) {
+  if (value === null || value === undefined || value === "") return "Not reported";
+  const raw = typeof value === "number" || /^\\d+(?:\\.\\d+)?$/.test(String(value).trim())
+    ? Number(value) * (Number(value) < 1e12 ? 1000 : 1)
+    : value;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "Not reported" : date.toLocaleString();
+}
+
 function renderYaraView(total = yaraSamples.length) {
   const s = yaraStatus || {}, managed = s.managed || {};
   const ready = !!s.available && Number(s.loaded || 0) > 0 && !(s.errors || []).length;
@@ -45,8 +54,8 @@ function renderYaraView(total = yaraSamples.length) {
       Status: <b>${esc(managed.status || "Unknown")}</b><br>
       Managed files: ${Number(s.managed_files || 0)} · Custom files: ${Number(s.custom_files || 0)}<br>
       Loaded groups: ${Number(s.groups || 0)}<br>
-      Updated: ${managed.updated_at ? esc(full(managed.updated_at)) : "Not reported"}<br>
-      Last checked: ${managed.checked_at ? esc(full(managed.checked_at)) : "Not reported"}
+      Updated: ${esc(formatYaraPackageDate(managed.updated_at))}<br>
+      Last checked: ${esc(formatYaraPackageDate(managed.checked_at))}
     </div>
     ${managed.last_error ? `<div class="v-note warn">${esc(managed.last_error)}</div>` : ""}
     ${(s.errors || []).length ? `<ul class="pot-notes">${s.errors.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : '<div class="muted">No YARA loading errors reported.</div>'}
