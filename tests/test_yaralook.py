@@ -21,7 +21,10 @@ class FakeRules:
     def __init__(self, path):
         self.path = path
 
+    calls = 0
+
     def match(self, data=None, timeout=None):
+        type(self).calls += 1
         if b"BAD" in pathlib.Path(self.path).read_bytes():
             raise RuntimeError("scan blew up")
         return [FakeMatch("Mirai_like", ["botnet"], {"description": "needs\x1b review"}, [1, 2])] if b"botnet" in data else []
@@ -120,11 +123,21 @@ class InTheFileView(unittest.TestCase):
             nm = types.SimpleNamespace(args=types.SimpleNamespace(demo=False), data_dir=pathlib.Path(t), notify_plain=lambda *a: None)
             h = ha.HoneyAnalysis(nm, FakeHp())
             ok, sha = h.add_sample(b"#!/bin/sh\necho botnet\n", {"ip": "198.51.100.7"}, quiet=True)
-            self.assertNotIn("yara", h.sample(sha))
+            self.assertEqual(h.sample(sha)["yara"]["scan_status"], "no_rules")
             (pathlib.Path(t) / "yara-rules").mkdir()
             (pathlib.Path(t) / "yara-rules" / "bot.yar").write_text("rule x { condition: true }")
-            y = h.sample(sha)["yara"]
-            self.assertEqual([m["rule"] for m in y["matches"]], ["Mirai_like"])
+            first = h.sample(sha)["yara"]
+            self.assertEqual([m["rule"] for m in first["matches"]], ["Mirai_like"])
+            self.assertEqual(first["scan_status"], "complete")
+            self.assertTrue(first["rules_fingerprint"])
+            calls = FakeRules.calls
+            cached = h.sample(sha)["yara"]
+            self.assertEqual(cached["rules_fingerprint"], first["rules_fingerprint"])
+            self.assertEqual(FakeRules.calls, calls)
+            (pathlib.Path(t) / "yara-rules" / "bot.yar").write_text("rule changed { condition: true }")
+            refreshed = h.sample(sha)["yara"]
+            self.assertNotEqual(refreshed["rules_fingerprint"], first["rules_fingerprint"])
+            self.assertGreater(FakeRules.calls, calls)
 
 
 if __name__ == "__main__":

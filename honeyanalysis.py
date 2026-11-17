@@ -841,6 +841,22 @@ class HoneyAnalysis:
                 log.exception("could not record the session headline")
         return True, "ok"
 
+    def _scan_yara(self, data: bytes) -> dict:
+        """Run bounded static YARA matching and label incomplete/unavailable scans explicitly."""
+        try:
+            status = self.yara.status()
+            result = self.yara.scan(data)
+            result["rules_fingerprint"] = status.get("fingerprint", "")
+            result["scanned_at"] = time.time()
+            result["scan_status"] = ("unavailable" if not result.get("available") else
+                                     "no_rules" if not result.get("files") else
+                                     "partial" if result.get("errors") else "complete")
+            return result
+        except Exception as exc:
+            log.warning("YARA scan failed; captured sample is retained", exc_info=True)
+            return {"available": False, "files": 0, "matches": [], "errors": [str(exc)[:160]],
+                    "rules_fingerprint": "", "scanned_at": time.time(), "scan_status": "unavailable"}
+
     def add_sample(self, data: bytes, meta: dict, quiet: bool = False) -> tuple[bool, str]:
         if not data:
             return False, "empty"
@@ -849,6 +865,8 @@ class HoneyAnalysis:
         if not quiet and not self._allow("sample"):
             return False, "rate limited"
         a = analyze_sample(data)
+        # Persist static YARA results immediately so the dashboard and analyst share the same evidence.
+        a["yara"] = self._scan_yara(data)
         sha = a["sha256"]
         ip = str(meta.get("ip") or "")[:45]
         try:
@@ -1258,8 +1276,11 @@ class HoneyAnalysis:
         out = []
         for sha, size, kind, typ, first, last, seen, an in rows:
             a = json.loads(an or "{}")
+            y = a.get("yara") if isinstance(a.get("yara"), dict) else {}
             out.append({"sha256": sha, "size": size, "kind": kind, "type": typ, "first_seen": first, "last_seen": last,
-                        "seen": seen, "families": a.get("families", []), "tags": a.get("tags", []), "score": a.get("score", 0)})
+                        "seen": seen, "families": a.get("families", []), "tags": a.get("tags", []), "score": a.get("score", 0),
+                        "yara_status": y.get("scan_status", "pending"), "yara_match_count": len(y.get("matches") or []),
+                        "yara_scanned_at": y.get("scanned_at")})
         return {"samples": out, "total": total}
 
     def sample(self, sha: str) -> dict | None:
@@ -1293,8 +1314,20 @@ class HoneyAnalysis:
                 out["elf"] = staticlook.elf_details(data)
             elif kind in ("script", "text", "web"):
                 out["decoded"] = decoded_view(data[:400_000].decode("latin-1", "replace"))
-            y = self.yara.scan(data)
-            if y["files"]:                      # nothing is shown unless the owner has put rule files in the folder
+            status = self.yara.status()
+            fingerprint = status.get("fingerprint", "")
+            with self.lock:
+                row = self.db.execute("SELECT analysis FROM samples WHERE sha256=?", (sha,)).fetchone()
+            analysis = json.loads(row[0] or "{}") if row else {}
+            cached = analysis.get("yara") if isinstance(analysis.get("yara"), dict) else {}
+            if cached.get("rules_fingerprint") == fingerprint and cached.get("scan_status") in ("complete", "partial", "no_rules", "unavailable"):
+                out["yara"] = cached
+            else:
+                y = self._scan_yara(data)
+                analysis["yara"] = y
+                with self.lock:
+                    self.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps(analysis), sha))
+                    self.db.commit()
                 out["yara"] = y
         except Exception:
             log.debug("closer look at a sample failed", exc_info=True)

@@ -64,13 +64,17 @@ function renderYaraView(total = yaraSamples.length) {
         <span class="muted mono">${esc(row.sha256)}</span>
         <span class="muted">${esc(row.kind || row.type || "file")} · ${Number(row.size || 0).toLocaleString()} bytes · score ${Number(row.score || 0)}/100</span>
         <span class="pot-hash-meta">${hasMatch ? `<span class="tagchip bad">${matches.length} YARA match${matches.length === 1 ? "" : "es"}</span>` :
-          y.files ? '<span class="tagchip">No YARA match</span>' : '<span class="tagchip">No scan details available</span>'}</span>
+          y.scan_status === "complete" ? '<span class="tagchip">Scanned · no match</span>' :
+          y.scan_status === "partial" ? '<span class="tagchip warn">Partial scan</span>' :
+          y.scan_status === "no_rules" ? '<span class="tagchip">No rules loaded</span>' :
+          y.scan_status === "unavailable" ? '<span class="tagchip warn">Engine unavailable</span>' : '<span class="tagchip">Scan pending</span>'}</span>
       </summary>
       <div class="yara-result-detail">
         <div><b>SHA-256</b><div class="mono">${esc(row.sha256)}</div></div>
         <div><b>File</b><div>${esc(name)}</div></div>
         <div><b>Type and size</b><div>${esc(row.kind || row.type || "file")} · ${Number(row.size || 0).toLocaleString()} bytes</div></div>
         <div><b>Honeypot score</b><div>${Number(row.score || 0)}/100</div></div>
+        <div><b>YARA scan status</b><div>${esc(y.scan_status || "pending")}${y.scanned_at ? " · " + esc(full(y.scanned_at)) : ""}</div></div>
         <div><b>YARA rule files scanned</b><div>${Number(y.files || 0).toLocaleString()}</div></div>
         <div><b>YARA matches</b><div>${hasMatch ? matches.map(m => `<div class="yara-rule-detail"><b class="mono">${esc(m.rule)}</b><div>${esc(m.file || "Rule file")}${(m.tags || []).length ? " · Tags: " + esc(m.tags.join(", ")) : ""}</div>${m.description ? `<p>${esc(m.description)}</p>` : ""}</div>`).join("") : "No matching rules were reported for this file."}</div></div>
       </div>

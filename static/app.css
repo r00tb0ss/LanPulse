@@ -1388,6 +1388,13 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .pot-hash-summary{font-size:12px;color:var(--muted);margin:0 0 8px}
 .pot-hash-list{display:grid;gap:5px;max-height:440px;overflow:auto}
 .pot-hash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)}
+/* Native details rows need a block wrapper: flex on the details element places the summary and
+   expanded panel side-by-side, making the disclosure difficult to use on narrow cards. */
+.yara-result-row{display:block;cursor:pointer}
+.yara-result-row>summary{display:grid;gap:4px;cursor:pointer;list-style-position:inside;min-width:0}
+.yara-result-row[open]>.yara-result-detail{display:grid;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;overflow-wrap:anywhere}
+.yara-rule-detail{padding:8px 0;border-top:1px solid var(--border)}
+.yara-rule-detail:first-child{border-top:0}
 .pot-hash-row.click{cursor:pointer}
 .pot-hash-row.click:hover{border-color:var(--border2);background:var(--panel2)}
 .pot-hash-main{display:grid;gap:4px;min-width:0;font-size:12px}

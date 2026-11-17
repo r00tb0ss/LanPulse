@@ -9,6 +9,7 @@ they are never executed. Rule includes are disabled.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import pathlib
@@ -123,7 +124,8 @@ class YaraRules:
             pass
         return {"available": yara is not None, "files": self._managed_files + self._custom_files,
                 "managed_files": self._managed_files, "custom_files": self._custom_files,
-                "loaded": self._loaded_files, "groups": len(self._rules), "errors": self._errors[:20], "managed": meta}
+                "loaded": self._loaded_files, "groups": len(self._rules), "errors": self._errors[:20], "managed": meta,
+                "fingerprint": hashlib.sha256(repr(self._sig).encode("utf-8")).hexdigest()}
 
     def scan(self, data: bytes) -> dict:
         out = self.status()

@@ -202,7 +202,7 @@ LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubun
 - Vulns: known vulnerabilities per device from NVD CVE data, matched by software version. Ranked: confirmed by a safe active check (nmap NSE, e.g. EternalBlue) first, then actively exploited (CISA KEV), then Metasploit modules / Exploit-DB exploits, then severity. Version matching cannot see missing patches, so Linux packages patched without a version change can show as "may be patched". Old Windows is matched from the OS guess only when ports answered. OpenVAS (Greenbone) can be installed and driven from Settings > Scanner. An alert goes out when a device gains an actively exploited flaw.
 - Services: uptime checks (ping, HTTP, TCP port) with 24 h / 7 d uptime, latency and incidents, plus suggestions based on what the scanner found.
 - Red Team: an attacker's-eye report built from LanPulse's own scan data (exposed apps, unpatched flaws, attack paths), exportable.
-- Honeypot: built-in decoy Telnet, FTP, SMB, RDP, MySQL (optional SSH and HTTP) that log probes and credentials; any hit from inside the LAN flags a likely-compromised device. Under Captured attacks and malware: Sessions, Samples and Sensors. A sensor is an optional Cowrie SSH/Telnet honeypot on a Raspberry Pi, Linux box or container (Add sensor shows a one-line install command; Customize sets ports, fake hostname/OS, which logins work, limits, and optional FTP and web decoys that keep uploaded files). Captured files are analysed statically (hashes, type, strings, families, tags, score) and are never run.
+- Honeypot: built-in decoy Telnet, FTP, SMB, RDP, MySQL (optional SSH and HTTP) that log probes and credentials; any hit from inside the LAN flags a likely-compromised device. Under Captured attacks and malware: Sessions, Samples and Sensors. A sensor is an optional Cowrie SSH/Telnet honeypot on a Raspberry Pi, Linux box or container (Add sensor shows a one-line install command; Customize sets ports, fake hostname/OS, which logins work, limits, and optional FTP and web decoys that keep uploaded files). Captured files are analysed statically (hashes, type, strings, families, tags, score and optional YARA matches) and are never run. YARA results are cached with the rule-set fingerprint and refreshed when rules change; no match does not prove a file is safe.
 - Security score (risk profile) with the biggest fixes, daily summary, alerts by ntfy, Telegram, webhook (Discord, Slack, Home Assistant), email or IRC, login with a hashed password and optional HTTPS, Wake-on-LAN, CSV export. This analyst can use Ollama, any OpenAI-compatible server or Anthropic; it is read-only and cannot change anything.
 - Updates: Settings > Update > Check for updates, then hard-refresh the page. Source and releases: gitlab.com/r00tb0ss/lanpulse."""
 
@@ -263,8 +263,12 @@ def _honeypot(nm, detail: bool) -> list[str]:
         if sm.get("total"):
             out.append(f"Captured malware samples: {sm['total']}. Newest:")
             for s in sm["samples"][:6]:
+                ystate = s.get("yara_status") or "pending"
+                ycount = int(s.get("yara_match_count") or 0)
+                ysummary = (f", YARA matches {ycount}" if ycount else
+                            ", YARA scanned: no match" if ystate == "complete" else f", YARA {ystate}")
                 out.append(f"  - {str(s.get('sha256'))[:12]} {_clip(s.get('type'), 30)}, {s.get('size')} bytes, seen {s.get('seen')}x, "
-                           f"families {','.join(_clip(x, 20) for x in (s.get('families') or [])[:3]) or 'none'}, score {s.get('score')}")
+                           f"families {','.join(_clip(x, 20) for x in (s.get('families') or [])[:3]) or 'none'}, score {s.get('score')}{ysummary}")
     except Exception:
         pass
     return out
