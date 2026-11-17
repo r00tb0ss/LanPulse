@@ -34,19 +34,25 @@ def classify_source(f: dict) -> dict:
         return {"label": label, "category": category, "level": level, "confidence": confidence,
                 "evidence": why or ev, "note": "A pattern in the traffic LanPulse saw, not proof of what the sender intended."}
 
+    # Real-service exposure must outrank scanner reputation and decoy activity.
+    if reached and on_open:
+        return out("Reached a real service", FOCUSED, "act", "high",
+                   [f"{reached} attempt{'s' if reached != 1 else ''} were allowed through the router.",
+                    f"{on_open} of them matched a port known to be open on one of your devices.",
+                    "Investigate the destination device and its service logs."])
     if f.get("tag") or f.get("gn_class") == "benign":
         who = f.get("tag") or "a known benign scanner"
-        return out("Research scanner", BACKGROUND, "ignore", "high",
-                   [f"Identified as {who}.", "Research scanners map the whole internet and rarely mean harm."])
-    if f.get("pot_commands"):
-        return out("Interactive attacker (decoy only)", DECOY, "watch", "moderate",
-                   [f"Logged in to the honeypot and ran {f['pot_commands']} command{'s' if f['pot_commands'] != 1 else ''}.",
-                    "Only a decoy was touched. Attackers like this try every address they find, so it is not aimed at you."])
-    if reached and on_open:
-        return out("Reached a real service", FOCUSED, "act", "moderate",
-                   [f"{reached} attempt{'s' if reached != 1 else ''} got through the router.",
-                    f"{on_open} of them hit a port that is open on one of your devices.",
-                    "Check that device and its logs."])
+        return out("Research scanner", BACKGROUND, "watch" if reached else "ignore", "high",
+                   [f"Identified as {who}.",
+                    "Scanner reputation is context, not proof that every connection is harmless."])
+    logged_in = bool(f.get("pot_logged_in"))
+    commands = int(f.get("pot_commands") or 0)
+    if logged_in or commands:
+        evidence = ["Successfully logged in to the honeypot."] if logged_in else []
+        if commands:
+            evidence.append(f"Ran {commands} command{'s' if commands != 1 else ''} in the honeypot.")
+        evidence.append("The recorded interactive activity was against a decoy; it does not establish access to a real device.")
+        return out("Interactive honeypot activity", DECOY, "watch", "high" if logged_in else "moderate", evidence)
     if repeat >= 5 or (days >= 3 and ports <= 3 and n >= 6):
         why = []
         if repeat >= 5:
@@ -86,7 +92,7 @@ def facts_from_rows(rows, devices_by_ip: dict, tag: str = "", gn_class: str = ""
                 on_open += 1
     return {"count": len(rows), "ports": len(ports), "targets": len(targets), "days": len(day_set),
             "max_repeat": max(repeat.values(), default=0), "reached": reached, "hits_on_open": on_open,
-            "tag": tag, "gn_class": gn_class, "pot_commands": int((pot or {}).get("commands") or 0)}
+            "tag": tag, "gn_class": gn_class, "pot_commands": int((pot or {}).get("commands") or 0),\n            "pot_logged_in": bool((pot or {}).get("logged_in") or (pot or {}).get("successful_logins") or (pot or {}).get("logins"))}
 
 
 def neighbours(db, lock, ip: str, days: int = 30, limit: int = 8) -> list[dict]:
