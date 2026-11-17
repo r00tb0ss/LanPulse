@@ -299,6 +299,17 @@ def _countries(rows, key="country"):
     return [[r.get(key) or r.get("iso") or "?", f"{r.get('count', r.get('hits', 0)):,}"] for r in rows]
 
 
+TYPE_LABELS = {"nas": "NAS", "tv": "TV", "ap": "Access point", "iot": "IoT device", "raspberrypi": "Raspberry Pi",
+               "unknown": "Unknown"}
+STATE_LABELS = {"ok": "Working", "warn": "Needs attention", "bad": "Problem", "off": "Not set up"}
+
+
+def type_label(t) -> str:
+    """A device type as people say it: 'nas' -> 'NAS', 'raspberrypi' -> 'Raspberry Pi', 'printer' -> 'Printer'."""
+    t = str(t or "unknown")
+    return TYPE_LABELS.get(t, t.replace("-", " ").capitalize())
+
+
 def _tone(n, bad=1, warn=0):
     return "bad" if n >= bad else "warn" if n > warn else "good"
 
@@ -323,10 +334,11 @@ def build_network(snap: dict, posture: dict, health: dict | None = None) -> Doc:
         doc.bullets(f"{f.get('text')} (+{f.get('points')} points)" for f in posture["fixes"])
     if health and health.get("items"):
         doc.h("LanPulse data sources")
-        doc.table(["Source", "State", "Detail"], [[i.get("name"), i.get("state"), i.get("detail")] for i in health["items"]], [2, 1, 6])
+        doc.table(["Source", "State", "Detail"], [[i.get("name"), STATE_LABELS.get(i.get("state"), i.get("state")), i.get("detail")] for i in health["items"]], [2, 1, 6])
     types: dict = {}
     for d in devs:
-        types[d.get("type") or "unknown"] = types.get(d.get("type") or "unknown", 0) + 1
+        label = type_label(d.get("type"))
+        types[label] = types.get(label, 0) + 1
     doc.h("Device types")
     doc.table(["Type", "Devices"], [[k, v] for k, v in sorted(types.items(), key=lambda kv: -kv[1])], [3, 1])
     if new:
@@ -339,7 +351,7 @@ def build_network(snap: dict, posture: dict, health: dict | None = None) -> Doc:
     for d in sorted(devs, key=lambda d: (not d.get("online"), str(d.get("ip")))):
         ports = d.get("ports") or []
         rows.append([d.get("name") or d.get("friendly") or d.get("hostname") or d.get("vendor") or d.get("ip"), d.get("ip"),
-                     d.get("mac"), d.get("vendor"), d.get("type"), d.get("os"), "online" if d.get("online") else "offline",
+                     d.get("mac"), d.get("vendor"), type_label(d.get("type")), d.get("os"), "Online" if d.get("online") else "Offline",
                      ", ".join(str(p.get("port")) for p in ports[:12])])
     doc.table(["Name", "IP", "MAC", "Vendor", "Type", "OS guess", "Status", "Open ports"], rows, [3, 2, 3, 3, 2, 3, 1.5, 3])
     return doc
@@ -418,7 +430,7 @@ def build_vulns(s: dict) -> Doc:
               empty="No vulnerabilities were matched.")
     doc.h("Devices ranked by risk")
     doc.table(["Device", "IP", "Type", "CVEs", "Critical", "High", "Exploited", "Exploits", "Confirmed"],
-              [[d.get("name"), d.get("ip"), d.get("type"), d.get("count"), d.get("critical"), d.get("high"), d.get("kev"), d.get("exploits"), d.get("confirmed")]
+              [[d.get("name"), d.get("ip"), type_label(d.get("type")), d.get("count"), d.get("critical"), d.get("high"), d.get("kev"), d.get("exploits"), d.get("confirmed")]
                for d in sorted(s.get("devices", []), key=lambda d: (-(d.get("kev") or 0), -(d.get("critical") or 0), -(d.get("count") or 0)))],
               [3, 2, 2, 1, 1, 1, 1.2, 1.2, 1.3], empty="No devices have been scanned for vulnerabilities yet.")
     if s.get("config"):
@@ -471,7 +483,7 @@ def build_redteam(devices: list[dict], results: dict, helpers) -> Doc:
             key = (t.get("id"), t.get("name"), t.get("tactic"))
             techs.setdefault(key, []).append(d.get("name") or d.get("ip"))
         if fs or dc:
-            rows.append([d.get("name") or d.get("hostname") or d.get("ip"), d.get("ip"), d.get("type"), len(d.get("ports") or []), len(fs),
+            rows.append([d.get("name") or d.get("hostname") or d.get("ip"), d.get("ip"), type_label(d.get("type")), len(d.get("ports") or []), len(fs),
                          sum(1 for f in fs if f.get("sev") in ("critical", "high")), sum(1 for f in fs if f.get("kev")),
                          ", ".join(x.get("service", "") for x in dc)])
     doc.h("Hosts")
