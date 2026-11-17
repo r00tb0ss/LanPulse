@@ -53,7 +53,22 @@ COMMON_INFRA = frozenset({
     "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "208.67.222.222", "208.67.220.220",
     "google.com", "github.com", "githubusercontent.com", "raw.githubusercontent.com", "example.com",
     "debian.org", "ubuntu.com", "microsoft.com", "cloudflare.com", "amazonaws.com", "pastebin.com",
+    "ifconfig.me", "icanhazip.com", "ipify.org", "ipinfo.io", "ip-api.com", "ident.me", "checkip.dyndns.org",
+    "ntp.org", "gitlab.com", "bitbucket.org", "sourceforge.net", "python.org", "pypi.org", "npmjs.com",
 })
+
+
+def _common_infra(value: str) -> bool:
+    """True for a listed host or any subdomain of one (cdn.github.com, s3.amazonaws.com)."""
+    v = value.lower().rstrip(".")
+    return v in COMMON_INFRA or any(v.endswith("." + d) for d in COMMON_INFRA if "." in d and not d[0].isdigit())
+
+
+# Tags nearly every bot shows; a shared mix of only these links unrelated sources, so it is not a behaviour pattern.
+GENERIC_TAGS = frozenset({"recon", "recon-network", "download", "make-executable", "run-dropped-file",
+                          "deletes-files", "kill-processes", "iot-botnet-probe"})
+# A fingerprint this many unrelated sources share belongs to a common SSH library, not to one operator.
+COMMON_CLIENT_SOURCES = 10
 
 
 def _ssh_key_fingerprint(key_text) -> str:
@@ -1136,7 +1151,7 @@ class HoneyAnalysis:
             ip = str(ip or "").strip()
             if not value or not ip:
                 return
-            if kind in ("Public IP", "Domain", "File transfer host") and value.lower() in COMMON_INFRA:
+            if kind in ("Public IP", "Domain", "File transfer host") and _common_infra(value):
                 return
             key = (kind, value)
             item = groups.setdefault(key, {"kind": kind, "value": value, "ips": set(),
@@ -1163,7 +1178,7 @@ class HoneyAnalysis:
             commands = json.loads(commands_json or "[]")
             files = json.loads(files_json or "[]")
             tags = sorted(set(json.loads(tags_json or "[]")) - {"logged-in"})
-            if len(tags) >= 3:
+            if len(tags) >= 3 and set(tags) - GENERIC_TAGS:
                 add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low", sensor=sensor)
             iocs = find_iocs("\n".join(commands))
             for indicator in iocs.get("ips", []):
@@ -1208,6 +1223,8 @@ class HoneyAnalysis:
         for item in groups.values():
             if len(item["ips"]) < 2:
                 continue
+            if item["kind"] == "SSH client fingerprint" and len(item["ips"]) >= COMMON_CLIENT_SOURCES:
+                item["confidence"] = "low"
             out.append({
                 "kind": item["kind"], "value": item["value"], "confidence": item["confidence"],
                 "sources": len(item["ips"]), "source_ips": sorted(item["ips"])[:30],
