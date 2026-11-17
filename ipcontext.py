@@ -40,11 +40,6 @@ def classify_source(f: dict) -> dict:
                    [f"{reached} attempt{'s' if reached != 1 else ''} were allowed through the router.",
                     f"{on_open} of them matched a port known to be open on one of your devices.",
                     "Investigate the destination device and its service logs."])
-    if f.get("tag") or f.get("gn_class") == "benign":
-        who = f.get("tag") or "a known benign scanner"
-        return out("Research scanner", BACKGROUND, "watch" if reached else "ignore", "high",
-                   [f"Identified as {who}.",
-                    "Scanner reputation is context, not proof that every connection is harmless."])
     logged_in = bool(f.get("pot_logged_in"))
     commands = int(f.get("pot_commands") or 0)
     if logged_in or commands:
@@ -53,6 +48,11 @@ def classify_source(f: dict) -> dict:
             evidence.append(f"Ran {commands} command{'s' if commands != 1 else ''} in the honeypot.")
         evidence.append("The recorded interactive activity was against a decoy; it does not establish access to a real device.")
         return out("Interactive honeypot activity", DECOY, "watch", "high" if logged_in else "moderate", evidence)
+    if f.get("tag") or f.get("gn_class") == "benign":
+        who = f.get("tag") or "a known benign scanner"
+        return out("Research scanner", BACKGROUND, "watch" if reached else "ignore", "high",
+                   [f"Identified as {who}.",
+                    "Scanner reputation is context, not proof that every connection is harmless."])
     if repeat >= 5 or (days >= 3 and ports <= 3 and n >= 6):
         why = []
         if repeat >= 5:
