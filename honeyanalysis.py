@@ -1366,7 +1366,7 @@ class HoneyAnalysis:
                         "yara_scanned_at": y.get("scanned_at")})
         return {"samples": out, "total": total}
 
-    def sample(self, sha: str) -> dict | None:
+    def sample(self, sha: str, scan_yara: bool = True) -> dict | None:
         sha = str(sha).lower()
         if not HEX64.match(sha):
             return None
@@ -1380,14 +1380,14 @@ class HoneyAnalysis:
         first, last, seen, ips, urls, names, an, stored = r
         a = json.loads(an or "{}")
         if stored:
-            a.update(self._closer_look(sha, a.get("kind")))
+            a.update(self._closer_look(sha, a.get("kind"), scan_yara=scan_yara))
         urls = json.loads(urls or "[]")
         return {**a, "first_seen": first, "last_seen": last, "seen": seen, "ips": json.loads(ips or "[]"),
                 "urls": [{"value": u, "defanged": defang(u)} for u in urls], "names": json.loads(names or "[]"),
                 "stored": bool(stored), "sessions": [{"id": i, "ip": ip, "start": t} for i, ip, t in sess],
                 "vt_link": f"https://www.virustotal.com/gui/file/{sha}"}
 
-    def _closer_look(self, sha: str, kind) -> dict:
+    def _closer_look(self, sha: str, kind, scan_yara: bool = True) -> dict:
         """Extra read-only detail worked out from the stored file each time it is opened, so it also covers files
         captured before this existed: decoded hidden content for scripts, header structure for Linux programs."""
         out: dict = {}
@@ -1405,13 +1405,18 @@ class HoneyAnalysis:
             cached = analysis.get("yara") if isinstance(analysis.get("yara"), dict) else {}
             if cached.get("rules_fingerprint") == fingerprint and cached.get("scan_status") in ("complete", "partial", "no_rules", "unavailable"):
                 out["yara"] = cached
-            else:
+            elif scan_yara:
                 y = self._scan_yara(data)
                 analysis["yara"] = y
                 with self.lock:
                     self.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps(analysis), sha))
                     self.db.commit()
                 out["yara"] = y
+            else:
+                # Reports are read-only: show the stored result, clearly marked stale/pending,
+                # instead of silently triggering a scan and writing to the sample database.
+                out["yara"] = {**cached, "scan_status": cached.get("scan_status", "pending"),
+                               "report_note": "Cached result only; fresh YARA analysis was not started."}
         except Exception:
             log.debug("closer look at a sample failed", exc_info=True)
         return out
