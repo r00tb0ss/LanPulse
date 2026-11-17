@@ -51,6 +51,9 @@ jobs:
           playwright install --with-deps chromium
       - name: Open every view
         run: python tests/browser_check.py
+      - name: Print screenshots into the log (review only)
+        if: always()
+        run: for f in browser-*.png; do echo "SHOT-BEGIN $f"; base64 -w0 "$f"; echo; echo "SHOT-END $f"; done
       - name: Keep screenshots of every view
         if: always()
         uses: actions/upload-artifact@v4
