@@ -57,7 +57,8 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Login** with a hashed password, plus optional HTTPS; changing the password signs out every other session
 - **Verified updates and backups**: downloaded releases are checked against a published SHA-256 checksum before they are installed, the previous version is restored automatically if an update fails, and data backups are verified archives you create and download from Settings
 - **Works offline**: map and icon libraries are stored locally
-- Wake-on-LAN, saved map layout, CSV export, search and filters, and it works on phones
+- **Responsive dashboard:** phone-friendly section navigation, stacked investigation panels, touch-sized controls, and mobile layouts across Network, Threats, DNS, Vulnerabilities, Services, Red Team and Honeypot. The live attack map keeps its geographic view, animated attack paths, filters and layers, with expanded/full-screen viewing available on smaller screens.
+- Wake-on-LAN, saved map layout, CSV export, search and filters
 
 ## Install (Ubuntu 22.04 / 24.04)
 
