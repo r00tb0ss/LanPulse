@@ -1989,3 +1989,51 @@ html[data-pretheme="sand"]{background:#f4efe6}
   #threatView .t-grid{grid-template-columns:minmax(0,1fr)}
   #threatView .t-card{padding:12px}
 }
+
+/* Full-screen attack map: keep every map filter reachable instead of clipping the toolbar. */
+#threatView .t-mapcard.full .map-top{
+  z-index:5;
+  left:16px;
+  right:76px;
+  top:16px;
+  max-height:min(48vh,420px);
+  overflow-y:auto;
+  overflow-x:hidden;
+  align-content:flex-start;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:9px;
+  padding:10px;
+  border:1px solid rgba(148,163,184,.28);
+  border-radius:12px;
+  background:rgba(5,11,24,.9);
+  box-shadow:0 8px 26px rgba(0,0,0,.28);
+  backdrop-filter:blur(12px);
+  pointer-events:auto;
+  scrollbar-width:thin;
+}
+#threatView .t-mapcard.full .map-title{flex:0 0 auto}
+#threatView .t-mapcard.full .map-chips{
+  flex:1 1 100%;
+  min-width:0;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-start;
+  gap:7px;
+}
+#threatView .t-mapcard.full .map-chips>*{max-width:100%}
+#threatView .t-mapcard.full .map-ctrl{z-index:6}
+@media(max-width:640px){
+  #threatView .t-mapcard.full .map-top{
+    left:8px;
+    right:54px;
+    top:8px;
+    max-height:min(56vh,460px);
+    padding:7px;
+    gap:6px;
+  }
+  #threatView .t-mapcard.full .map-chips{gap:5px}
+  #threatView .t-mapcard.full .map-chips select{max-width:min(42vw,180px)}
+}
+
