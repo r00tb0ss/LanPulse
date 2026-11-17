@@ -229,6 +229,10 @@ class AdGuardHome:
         self.sid = None
         self.version = None
         self.pagination_truncated = False
+        self._pending_since = None
+        self._pending_until = None
+        self._pending_older = ""
+        self._pending_rows = []
 
     def _get(self, path: str, timeout: int = 20):
         headers = {"Accept": "application/json", "User-Agent": "LanPulse"}
@@ -258,15 +262,21 @@ class AdGuardHome:
         self.version = str(data.get("version") or "").lstrip("v") or "?"
 
     def queries(self, since: float, until: float) -> list[dict]:
-        """Lookups between two times, oldest first: {id, t, client, client_name, domain, blocked}."""
+        """Lookups between two times, oldest first. Large backlogs are drained across polls."""
         if self.version is None:
             self.login()
-        out, older = [], ""
+        # Keep one fixed time window while draining a large query log. Do not advance
+        # the monitor watermark until all pages for this window have been collected.
+        if self._pending_since is None:
+            self._pending_since, self._pending_until = since, until
+            self._pending_older = ""
+            self._pending_rows = []
+        since, until = self._pending_since, self._pending_until
         self.pagination_truncated = False
         for _ in range(self.MAX_PAGES):
             q = {"limit": self.PAGE}
-            if older:
-                q["older_than"] = older
+            if self._pending_older:
+                q["older_than"] = self._pending_older
             code, data = self._get("/control/querylog?" + urllib.parse.urlencode(q), timeout=30)
             if code in (401, 403):
                 raise AdGuardError("AdGuard Home rejected the username or password.")
@@ -283,15 +293,23 @@ class AdGuardHome:
                 oldest_t = t if oldest_t is None else min(oldest_t, t)
                 if since <= t <= until + 1:
                     info = x.get("client_info") if isinstance(x.get("client_info"), dict) else {}
-                    out.append({"id": None, "t": t, "client": str(x.get("client") or ""), "client_name": str(info.get("name") or ""),
-                                "domain": clean_domain((x.get("question") or {}).get("name")), "blocked": is_adguard_blocked(x.get("reason"))})
-            older = str(data.get("oldest") or "")
-            if not page or not older or oldest_t is None or oldest_t < since or len(page) < self.PAGE:
+                    self._pending_rows.append({"id": None, "t": t, "client": str(x.get("client") or ""),
+                        "client_name": str(info.get("name") or ""),
+                        "domain": clean_domain((x.get("question") or {}).get("name")),
+                        "blocked": is_adguard_blocked(x.get("reason"))})
+            self._pending_older = str(data.get("oldest") or "")
+            if not page or not self._pending_older or oldest_t is None or oldest_t < since or len(page) < self.PAGE:
                 break
         else:
-            # We hit the safety ceiling while the source still has older pages.
-            # Return what we collected, but expose that the requested window is incomplete.
-            self.pagination_truncated = bool(page and len(page) >= self.PAGE and older)
+            self.pagination_truncated = bool(page and len(page) >= self.PAGE and self._pending_older)
+        if self.pagination_truncated:
+            # Keep the partial window private; returning it would advance DnsMonitor's
+            # timestamp watermark and cause the older pages to be discarded as duplicates.
+            return []
+        out = self._pending_rows
+        self._pending_since = self._pending_until = None
+        self._pending_older = ""
+        self._pending_rows = []
         out.sort(key=lambda r: r["t"])
         return out
 
