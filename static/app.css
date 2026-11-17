@@ -1660,3 +1660,48 @@ html[data-pretheme="sand"]{background:#f4efe6}
   #threatView .k-num{font-size:19px}
   #threatView .map-chips select{max-width:38vw}
 }
+
+
+/* Responsive behavior shared by network, DNS, vulnerability, service, red-team and honeypot views. */
+@media(max-width:640px){
+  .tview{box-sizing:border-box;width:100%;min-width:0;padding-left:10px;padding-right:10px}
+  .tview>*{min-width:0;max-width:100%}
+  .v-head{align-items:flex-start;gap:10px}
+  .v-head>div:first-child{min-width:0;flex:1 1 100%}
+  .v-head h2{flex-wrap:wrap;line-height:1.25}
+  .v-head .muted{line-height:1.45}
+  .v-tools{width:100%;min-width:0;gap:7px}
+  .v-tools>*{min-width:0;max-width:100%}
+  .v-tools select{flex:1 1 135px;max-width:none;min-height:40px}
+  .v-grid,.v-grid.two,.t-grid,.traffic-grid,.pot-analytics{grid-template-columns:minmax(0,1fr)}
+  .v-grid>* ,.v-grid.two>* ,.t-grid>*{min-width:0}
+  .t-card{padding:12px;min-width:0}
+  .t-card h4{align-items:flex-start;flex-wrap:wrap}
+  .filters{padding-left:10px;padding-right:10px}
+  .filters .row{flex-wrap:wrap}
+  .filters .row>*{min-width:0;flex:1 1 120px}
+  .panel{left:0;right:0;width:100%;max-width:100%;border-left:0}
+  .p-head{padding:18px 14px 14px;gap:10px}
+  .p-icon{width:48px;height:48px;border-radius:13px;font-size:22px}
+  .p-title{font-size:16px;min-width:0;overflow-wrap:anywhere}
+  .p-sec{padding:12px 14px}
+  .kv{grid-template-columns:minmax(82px,32%) minmax(0,1fr);gap:7px 8px}
+  .kv dd{min-width:0;overflow-wrap:anywhere}
+  .atk-table,.table-wrap,.scroll-x{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+  pre.code{max-width:100%;white-space:pre;overflow-x:auto;overscroll-behavior-x:contain}
+  .modal{padding:8px}
+  .modal-card{max-height:calc(100dvh - 16px);border-radius:12px}
+  .modal-head{padding:12px}
+  .tabs{overflow-x:auto;overscroll-behavior-x:contain;padding:0 10px}
+  .tabs button{flex:0 0 auto;min-height:42px}
+  .btn,.icon-btn,.sugg,.layer-pick button,.pot-section-tabs button{min-height:40px}
+  input,select,textarea{font-size:16px}
+}
+@media(max-width:380px){
+  .tview{padding-left:7px;padding-right:7px}
+  .v-tools select{flex-basis:100%}
+  .p-head{padding-left:11px;padding-right:11px}
+  .p-sec{padding-left:11px;padding-right:11px}
+  .kv{grid-template-columns:76px minmax(0,1fr);font-size:12px}
+  .kv dd{font-size:11.5px}
+}
