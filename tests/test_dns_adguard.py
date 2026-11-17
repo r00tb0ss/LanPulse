@@ -104,6 +104,16 @@ class Client(unittest.TestCase):
         self.assertEqual(len([p for p in Fake.calls if "querylog" in p]), 3)
         self.assertTrue(any("older_than" in p for p in Fake.calls))
 
+    def test_reports_when_the_pagination_safety_limit_is_reached(self):
+        now = time.time()
+        Fake.entries = [{"time": stamp(now - i * 0.01), "client": "10.0.0.5", "question": {"name": "a.example"}, "reason": "NotFilteredNotFound"} for i in range(1200)]
+        Fake.entries.sort(key=lambda r: r["time"], reverse=True)
+        c = dns.make_client(self.cfg())
+        c.MAX_PAGES = 2
+        rows = c.queries(now - 600, now)
+        self.assertEqual(len(rows), 1000)
+        self.assertTrue(c.pagination_truncated)
+
     def test_old_entries_are_left_out(self):
         Fake.entries.append({"time": stamp(time.time() - 7200), "client": "1.1.1.1", "question": {"name": "old.example"}, "reason": ""})
         rows = dns.make_client(self.cfg()).queries(time.time() - 600, time.time())
