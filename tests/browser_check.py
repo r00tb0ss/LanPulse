@@ -31,6 +31,24 @@ def wait_up(proc, seconds=60):
     raise SystemExit("LanPulse did not start within %ss" % seconds)
 
 
+def check_delivery(problems):
+    """Pages and data must be compressed, and a version-stamped file must be cacheable for a long time."""
+    import re
+    html = urllib.request.urlopen(BASE + "/").read().decode()
+    stamped = re.search(r'(/static/app\.js\?v=[^"]+)', html)
+    if not stamped:
+        problems.append("[delivery] the page does not stamp its script URLs with the release number")
+        return
+    for path in (stamped.group(1), "/api/devices"):
+        req = urllib.request.Request(BASE + path, headers={"Accept-Encoding": "gzip"})
+        resp = urllib.request.urlopen(req)
+        if resp.headers.get("Content-Encoding") != "gzip":
+            problems.append(f"[delivery] {path} was not compressed")
+    cache = urllib.request.urlopen(BASE + stamped.group(1)).headers.get("Cache-Control", "")
+    if "immutable" not in cache:
+        problems.append(f"[delivery] a version-stamped file should be cached long-term, got {cache!r}")
+
+
 def main() -> int:
     from playwright.sync_api import sync_playwright
     problems = []
@@ -40,6 +58,7 @@ def main() -> int:
         proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "app.py"), "--demo", "--data-dir", data], cwd=ROOT)
         try:
             wait_up(proc)
+            check_delivery(problems)
             with sync_playwright() as p:
                 browser = p.chromium.launch()
                 page = browser.new_page(viewport={"width": 1400, "height": 900})
