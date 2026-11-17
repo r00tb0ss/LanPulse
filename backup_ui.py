@@ -47,3 +47,24 @@ def backup_archive_path(name: str, directory: Path = BACKUP_DIR) -> Path:
     if path.is_symlink() or not path.is_file() or path.resolve().parent != root:
         raise ValueError("Backup not found")
     return path
+
+
+def delete_backup_archive(name: str, directory: Path = BACKUP_DIR) -> None:
+    """Delete one backup by its generated filename. Anything else is refused."""
+    backup_archive_path(name, directory).unlink()
+
+
+def prune_backups(keep: int, directory: Path = BACKUP_DIR) -> list[str]:
+    """Keep the newest `keep` backups and delete the rest. keep < 1 means keep everything.
+    Only files that match the backup naming pattern are ever touched."""
+    keep = int(keep or 0)
+    if keep < 1:
+        return []
+    removed = []
+    for item in list_backup_archives(directory)[keep:]:       # newest first
+        try:
+            delete_backup_archive(item["name"], directory)
+            removed.append(item["name"])
+        except (OSError, ValueError):
+            continue
+    return removed
