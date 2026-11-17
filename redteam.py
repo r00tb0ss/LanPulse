@@ -168,10 +168,13 @@ def cleartext_exposures(d: dict) -> list[dict]:
 def exploitability(findings: list[dict], d: dict) -> tuple[int, str]:
     """A 0-100 'how easy to break in' score and a one-word band, from exploit availability and exposure.
     A planning aid, not a measurement."""
-    kev = sum(1 for f in findings if f.get("kev"))
-    msf = sum(1 for f in findings if f.get("msf"))
-    score = min(60, kev * 30 + msf * 15)
-    score += min(20, 10 * len(cleartext_exposures(d)))
+    # A match on a distro package may already be patched by a backport, so it counts for much less.
+    kev = sum(1 for f in findings if f.get("kev") and not f.get("distro"))
+    msf = sum(1 for f in findings if f.get("msf") and not f.get("kev") and not f.get("distro"))
+    maybe = sum(1 for f in findings if (f.get("kev") or f.get("msf")) and f.get("distro"))
+    score = min(60, kev * 30 + msf * 15 + min(24, maybe * 8))
+    # Plain HTTP is on nearly every device; whether it serves a login cannot be told from the port alone.
+    score += min(20, 10 * len([x for x in cleartext_exposures(d) if x["port"] != 80]))
     score += min(10, 5 * len(default_cred_services(d)))
     if any(p.get("port") in (23, 445, 3389, 5900) for p in d.get("ports", [])):
         score += 10
