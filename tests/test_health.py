@@ -69,5 +69,20 @@ class HealthTests(unittest.TestCase):
         self.assertIn("unifi", states(out))
 
 
+
+class HealthAccuracy(unittest.TestCase):
+    def test_dns_enabled_but_never_polled_is_not_ok(self):
+        out = health.build(fake(dns=NS(status={"state": "off", "error": "", "last_poll": 0})), NOW)
+        self.assertEqual(states(out)["dns"], "warn")
+
+    def test_dns_polling_normally_is_ok(self):
+        self.assertEqual(states(health.build(fake(), NOW))["dns"], "ok")
+
+    def test_vulnerability_data_a_week_old_is_flagged(self):
+        old = NS(status={"state": "idle", "error": "", "last_run": NOW - 8 * 86400, "pending": 0, "products": 12})
+        self.assertEqual(states(health.build(fake(vulns=old), NOW))["vulns"], "warn")
+        self.assertEqual(states(health.build(fake(), NOW))["vulns"], "ok")
+
+
 if __name__ == "__main__":
     unittest.main()

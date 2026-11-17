@@ -15,6 +15,7 @@ import time
 log = logging.getLogger("lanpulse.health")
 
 STALE_LIVE = 10 * 60         # UniFi, SNMP and Pi-hole are polled often; older than this means polling stopped
+STALE_VULNS = 7 * 24 * 3600  # the checker runs regularly; a week without a finished check means it is stuck
 STALE_LOGS = 24 * 3600       # a quiet network can go a while without a firewall event, but not a day
 
 
@@ -94,7 +95,10 @@ def build(nm, now: float | None = None) -> dict:
         elif st.get("state") == "error":
             items.append(_item("dns", "DNS source", "fa-globe", "bad", st.get("error") or "The last poll failed", last,
                                "Check the address and password in Settings."))
-        elif last and now - last > STALE_LIVE:
+        elif not last:
+            items.append(_item("dns", "DNS source", "fa-globe", "warn", "Waiting for the first poll", None,
+                               "If this stays, check the address in Settings."))
+        elif now - last > STALE_LIVE:
             items.append(_item("dns", "DNS source", "fa-globe", "warn", f"No poll for {_span(now - last)}", last))
         else:
             items.append(_item("dns", "DNS source", "fa-globe", "ok", "Reading the query log", last))
@@ -109,6 +113,9 @@ def build(nm, now: float | None = None) -> dict:
         elif st.get("state") == "checking":
             items.append(_item("vulns", "Vulnerability data", "fa-bug", "ok",
                                f"Checking {st.get('pending', 0)} of {st.get('products', 0)} products", last))
+        elif last and now - last > STALE_VULNS:
+            items.append(_item("vulns", "Vulnerability data", "fa-bug", "warn",
+                               f"Last check finished {_span(now - last)} ago", last, "Check that this machine can reach the internet."))
         elif last:
             items.append(_item("vulns", "Vulnerability data", "fa-bug", "ok", f"{st.get('products', 0)} products matched", last))
         else:
