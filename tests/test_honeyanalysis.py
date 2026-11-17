@@ -343,6 +343,12 @@ class Store(unittest.TestCase):
         self.assertEqual(profile["latest_session"], "profile-b")
         self.assertIn("do not identify a person", result["note"])
 
+    def test_campaigns_never_link_single_source_artifacts_as_cross_source(self):
+        self.h.add_session(self.session(session="single-a", ip="198.51.100.7",
+            hassh="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
+        result = self.h.campaigns(24)
+        self.assertFalse(any(x["value"] == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                             for x in result["campaigns"]))
     def test_campaigns_correlate_shared_fingerprints_and_samples(self):
         hassh = "16443846184eafde36765c9bab2f4397"
         self.h.add_session(self.session(session="campaign-a", ip="198.51.100.7", hassh=hassh))
