@@ -31,6 +31,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import ipcontext
 from scanners import ScannerTagger
 import mmdb
 
@@ -865,6 +866,12 @@ class ThreatMonitor:
                 out["reached"] = 0
                 out["ports"] = [{"port": h["port"], "service": SERVICES_LABEL(h["service"]), "count": h["n"]}
                                 for h in _ports_from(hp["hits"])]
+        try:
+            gn = (out["intel"].get("greynoise") or {}).get("classification", "")
+            tag = (out["tag"] or {}).get("label", "") if isinstance(out.get("tag"), dict) else ""
+            out["context"] = ipcontext.build(self.nm, ip, rows, tag, gn)
+        except Exception:
+            log.debug("ip context skipped", exc_info=True)
         return out
 
     def reached_ips(self, hours: int = 168) -> set:

@@ -14,6 +14,7 @@ page inserts as plain text. It is stored under a hash-only file name in a privat
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import ipaddress
 import json
@@ -1236,6 +1237,51 @@ class HoneyAnalysis:
         out.sort(key=lambda x: (-x["sources"], -x["sessions"], -x["samples"], x["kind"], x["value"]))
         return {"campaigns": out[:max(1, min(int(limit), 200))], "total": len(out), "hours": hours,
                 "note": "Correlations show shared observable evidence; they do not prove a common operator or campaign."}
+
+    def ip_activity(self, ip: str, hours: int = 2160) -> dict | None:
+        """Everything the analysis store knows about one source address: its sessions, SSH client fingerprints,
+        captured files, the latest session as an ordered sequence, and the campaign links it belongs to."""
+        since = time.time() - hours * 3600
+        with self.lock:
+            rows = self.db.execute("SELECT id, start, proto, port, hassh, commands, files, tags, score, logins FROM sessions "
+                                   "WHERE ip = ? AND start >= ? ORDER BY start DESC LIMIT 50", (ip, since)).fetchall()
+        if not rows:
+            return None
+        sessions, hassh, hashes = [], collections.Counter(), {}
+        logged_in, cmd_total, pick = False, 0, None
+        for sid, start, proto, port, hs, cmds_json, files_json, tags_json, score, logins_json in rows:
+            cmds, files = json.loads(cmds_json or "[]"), json.loads(files_json or "[]")
+            ok = any(isinstance(x, dict) and x.get("ok") for x in json.loads(logins_json or "[]"))
+            logged_in |= ok
+            cmd_total += len(cmds)
+            if hs:
+                hassh[str(hs).lower()] += 1
+            for f in files:
+                sha = str(f.get("sha256") or "").lower()
+                if HEX64.match(sha):
+                    hashes.setdefault(sha, str(f.get("name") or "")[:80])
+            sessions.append({"id": sid, "start": start, "proto": proto, "port": port, "score": score or 0,
+                             "commands": len(cmds), "files": len(files), "logged_in": ok,
+                             "tags": [t for t in json.loads(tags_json or "[]") if t != "logged-in"][:6]})
+            if pick is None and (cmds or ok):
+                pick = sid                       # the newest session that actually did something
+        sequence = []
+        detail = self.session(pick or rows[0][0])
+        if detail:
+            sequence = [{"stage": x["stage"], "summary": x["summary"], "evidence": x.get("evidence", "")[:160]}
+                        for x in detail.get("timeline", [])[:24]]
+        links = []
+        try:
+            for c in self.campaigns(hours)["campaigns"]:
+                if ip in c["source_ips"]:
+                    links.append({"kind": c["kind"], "value": c["value"], "sources": c["sources"],
+                                  "confidence": c["confidence"], "others": [x for x in c["source_ips"] if x != ip][:5]})
+        except Exception:
+            log.debug("campaign lookup skipped", exc_info=True)
+        return {"sessions": sessions[:8], "total": len(rows), "logged_in": logged_in, "commands": cmd_total,
+                "hassh": [{"value": k, "count": v} for k, v in hassh.most_common(3)],
+                "samples": [{"sha256": k, "name": v} for k, v in list(hashes.items())[:6]],
+                "sequence": sequence, "sequence_session": pick or rows[0][0], "campaigns": links[:8]}
 
     def sessions(self, hours: int = 168, limit: int = 100) -> dict:
         since = time.time() - hours * 3600

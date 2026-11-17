@@ -2071,3 +2071,16 @@ html[data-pretheme="sand"]{background:#f4efe6}
   .fixdev-head .fix-tags{order:3;width:100%;justify-content:flex-start;padding-left:50px}
   .rk.vd .vd-acts{margin-left:0;width:100%}
 }
+
+/* IP info box: behaviour read, outbound check, attack sequence */
+.ctx-read .ctx-verdict{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.ctx-read .ctx-verdict b{font-size:15px}
+.ctx-conf{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:99px;padding:1px 8px}
+.ctx-read.act .ctx-verdict b{color:#fca5a5}.ctx-read.watch .ctx-verdict b{color:#fcd34d}.ctx-read.ignore .ctx-verdict b{color:#86efac}
+.ctx-why{margin:0;padding-left:18px;font-size:13px;color:var(--text)}.ctx-why li{margin:2px 0}
+.ctx-alert{display:flex;gap:8px;align-items:center;background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.4);color:#fda4af;border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:13px}
+.ctx-seq{list-style:none;margin:0;padding:0 0 0 12px;border-left:2px solid var(--border)}
+.ctx-seq li{position:relative;padding:0 0 10px 14px;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.ctx-seq li:before{content:"";position:absolute;left:-19px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--accent,#60a5fa)}
+.ctx-seq li b{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim)}
+.ctx-seq li code{font:11px var(--mono);color:var(--muted);word-break:break-all}
