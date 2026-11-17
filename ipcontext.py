@@ -92,7 +92,8 @@ def facts_from_rows(rows, devices_by_ip: dict, tag: str = "", gn_class: str = ""
                 on_open += 1
     return {"count": len(rows), "ports": len(ports), "targets": len(targets), "days": len(day_set),
             "max_repeat": max(repeat.values(), default=0), "reached": reached, "hits_on_open": on_open,
-            "tag": tag, "gn_class": gn_class, "pot_commands": int((pot or {}).get("commands") or 0),\n            "pot_logged_in": bool((pot or {}).get("logged_in") or (pot or {}).get("successful_logins") or (pot or {}).get("logins"))}
+            "tag": tag, "gn_class": gn_class, "pot_commands": int((pot or {}).get("commands") or 0),
+            "pot_logged_in": bool((pot or {}).get("logged_in") or (pot or {}).get("successful_logins"))}
 
 
 def neighbours(db, lock, ip: str, days: int = 30, limit: int = 8) -> list[dict]:
