@@ -46,7 +46,7 @@ def main() -> int:
                 current = {"view": "load"}
                 page.on("pageerror", lambda e: problems.append(f"[{current['view']}] script error: {e}"))
                 page.on("response", lambda r: problems.append(f"[{current['view']}] HTTP {r.status} {r.url}")
-                        if r.url.startswith(BASE) and r.status >= 400 and not r.url.endswith("favicon.ico") else None)
+                        if r.url.startswith(BASE) and r.status >= 400 and not r.url.endswith("favicon.ico") and "/static/vendor/" not in r.url else None)   # vendor libraries come from the installer; the page falls back to a CDN
                 page.goto(BASE, wait_until="domcontentloaded")
                 page.wait_for_selector("#vNet", timeout=20000)
                 page.wait_for_timeout(2500)
