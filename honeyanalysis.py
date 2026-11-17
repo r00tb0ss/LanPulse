@@ -252,15 +252,15 @@ def find_iocs(text: str, limit: int = 40) -> dict:
 # ------------------------------------------------------------------ what commands are trying to do
 # (tag, label, MITRE ATT&CK technique, severity weight, pattern)
 CMD_RULES = [
-    ("download", "Downloads a file", "T1105", 25, r"\b(wget|curl|tftp|ftpget|ftp)\b.*(://|\s\d+\.\d+\.\d+\.\d+)|\btftp\s+-"),
+    ("download", "Downloads a file", "T1105", 25, r"\b(wget|curl|tftp|ftpget|ftp)\b(?!.*://(?:localhost|127\.|\[::1\]))(?!.*\s127\.\d+\.\d+\.\d+).*(://|\s\d+\.\d+\.\d+\.\d+)|\btftp\s+-"),
     ("pipe-to-shell", "Pipes a download straight into a shell", "T1059.004", 35, r"\b(curl|wget)\b[^|;]*\|\s*(sudo\s+)?(ba|da)?sh\b"),
     ("make-executable", "Makes a file executable", "T1222.002", 15, r"\bchmod\s+(?:[ugoa]*\+x|[0-7]{3,4})\b"),
-    ("run-dropped-file", "Runs a file it just wrote", "T1059.004", 20, r"(?:^|[;&|]\s*|\s)(?:\./[\w.\-]+|sh\s+[\w./\-]+\.sh|bash\s+[\w./\-]+)(?:\s|$|;)"),
+    ("run-dropped-file", "Runs a file it just wrote", "T1059.004", 20, r"(?:^|[;&|]\s*|\s)(?:\./[\w.\-]+|sh\s+[\w./][\w./\-]*\.sh|bash\s+[\w./][\w./\-]*)(?:\s|$|;)"),
     ("reverse-shell", "Opens a reverse shell", "T1059.004", 40, r"bash\s+-i\b[^;\n]*/dev/tcp/|\bnc(?:at)?\b[^;|]*\s-e\b|bash\s+-i\s*>?&|\bmkfifo\b|socket\.socket.*connect"),
     ("persistence-cron", "Installs a scheduled task", "T1053.003", 25, r"\bcrontab\b(?!\s+-l\b)|/etc/cron|/var/spool/cron"),
-    ("persistence-startup", "Adds itself to startup", "T1546", 25, r"rc\.local|/etc/init\.d|systemctl\s+enable|\.bashrc|\.profile|ld\.so\.preload"),
-    ("ssh-key-plant", "Plants its own SSH key", "T1098.004", 35, r"authorized_keys"),
-    ("account-change", "Creates or changes accounts and passwords", "T1136.001", 25, r"\b(useradd|adduser|usermod|chpasswd|passwd)\b"),
+    ("persistence-startup", "Adds itself to startup", "T1546", 25, r"(?:>>?|\btee\b|\bsed\s+-i|\bcp\b|\bmv\b|\bln\s+-s)[^\n]*(?:rc\.local|/etc/init\.d|\.bashrc|\.profile)|systemctl\s+enable|update-rc\.d|ld\.so\.preload"),
+    ("ssh-key-plant", "Plants its own SSH key", "T1098.004", 35, r"(?:>>?|\btee\b|\bcp\b|\bmv\b|\binstall\b)[^\n]*authorized_keys|\bssh-copy-id\b"),
+    ("account-change", "Creates or changes accounts and passwords", "T1136.001", 25, r"\b(?:useradd|adduser|usermod|chpasswd)\b|(?:^|[;&|]\s*)(?:sudo\s+)?passwd\b(?!\s+-{1,2}h)"),
     ("recon", "Looks around the system", "T1082", 5, r"\b(uname|lscpu|nproc|hostname|whoami|lspci|lsb_release|free\s+-[mgh]|df\s+-h|uptime)\b|/proc/(cpuinfo|meminfo|version)|/etc/(passwd|issue|os-release|shadow)"),
     ("recon-network", "Looks at the network setup", "T1016", 5, r"\b(ifconfig|ip\s+(a|addr|route)|netstat|ss\s+-|arp\s+-a)\b|/proc/net"),
     ("miner", "Cryptocurrency mining", "T1496", 40, r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:nohup\s+)?(?:\./)?(?:xmrig|minerd|cpuminer(?:-multi)?)\b|stratum\+(?:tcp|ssl)://"),
@@ -374,7 +374,7 @@ FAMILY_HINTS = [
     ("Cryptocurrency miner", r"xmrig|stratum\+|cpuminer|randomx|--donate-level|monero|minerd"),
     ("Mining dropper / cleaner script", r"kdevtmpfsi|kinsing|\.ICEauth|ld\.so\.preload"),
     ("DDoS tool", r"(udp|syn|ack|http|dns)[ _-]?flood|\bddos\b|\battack_method"),
-    ("SSH brute-forcer / worm", r"sshpass|libssh|zmap|masscan|\bhydra\b|authorized_keys"),
+    ("SSH brute-forcer / worm", r"sshpass|libssh|zmap|masscan|\bhydra\b"),
     ("Reverse shell / backdoor", r"bash\s+-i\b[^;\n]*/dev/tcp/|reverse.?shell|bindshell|nc -e|\bmkfifo\b"),
     ("IRC-controlled Linux botnet", r"undernet\.org[\s\S]{0,500}JOIN\s+#[\w.-]+|JOIN\s+#[\w.-]+[\s\S]{0,500}PRIVMSG"),
 ]
