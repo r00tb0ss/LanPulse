@@ -184,13 +184,13 @@
   </div>
 </section>
 
-<!-- DNS: what devices look up (Pi-hole) -->
+<!-- DNS: what devices look up (from your DNS resolver) -->
 <section class="tview hidden" id="dnsView" aria-label="DNS">
-  <div class="v-head"><div><h2><i class="fa-solid fa-globe"></i>DNS lookups</h2><span class="muted" id="dnsSub">from your Pi-hole</span></div>
+  <div class="v-head"><div><h2><i class="fa-solid fa-globe"></i>DNS lookups</h2><span class="muted" id="dnsSub">from your DNS resolver</span></div>
     <div class="v-tools">
       <select id="dnsDevice" aria-label="Device"><option value="">All devices</option></select>
       <select id="dnsRange" aria-label="Time range"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="168">7 days</option></select>
-      <button class="btn sm ghost" id="dnsCfgBtn"><i class="fa-solid fa-gear"></i>Pi-hole</button>
+      <button class="btn sm ghost" id="dnsCfgBtn"><i class="fa-solid fa-gear"></i>DNS source</button>
     </div></div>
   <div class="v-setup hidden" id="dnsSetup"></div>
   <div id="dnsBody">

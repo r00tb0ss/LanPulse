@@ -198,7 +198,7 @@ GUIDE = """LANPULSE GUIDE (what LanPulse is and where things are; use it to answ
 LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubuntu/Debian/Raspberry Pi machine and is opened in a browser. Tabs along the top: Network, Threats, DNS, Vulns, Services, Red Team, Honeypot. The gear icon opens Settings; the wand icon opens this analyst.
 - Network: every device found on the LAN, shown as Topology (internet, gateway, switches, access points, devices; UniFi or SNMP/LLDP fill in real connections), rings, tiles or a table. Device panel: IP, MAC, vendor, hostname, latency, OS guess, open ports, 24 h uptime and latency, notes, Watch (alert when it goes offline), Trust (new devices show a red dashed ring until trusted), Thorough scan (all 65,535 ports with full version detection and safe active vulnerability checks). New devices, port changes and roaming are listed under Changes.
 - Threats: who attacks the public IP, on a live world map with GeoIP, ASN and abuse data, fed by the router's firewall logs (syslog UDP 514; UniFi, pfSense/OPNsense, OpenWrt, MikroTik, Fortinet-style or JSON). Also device traffic (where each device connects, alert when one contacts a known botnet C2 address = likely compromised), IPS events from a UDM, one-click blocking of an attacker on a UniFi gateway, and detection inside the LAN: network sweeps, ARP spoofing / router impersonation, IP conflicts, rogue DHCP servers, port scans against the LanPulse server, and any LAN device touching a honeypot.
-- DNS: connects to Pi-hole; shows queries, blocked domains, top domains and clients, and flags devices looking up known malware domains (abuse.ch URLhaus list).
+- DNS: connects to a DNS resolver (currently Pi-hole); shows queries, blocked domains, top domains and clients, and flags devices looking up known malware domains (abuse.ch URLhaus list).
 - Vulns: known vulnerabilities per device from NVD CVE data, matched by software version. Ranked: confirmed by a safe active check (nmap NSE, e.g. EternalBlue) first, then actively exploited (CISA KEV), then Metasploit modules / Exploit-DB exploits, then severity. Version matching cannot see missing patches, so Linux packages patched without a version change can show as "may be patched". Old Windows is matched from the OS guess only when ports answered. OpenVAS (Greenbone) can be installed and driven from Settings > Scanner. An alert goes out when a device gains an actively exploited flaw.
 - Services: uptime checks (ping, HTTP, TCP port) with 24 h / 7 d uptime, latency and incidents, plus suggestions based on what the scanner found.
 - Red Team: an attacker's-eye report built from LanPulse's own scan data (exposed apps, unpatched flaws, attack paths), exportable.
@@ -278,7 +278,7 @@ def _honeypot(nm, detail: bool) -> list[str]:
 def _dns(nm, detail: bool) -> list[str]:
     s = nm.dns.summary(24)
     if not s.get("enabled"):
-        return ["DNS monitoring: not connected (connect Pi-hole under Settings > DNS)."]
+        return ["DNS monitoring: not connected (connect a DNS source from the DNS tab)."]
     out = [f"DNS, last 24 h: {s.get('total', 0)} queries, {s.get('blocked', 0)} blocked, {s.get('domains', 0)} distinct domains."]
     if s.get("malware"):
         out.append("  KNOWN-MALWARE DOMAIN LOOKUPS: " + _join(s["malware"], lambda m: f"{_clip(m.get('name') or m.get('ip'), 30)} looked up {_clip(m.get('domain'), 50)} {m.get('count')}x", 8))
