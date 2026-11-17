@@ -2037,3 +2037,9 @@ html[data-pretheme="sand"]{background:#f4efe6}
   #threatView .t-mapcard.full .map-chips select{max-width:min(42vw,180px)}
 }
 
+
+/* Campaign observation ranges: relative position in the last 90 days, not inferred event times. */
+.pot-campaign-timeline{margin:8px 0 4px;display:grid;gap:6px;min-width:0}
+.pot-campaign-track{height:8px;position:relative;overflow:hidden;border-radius:99px;background:var(--line,rgba(127,127,127,.2))}
+.pot-campaign-range{position:absolute;top:0;bottom:0;min-width:4px;border-radius:99px;background:var(--accent,#4f8fe8)}
+.pot-campaign-timeline .row-between{gap:12px;font-size:.78rem;flex-wrap:wrap}
