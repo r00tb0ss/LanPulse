@@ -37,6 +37,11 @@ from scanners import ScannerTagger
 import mmdb
 
 log = logging.getLogger("lanpulse.threats")
+
+# Shared, bounded intelligence workers prevent rapid IP-profile clicks from creating
+# an unbounded number of threads. A slot covers one complete seven-source lookup.
+_INTEL_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="intel")
+_INTEL_SLOTS = threading.BoundedSemaphore(4)
 KEEP_DAYS = 30
 
 SERVICES = {
@@ -1005,11 +1010,27 @@ class ThreatMonitor:
                 info["tor"] = ip in self.tor_exits
         jobs = {"rdns": look_rdns, "ip-api": look_ipapi, "shodan": look_shodan, "abuseipdb": look_abuse,
                 "greynoise": look_greynoise, "threatfox": look_threatfox, "tor": look_tor}
-        pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="intel")
+        if not _INTEL_SLOTS.acquire(blocking=False):
+            info["errors"]["lookup"] = "too many IP investigations are already running; try again shortly"
+            return info
         started = time.time()
-        futs = {pool.submit(f): k for k, f in jobs.items()}
+        try:
+            futs = {_INTEL_POOL.submit(f): k for k, f in jobs.items()}
+        except Exception:
+            _INTEL_SLOTS.release()
+            raise
+        # Release capacity only when every source has actually stopped, including timed-out
+        # DNS/network calls. The fixed-size pool bounds the damage from a stuck resolver.
+        remaining = [len(futs)]
+        release_lock = threading.Lock()
+        def release_slot(_future):
+            with release_lock:
+                remaining[0] -= 1
+                if remaining[0] == 0:
+                    _INTEL_SLOTS.release()
+        for future in futs:
+            future.add_done_callback(release_slot)
         done, late = concurrent.futures.wait(futs, timeout=INTEL_DEADLINE)
-        pool.shutdown(wait=False)
         for f in late:
             info["errors"][futs[f]] = "took too long"
         for f in done:
