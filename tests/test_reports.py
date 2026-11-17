@@ -119,7 +119,7 @@ class EveryKind(unittest.TestCase):
         self.nm.honeyan._scan_yara = lambda *a, **k: (_ for _ in ()).throw(AssertionError("report triggered YARA scan"))
         doc = reports.gather(self.nm, "honeypot-malware", 168)
         out = reports.render_html(doc, {})
-        self.assertIn("YARA scan status:", out)
+        self.assertIn("YARA scan status: no_rules", out)
 
     def test_executive_report_flags_what_needs_attention(self):
         out = reports.render_html(reports.gather(self.nm, "executive", 24), {})
