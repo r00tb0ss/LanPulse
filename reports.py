@@ -751,7 +751,7 @@ def gather(nm, kind: str, hours: int = 168) -> Doc:
     if kind == "honeypot-malware":
         samples = ha.samples(2000)
         ranked = sorted(samples.get("samples", []), key=lambda r: (-(r.get("score") or 0), -(r.get("last_seen") or 0)))[:MAX_SAMPLE_DETAILS]
-        details = [d for d in (_safe(ha.sample, r["sha256"], default=None) for r in ranked) if d]
+        details = [d for d in (_safe(ha.sample, r["sha256"], scan_yara=False, default=None) for r in ranked) if d]
         return build_malware(samples, details, _safe(ha.yara.status), hours)
     if kind == "honeypot-sensors":
         return build_sensors(ha.sensors())
