@@ -2259,3 +2259,5 @@ body[data-theme="light"] .rt-score.critical,body[data-theme="sand"] .rt-score.cr
 body[data-theme="light"] .rt-score.high,body[data-theme="sand"] .rt-score.high{background:#ffedd5;border-color:#fdba74}
 body[data-theme="light"] .rt-score.medium,body[data-theme="sand"] .rt-score.medium{background:#fef3c7;color:#92400e;border-color:#fcd34d}
 body[data-theme="light"] .rt-score.low,body[data-theme="sand"] .rt-score.low{background:#e2e8f0;color:#475569;border-color:#cbd5e1}
+body[data-theme="light"] .res.blocked,body[data-theme="sand"] .res.blocked{color:#0369a1}
+body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[data-theme="sand"] .res.allowed,body[data-theme="sand"] .res.logged{color:#be123c}
