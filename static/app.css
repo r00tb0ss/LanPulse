@@ -2051,3 +2051,10 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .r-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0}
 .r-acts{display:flex;gap:4px;flex:none}
 .r-all summary{cursor:pointer;font-size:12.5px;color:var(--muted);margin:4px 0}
+
+/* One page frame for every main view: the same padding, spacing and title style (desktop; phones keep their own tighter rules). */
+@media(min-width:721px){
+  .tview,#threatView{padding:18px clamp(14px,2vw,30px) 30px;gap:16px}
+}
+#threatView:before{content:none;display:none}
+#threatView>.v-head{margin-bottom:0}
