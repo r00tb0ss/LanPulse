@@ -2084,3 +2084,7 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .ctx-seq li:before{content:"";position:absolute;left:-19px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--accent,#60a5fa)}
 .ctx-seq li b{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim)}
 .ctx-seq li code{font:11px var(--mono);color:var(--muted);word-break:break-all}
+
+/* Tablet: the device search sits along the bottom (not under the view buttons), so Topology needs less room above
+   and must leave room below, or its toolbar floats far from the buttons and the minimap hides behind the search bar. */
+@media (max-width:900px){.topo{padding-top:56px;padding-bottom:64px}}
