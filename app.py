@@ -62,9 +62,9 @@ from discovery import Discovery, classify_from_hints
 from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
-from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
+from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
 
-VERSION = "1.39.2"
+VERSION = "1.39.3"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1554,9 +1554,15 @@ def build_app(nm: LanPulse) -> FastAPI:
         await asyncio.to_thread(nm.threats.clean_noise)     # drop stored late replies if the filter is on
         return alerts.masked(nm.settings)
 
+    def backup_keep() -> int:
+        try:
+            return max(0, min(100, int((nm.settings.get("backup") or {}).get("keep", 0))))
+        except (TypeError, ValueError):
+            return 0
+
     @app.get("/api/backups")
     async def get_backups():
-        return {"backups": list_backup_archives(), "location": str(BACKUP_DIR)}
+        return {"backups": list_backup_archives(), "location": str(BACKUP_DIR), "keep": backup_keep()}
 
     @app.post("/api/backups")
     async def create_backup():
@@ -1583,8 +1589,44 @@ def build_app(nm: LanPulse) -> FastAPI:
             log.error("LanPulse backup failed: %s", detail)
             status = 409 if "already in progress" in detail.lower() else 500
             return JSONResponse({"error": detail}, status)
+        removed = await asyncio.to_thread(prune_backups, backup_keep())      # the "keep the newest N" setting
         backups = list_backup_archives()
-        return {"ok": True, "backups": backups}
+        return {"ok": True, "backups": backups, "removed": removed}
+
+    @app.post("/api/backups/keep")
+    async def set_backup_keep(request: Request):
+        """How many backups to keep. 0 keeps all of them. Older ones are deleted at once and after each new backup."""
+        if nm.args.demo:
+            return JSONResponse({"error": "Backups are unavailable in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a dashboard login in Settings > Login before changing backups."}, 403)
+        try:
+            body = await request.json()
+            keep = int(body.get("keep", 0))
+        except (ValueError, TypeError, AttributeError):
+            return JSONResponse({"error": "Expected {\"keep\": number}"}, 400)
+        if keep != 0 and not 1 <= keep <= 100:
+            return JSONResponse({"error": "Keep between 1 and 100 backups, or 0 to keep all."}, 400)
+        nm.settings["backup"] = {"keep": keep}
+        nm.save_settings()
+        removed = await asyncio.to_thread(prune_backups, keep)
+        return {"ok": True, "keep": keep, "removed": removed, "backups": list_backup_archives()}
+
+    @app.delete("/api/backups/{name}")
+    async def remove_backup(name: str):
+        if nm.args.demo:
+            return JSONResponse({"error": "Backups are unavailable in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a dashboard login in Settings > Login before deleting backups."}, 403)
+        try:
+            await asyncio.to_thread(delete_backup_archive, name)
+        except (ValueError, FileNotFoundError):
+            return JSONResponse({"error": "Backup not found."}, 404)
+        except OSError as exc:
+            log.warning("Could not delete backup %s: %s", name, exc)
+            return JSONResponse({"error": f"Could not delete it: {exc.strerror or exc}"}, 500)
+        log.info("Backup %s deleted from the dashboard", name)
+        return {"ok": True, "backups": list_backup_archives()}
 
     @app.get("/api/backups/{name}")
     async def download_backup(name: str):

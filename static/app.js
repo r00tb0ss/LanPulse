@@ -684,8 +684,12 @@ function renderBackupSettings(body) {
       </div>
     </div>
     <div class="chan">
-      <div class="chan-head"><i class="fa-solid fa-clock-rotate-left ci"></i><div class="txt"><b>Saved backups</b><small>Download a copy to keep somewhere safe.</small></div>
+      <div class="chan-head"><i class="fa-solid fa-clock-rotate-left ci"></i><div class="txt"><b>Saved backups</b><small>Download a copy to keep somewhere safe. Delete the ones you no longer need.</small></div>
         <button class="btn sm" id="bBackupRefresh" title="Refresh backup list"><i class="fa-solid fa-rotate"></i></button></div>
+      <div class="chan-fields" style="padding-bottom:0"><label class="full">Keep
+        <select id="backupKeep" ${meta.auth ? "" : "disabled"}><option value="0">All backups (never delete automatically)</option>
+          ${[1, 3, 5, 10, 20].map((n) => `<option value="${n}">Only the newest ${n}</option>`).join("")}</select>
+        <small class="muted">Older backups are deleted right away when you choose a number, and after each new backup.</small></label></div>
       <div id="backupList" style="padding:0 12px 12px"><p class="hint">Loading backups…</p></div>
     </div>
     <p class="hint">Downloading requires a dashboard login. Restoring remains a maintenance operation and is done with the documented command-line procedure.</p>`;
@@ -696,12 +700,33 @@ function renderBackupSettings(body) {
     if (!result) { list.innerHTML = '<p class="hint">Could not load backups.</p>'; return; }
     const locationField = $("backupLocation");
     if (locationField && result.location) locationField.value = result.location;
+    const keepSel = $("backupKeep");
+    if (keepSel) { if (![...keepSel.options].some((o) => +o.value === result.keep)) keepSel.add(new Option(`Only the newest ${result.keep}`, result.keep)); keepSel.value = String(result.keep || 0); }
     if (!result.backups || !result.backups.length) { list.innerHTML = '<p class="hint">No backups yet. Select “Create backup now” to make the first one.</p>'; return; }
     list.innerHTML = result.backups.map((item) => {
       const size = item.size >= 1048576 ? (item.size / 1048576).toFixed(1) + " MB" : (item.size / 1024).toFixed(0) + " KB";
       const action = meta.auth ? `<a class="btn sm" href="/api/backups/${encodeURIComponent(item.name)}"><i class="fa-solid fa-download"></i>Download</a>` : '<span class="test-res">Set a login to download</span>';
-      return `<div class="rule"><div class="txt"><b>${esc(item.name)}</b><small>${esc(item.created)} · ${size}</small></div>${action}</div>`;
+      const del = meta.auth ? `<button class="btn sm danger" data-del="${esc(item.name)}" title="Delete this backup"><i class="fa-solid fa-trash"></i>Delete</button>` : "";
+      return `<div class="rule"><div class="txt"><b>${esc(item.name)}</b><small>${esc(item.created)} · ${size}</small></div>${action}${del}</div>`;
     }).join("");
+    list.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
+      const name = b.dataset.del;
+      if (!confirm(`Delete ${name}? This cannot be undone. Download it first if you may need it.`)) return;
+      b.disabled = true;
+      const r = await api(`/api/backups/${encodeURIComponent(name)}`, "DELETE", null, true);
+      const status = $("backupResult");
+      status.className = r && r.ok ? "test-res ok" : "test-res bad";
+      status.textContent = r && r.ok ? "Backup deleted." : (r?.error || "Could not delete the backup.");
+      await refresh();
+    });
+  };
+  if ($("backupKeep")) $("backupKeep").onchange = async (e) => {
+    const n = +e.target.value, status = $("backupResult");
+    if (n && !confirm(`Keep only the newest ${n} backup${n === 1 ? "" : "s"}? Any older ones will be deleted now. This cannot be undone.`)) { await refresh(); return; }
+    const r = await api("/api/backups/keep", "POST", {keep: n}, true);
+    status.className = r && r.ok ? "test-res ok" : "test-res bad";
+    status.textContent = r && r.ok ? (r.removed.length ? `Deleted ${r.removed.length} older backup${r.removed.length === 1 ? "" : "s"}.` : "Saved.") : (r?.error || "Could not save.");
+    await refresh();
   };
   $("bBackupRefresh").onclick = refresh;
   $("bBackupNow").onclick = async () => {
