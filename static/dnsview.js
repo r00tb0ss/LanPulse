@@ -25,7 +25,8 @@ function renderDns() {
   }
   if (!$("dnsSetup").dataset.open) $("dnsSetup").classList.add("hidden");
   $("dnsSub").innerHTML = st.state === "error" ? `<span style="color:#fca5a5"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(st.error)}</span>`
-    : st.last_poll ? `from ${esc(st.source || "your DNS resolver")}${st.version ? ` (v${esc(st.version)})` : ""} · updated ${ago(st.last_poll)}` : "connecting to the DNS source…";
+    : (st.last_poll ? `from ${esc(st.source || "your DNS resolver")}${st.version ? ` (v${esc(st.version)})` : ""} · updated ${ago(st.last_poll)}` : "connecting to the DNS source…")
+      + (st.warning ? `<div style="color:#fbbf24;margin-top:4px"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(st.warning)}</div>` : "");
   const pct = s.total ? Math.round(100 * s.blocked / s.total) : 0;
   const mal = s.malware || [];
   $("dnsKpis").innerHTML = `
