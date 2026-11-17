@@ -111,8 +111,12 @@ class Client(unittest.TestCase):
         c = dns.make_client(self.cfg())
         c.MAX_PAGES = 2
         rows = c.queries(now - 600, now)
-        self.assertEqual(len(rows), 1000)
+        self.assertEqual(rows, [])  # don't advance the monitor watermark with a partial window
         self.assertTrue(c.pagination_truncated)
+        rows = c.queries(now - 600, now)
+        self.assertEqual(len(rows), 1200)
+        self.assertFalse(c.pagination_truncated)
+        self.assertEqual(len({r["domain"] for r in rows}), 1)
 
     def test_old_entries_are_left_out(self):
         Fake.entries.append({"time": stamp(time.time() - 7200), "client": "1.1.1.1", "question": {"name": "old.example"}, "reason": ""})
