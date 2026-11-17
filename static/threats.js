@@ -776,7 +776,7 @@ function renderIpPanel(d) {
       ${d.targets.length ? d.targets.map((t) => { const ty = TYPES[t.type] || TYPES.unknown;
         return `<div class="tgt-row" data-dev="${esc(t.id)}" style="--c:${ty.color}"><div class="ic"><i class="${faClass(ty)}"></i></div>
           <div><b>${esc(t.name)}</b><div class="muted" style="font:11px var(--mono)">${esc(t.lan)}</div></div><span class="ct">×${fmtN(t.count)}</span></div>`; }).join("")
-        : `<div class="ok-line"><i class="fa-solid fa-shield-halved"></i>Every attempt was stopped at your router.</div>`}
+        : d.honeypot ? `<div class="ok-line"><i class="fa-solid fa-shield-halved"></i>No real LAN device was reached. ${fmtN(d.honeypot.total)} honeypot session${d.honeypot.total === 1 ? "" : "s"} reached decoy services only.</div>` : `<div class="ok-line"><i class="fa-solid fa-shield-halved"></i>Every attempt was stopped at your router.</div>`}
     </div>
 
     <div class="p-sec"><h4>IP intelligence</h4><dl class="kv">
