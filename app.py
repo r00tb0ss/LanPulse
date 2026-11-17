@@ -63,7 +63,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.38.1"
+VERSION = "1.38.2"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -520,25 +520,30 @@ def classify(d: dict) -> str:
     def any_in(text: str, words) -> bool:
         return any(w in text for w in words)
 
+    brands = ("epson", "brother", "canon", "kyocera", "xerox", "lexmark", "ricoh")
+    if "canon" in v and tok & {"eos", "powershot", "vixia"} and not ports & {631, 9100, 515}:
+        return "camera"
     if "printer" in ot or ports & {631, 9100, 515} or any_in(vh, (
-            "printer", "laserjet", "officejet", "deskjet", "epson", "brother", "canon", "kyocera",
-            "xerox", "lexmark", "ricoh")):
+            "printer", "laserjet", "officejet", "deskjet")) or any_in(v, brands) or tok & set(brands):
         return "printer"
-    if "storage" in ot or tok & {"nas"} or any_in(vh, (
+    if "storage" in ot or tok & {"nas", "unvr"} or any_in(vh, (
             "synology", "qnap", "asustor", "terramaster", "truenas", "unraid", "diskstation", "readynas")):
         return "nas"
     windows = ("windows" in os_ or "microsoft" in h or "windows" in h or bool(ports & {135, 139, 3389})
                or (445 in ports and 554 in ports))
+    if "homeassistant" in tok or "home-assistant" in h or 8123 in ports:
+        return "server"
     if "webcam" in ot or any_in(vh, ("hikvision", "dahua", "axis comm", "reolink", "amcrest", "foscam",
                                      "camera", "ipcam", "lorex", "uniview", "cam-")) or tok & {"cam"} \
             or (554 in ports and not windows and len(ports) <= 6):
         return "camera"
     if "raspberry" in vh:
         return "raspberrypi"
-    if "ipad" in h or tok & {"kindle", "tablet"}:
+    if "ipad" in h or tok & {"kindle", "tablet"} or any_in(h, ("fire-hd", "fire hd", "firehd", "fire-7")):
         return "tablet"
-    if any_in(h, ("iphone", "android", "galaxy", "pixel", "oneplus", "sm-", "moto", "redmi", "huawei")) \
-            or "phone" in ot or "ios" in os_.split() or "android" in os_:
+    if not windows and (any_in(h, ("iphone", "android", "galaxy", "pixel", "oneplus", "sm-", "redmi", "huawei"))
+                        or tok & {"moto"} or "motorola" in v
+                        or "phone" in ot or "ios" in os_.split() or "android" in os_):
         return "phone"
     if "game console" in ot or any_in(vh, ("nintendo", "xbox", "playstation", "sony interactive",
                                            "ps4", "ps5", "steamdeck", "steam-deck")):
@@ -556,7 +561,7 @@ def classify(d: dict) -> str:
             "rachio", "tasmota", "esp32", "esp8266", "esp_", "arduino", "particle", "silicon lab", "murata")):
         return "iot"
     if ot in ("wap",) or any_in(vh, ("unifi", "u6-", "uap", "aruba", "ruckus", "meraki", "eero", "orbi",
-                                    "deco", "access point", "mesh")) or tok & {"ap"}:
+                                    "access point")) or tok & {"ap", "deco", "mesh"}:
         return "ap"
     if ot in ("switch", "router", "bridge") or tok & {"switch", "sw"} or any_in(v, (
             "ubiquiti", "cisco", "juniper", "zyxel", "netgear", "d-link", "linksys", "mikrotik", "routerboard")):
@@ -564,22 +569,24 @@ def classify(d: dict) -> str:
     if "tp-link" in v:
         return "ap" if ports & {80, 443} else "iot"
     if windows:
+        if "server" in os_ or ports & {88, 389, 636, 1433, 3268}:
+            return "server"
         return "desktop"
     if "apple" in v or "mac os" in os_ or "macos" in os_ or any_in(h, ("macbook", "imac", "mac-mini",
                                                                        "macmini", "mbp")):
+        if any_in(h, ("imac", "mac-mini", "macmini", "mac-studio", "macstudio", "mac-pro", "macpro")):
+            return "desktop"
         if not ports and "apple" in v and not any_in(h, ("mac", "imac")):
             return "phone"           # most portless Apple devices on a LAN are iPhones
         return "laptop"
     if any_in(h, ("laptop", "notebook", "thinkpad", "xps", "latitude", "elitebook", "zenbook")):
         return "laptop"
     if any_in(vh, ("vmware", "qemu", "proxmox", "xensource", "super micro", "supermicro")) or \
-            any_in(os_, ("linux", "freebsd", "esxi")) and (22 in ports or len(ports) >= 3):
+            any_in(os_, ("linux", "freebsd")) and (22 in ports or len(ports) >= 3) or any_in(os_, ("esxi", "vmware")):
         return "server"
     if tok & {"desktop", "pc"} or any_in(v, ("dell", "lenovo", "asustek", "micro-star", "gigabyte",
                                              "asrock", "acer", "framework", "realtek")):
         return "desktop"
-    if "intel" in v:
-        return "laptop"
     if d.get("randomized_mac"):
         return "phone"
     return "unknown"
