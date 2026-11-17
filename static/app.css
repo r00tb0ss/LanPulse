@@ -1626,3 +1626,37 @@ html[data-pretheme="sand"]{background:#f4efe6}
 .lgroup-count{display:inline-flex;margin:0 0 7px 48px;padding:2px 7px;border:1px solid var(--border2);border-radius:999px;color:var(--accent);font-size:10px;font-weight:650}
 .lgroup-items{padding:3px 8px 6px 12px;border-top:1px solid var(--border);display:grid;gap:2px}
 .lgroup-items .lrow{background:rgba(0,0,0,.08);border-radius:7px}
+
+
+/* Mobile SOC ergonomics: preserve the live map while making its controls easier to tap. */
+@media(max-width:640px){
+  .topbar{gap:7px;padding-left:8px;padding-right:8px}
+  .brand{gap:7px;font-size:16px}
+  .conn{padding:4px 7px}
+  .conn .conn-txt{display:none}
+  .tview{padding:10px 9px 18px;gap:10px}
+  #threatView .t-kpis{gap:7px}
+  #threatView .t-kpis .kpi{padding:10px 11px;border-radius:10px}
+  #threatView .k-lbl{font-size:10px;letter-spacing:.45px}
+  #threatView .k-num{font-size:21px}
+  #threatView .k-sub{font-size:10.5px}
+  #threatView .t-mapcard{border-radius:11px}
+  #threatView .map-ctrl{right:7px;gap:7px}
+  #threatView .map-ctrl .icon-btn{width:44px;height:44px;min-width:44px}
+  #threatView .map-top{left:8px;right:58px;top:8px;gap:7px}
+  #threatView .map-title{font-size:12px;padding:6px 8px}
+  #threatView .map-chips{gap:6px;row-gap:6px;max-width:100%}
+  #threatView .map-chips select{max-width: min(132px,42vw);min-height:36px;font-size:11px}
+  #threatView .layer-pick button{min-height:36px;padding:6px 8px}
+  #threatView .map-legend{left:8px;right:8px;bottom:8px;padding:6px 8px;font-size:10px}
+  #threatView .t-feed{max-height:340px}
+  #threatView .t-card{padding:11px}
+  #threatView .p-sec{padding:12px}
+  #threatView .atk-table{max-width:100%;overscroll-behavior-x:contain}
+}
+@media(max-width:380px){
+  #threatView .tview{padding-left:7px;padding-right:7px}
+  #threatView .t-kpis .kpi{padding:9px}
+  #threatView .k-num{font-size:19px}
+  #threatView .map-chips select{max-width:38vw}
+}
