@@ -153,7 +153,7 @@ function initWorld() {
       trigger: "item", confine: true, backgroundColor: "#111a2e", borderColor: "#2a3858", padding: [8, 10],
       textStyle: {color: "#e2e8f0", fontSize: 12, fontFamily: "Inter, system-ui, sans-serif"},
       formatter: (p) => p.seriesId === "attackers"
-        ? `${flag(p.data.iso)} <b style="font-family:monospace">${esc(p.data.ip)}</b>${p.data.tag ? ` · <span style="color:#9fb0cc">${esc(p.data.tag.label)} (research scanner)</span>` : ""}<br>${esc(p.data.place)}<br>${fmtN(p.data.count)} attempts · ${esc(p.data.services)}`
+        ? `${flag(p.data.iso)} <b style="font-family:monospace">${esc(p.data.ip)}</b>${p.data.tag ? ` · <span style="color:#9fb0cc">${esc(p.data.tag.label)} (research scanner)</span>` : ""}<br>${esc(p.data.place)}<br>${fmtN(p.data.count)} attempts · ${esc(p.data.services)}<br><span style="color:#7dd3fc">Click marker for full attacker investigation →</span>`
         : p.seriesId === "home" ? `<b>Your network</b><br>${esc(p.data.place)}`
         : p.seriesId === "dests" ? `${flag(p.data.d.iso)} <b>${esc(p.data.d.org)}</b>${p.data.d.bad ? ' · <span style="color:#fca5a5">attacked you</span>' : ""}<br>
             <span style="font-family:monospace">${esc(p.data.d.ip)}</span> · ${esc(placeOf(p.data.d))}<br>
