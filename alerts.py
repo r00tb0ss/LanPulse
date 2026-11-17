@@ -55,7 +55,7 @@ DEFAULT_SETTINGS = {
     "snmp": {"enabled": False, "community": "", "hosts": []},
     "quiet": {"until": 0},         # quiet mode: no alert messages are sent until this time (epoch seconds)
     "layout": {},
-    "dns": {"enabled": False, "url": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
+    "dns": {"enabled": False, "provider": "pihole", "url": "", "username": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
     "vulns": {"enabled": True, "nvd_key": ""},
     "honeypot": {"enabled": False, "bind": "0.0.0.0", "ingest_key": "",
                  "services": {"ssh": False, "telnet": True, "ftp": True, "http": False,
@@ -182,7 +182,7 @@ _SECRET_TARGETS = (
     (("channels", "email"), ("host",), ("password",)),
     (("channels", "irc"), ("host",), ("key",)),
     (("unifi",), ("host",), ("api_key", "password")),
-    (("dns",), ("url",), ("password",)),
+    (("dns",), ("url", "provider", "username"), ("password",)),
     (("ai",), ("provider", "base_url"), ("api_key",)),
 )
 
@@ -332,6 +332,10 @@ def apply_update(current: dict, incoming: dict) -> dict:
         for f in ("enabled", "verify_tls", "malware"):
             if f in dn:
                 cur[f] = bool(dn[f])
+        if str(dn.get("provider")) in ("pihole", "adguard"):
+            cur["provider"] = str(dn["provider"])
+        if "username" in dn:
+            cur["username"] = re.sub(r"[\x00-\x1f\x7f:]", "", str(dn["username"]))[:100]
         if "url" in dn:
             u = str(dn["url"]).strip().rstrip("/")[:200]
             if u and not u.startswith(("http://", "https://")):
