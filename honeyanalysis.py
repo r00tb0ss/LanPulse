@@ -487,14 +487,27 @@ def analyze_sample(data: bytes) -> dict:
     if families and not any(t == "miner" for t in tags) and "Cryptocurrency miner" in families:
         tags.append("miner")
     score = script_tags.get("score", 0)
+    evidence = [{"label": TAG_INFO[t]["label"], "points": TAG_INFO[t]["weight"], "confidence": "heuristic",
+                 "source": "command patterns", "explanation": f"Matches the {TAG_INFO[t]['attack']} pattern."}
+                for t in script_tags.get("tags", []) if t in TAG_INFO]
     if ident["kind"] in ("elf", "pe"):
+        if score < 40:
+            evidence.append({"label": "Executable program", "points": 40 - score, "confidence": "heuristic", "source": "file type",
+                             "explanation": "Captured executables start at a minimum triage score; this says nothing about what the program does."})
         score = max(score, 40)
     if families:
+        evidence.append({"label": "Family hint: " + ", ".join(families[:3]), "points": min(25, 100 - min(score, 100)),
+                         "confidence": "heuristic", "source": "text inside the file",
+                         "explanation": "Text in the file resembles a known family. A hint, not a verdict."})
         score = min(100, score + 25)
     if ent >= 7.2:
+        evidence.append({"label": "High entropy", "points": min(10, 100 - min(score, 100)), "confidence": "heuristic",
+                         "source": "byte statistics", "explanation": f"Entropy {ent}: possibly packed or encrypted."})
         score = min(100, score + 10)
     return {**h, "size": len(data), "kind": ident["kind"], "type": ident["detail"], "arch": ident.get("arch", ""),
             "entropy": ent, "families": families, "notes": notes, "tags": tags, "score": score,
+            "score_evidence": evidence,
+            "score_explanation": "Static triage indicators add up to this score (capped at 100). It is not a probability or a malware verdict.",
             "iocs": script_analysis.get("iocs", find_iocs(blob)), "script_analysis": script_analysis,
             "strings": strs[:150]}
 
@@ -658,6 +671,9 @@ def sensor_options(raw, kind: str = "pi") -> list[str]:
             continue
         out.append(f"{key}={n}")
     return out
+
+
+YARA_INGEST_MAX = 4 * 1024 * 1024
 
 
 class HoneyAnalysis:
@@ -866,7 +882,8 @@ class HoneyAnalysis:
             return False, "rate limited"
         a = analyze_sample(data)
         # Persist static YARA results immediately so the dashboard and analyst share the same evidence.
-        a["yara"] = self._scan_yara(data)
+        if len(data) <= YARA_INGEST_MAX:      # larger files are scanned the first time they are opened, so an upload is never held up
+            a["yara"] = self._scan_yara(data)
         sha = a["sha256"]
         ip = str(meta.get("ip") or "")[:45]
         try:

@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # LanPulse YARA setup helper. Invoked only by the root-owned systemd path unit.
 set -euo pipefail
-D=/opt/lanpulse/data/yara
+D=${LANPULSE_YARA_DIR:-/opt/lanpulse/data/yara}
 LOG=$D/log.txt
 STATUS=$D/status.json
+# This runs as root, but the folder is writable by the dashboard's own user. Never follow a link planted there:
+# refuse a linked folder, remove old files first and create new ones with O_EXCL (noclobber).
+[[ -L "$D" ]] && { echo "refusing a symlinked $D" >&2; exit 1; }
 mkdir -p "$D"
+[[ -d "$D" && ! -L "$D" ]] || exit 1
 chmod 700 "$D"
-state() { printf '{"state":"%s","message":"%s","t":%s}\n' "$1" "$2" "$(date +%s)" > "$STATUS.tmp"; chmod 600 "$STATUS.tmp"; mv -f "$STATUS.tmp" "$STATUS"; }
-fail() { echo "!! $1" >> "$LOG"; state failed "$1"; exit 1; }
-[[ -f "$D/request" ]] || exit 0
+state() { rm -f "$STATUS.tmp"; ( set -C; printf '{"state":"%s","message":"%s","t":%s}\n' "$1" "$2" "$(date +%s)" > "$STATUS.tmp" ); chmod 600 "$STATUS.tmp"; mv -f "$STATUS.tmp" "$STATUS"; }
+fail() { [[ -L "$LOG" ]] || echo "!! $1" >> "$LOG"; state failed "$1"; exit 1; }
+[[ -f "$D/request" && ! -L "$D/request" ]] || exit 0
 ACTION=$(python3 - "$D/request" <<'PY'
 import json,sys
 try:
@@ -17,7 +21,7 @@ except Exception: print('')
 PY
 )
 rm -f "$D/request"
-: > "$LOG"; chmod 600 "$LOG"
+rm -f "$LOG"; ( set -C; : > "$LOG" ); chmod 600 "$LOG"
 exec >> "$LOG" 2>&1
 echo "== LanPulse YARA $ACTION $(date) =="
 case "$ACTION" in

@@ -28,7 +28,7 @@ async function loadYaraView() {
 
 function formatYaraPackageDate(value) {
   if (value === null || value === undefined || value === "") return "Not reported";
-  const raw = typeof value === "number" || /^\\d+(?:\\.\\d+)?$/.test(String(value).trim())
+  const raw = typeof value === "number" || /^\d+(?:\.\d+)?$/.test(String(value).trim())
     ? Number(value) * (Number(value) < 1e12 ? 1000 : 1)
     : value;
   const date = new Date(raw);
