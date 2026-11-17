@@ -144,6 +144,31 @@ def main() -> int:
                     problems.append(f"[tablet panel] the side panel covers {widths['normal']:.0f}px of a {widths['vw']}px screen by default")
                 if widths["wide"] <= widths["normal"] + 100:
                     problems.append("[tablet panel] the wider-panel button did not make the panel wider")
+                # Phone layout: no tab may be wider than the screen (the page would scroll sideways).
+                page.set_viewport_size({"width": 390, "height": 1400})
+                page.goto(BASE, wait_until="domcontentloaded")
+                page.wait_for_selector("#vNet", timeout=20000)
+                page.wait_for_timeout(1500)
+                for vid in VIEWS:
+                    current["view"] = f"phone {vid}"
+                    page.evaluate("id => document.getElementById(id).click()", vid)
+                    page.wait_for_timeout(1800)
+                    over = page.evaluate("""() => {
+                      const w = window.innerWidth, wide = [];
+                      for (const el of document.querySelectorAll('body *')) {
+                        const r = el.getBoundingClientRect();
+                        if (r.width > 0 && r.right > w + 2 && getComputedStyle(el).position !== 'fixed' && !el.closest('#panel,.vis-network,canvas,svg,.topo-stage,.t-map,#map,.scroll-x,.table-wrap,.atk-table,pre,.tabs,.views')) {
+                          wide.push((el.id ? '#' + el.id : el.tagName.toLowerCase() + '.' + String(el.className).split(' ')[0]) + ' ' + Math.round(r.right - w) + 'px');
+                          if (wide.length >= 4) break;
+                        }
+                      }
+                      return {scroll: document.documentElement.scrollWidth - w, wide};
+                    }""")
+                    if over["scroll"] > 2:
+                        problems.append(f"[phone {vid}] the page scrolls sideways by {over['scroll']}px")
+                    if over["wide"]:
+                        problems.append(f"[phone {vid}] wider than the screen: {', '.join(over['wide'])}")
+                    page.screenshot(path=os.path.join(ROOT, f"browser-phone-{vid}.png"))
                 browser.close()
         finally:
             proc.terminate()

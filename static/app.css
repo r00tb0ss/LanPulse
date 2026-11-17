@@ -2095,3 +2095,12 @@ html[data-pretheme="sand"]{background:#f4efe6}
 @media (max-width:900px) and (min-width:561px){.panel{width:440px}}
 .panel.wide{width:min(860px,100%)}
 @media (max-width:560px){.panel .expand{display:none}.panel .p-head{padding-right:64px}}
+
+/* Phones: Red Team target rows put the badges under the device name, and the Threats map gets room for its controls */
+.rt-tags{align-items:center}
+@media (max-width:720px){
+  .rt-row{flex-wrap:wrap;align-items:flex-start}
+  .rt-dev{flex:1 1 100%}
+  .rt-tags{width:100%;justify-content:flex-start}
+  #threatView .t-mapcard{min-height:450px}
+}
