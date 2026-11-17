@@ -115,6 +115,12 @@ class EveryKind(unittest.TestCase):
         self.assertNotIn("http://203.0.113.50", out)
         self.assertIn("203[.]0[.]113[.]50", out)
 
+    def test_malware_report_uses_cached_yara_results_without_scanning(self):
+        self.nm.honeyan._scan_yara = lambda *a, **k: (_ for _ in ()).throw(AssertionError("report triggered YARA scan"))
+        doc = reports.gather(self.nm, "honeypot-malware", 168)
+        out = reports.render_html(doc, {})
+        self.assertIn("Cached result only", out)
+
     def test_executive_report_flags_what_needs_attention(self):
         out = reports.render_html(reports.gather(self.nm, "executive", 24), {})
         self.assertIn("came from inside the network", out)
