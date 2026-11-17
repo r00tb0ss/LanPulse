@@ -847,6 +847,16 @@ function initUI() {
     refilter();
   }));
   $("btnClose").onclick = closePanel;
+  const setWide = (on) => {                       // the side panel keeps its normal size; this makes it wider and remembers the choice
+    $("panel").classList.toggle("wide", on);
+    const b = $("btnExpand");
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.title = on ? "Back to normal size" : "Make wider";
+    b.firstElementChild.className = on ? "fa-solid fa-compress" : "fa-solid fa-expand";
+    try { localStorage.setItem("lp-panel-wide", on ? "1" : "0"); } catch (_) {}
+  };
+  $("btnExpand").onclick = () => setWide(!$("panel").classList.contains("wide"));
+  try { if (localStorage.getItem("lp-panel-wide") === "1") setWide(true); } catch (_) {}
   $("btnFit").onclick = () => network.fit({animation: {duration: 500}});
   $("btnPhysics").onclick = () => { setPhysics(!physicsOn); toast(physicsOn ? "Layout unlocked" : "Layout frozen. Drag devices where you like."); };
   $("btnSaveLayout").onclick = async () => {

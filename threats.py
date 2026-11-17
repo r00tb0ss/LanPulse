@@ -32,6 +32,7 @@ import urllib.request
 from pathlib import Path
 
 import ipcontext
+import concurrent.futures
 from scanners import ScannerTagger
 import mmdb
 
@@ -377,6 +378,9 @@ class Geo:
             self.cache.clear()
         self.cache[ip] = out
         return out
+
+
+INTEL_DEADLINE = 9          # seconds to wait for all the outside lookups together
 
 
 def _get_json(url: str, headers: dict | None = None, timeout: int = 8):
@@ -807,6 +811,7 @@ class ThreatMonitor:
         }
 
     def investigate(self, ip: str) -> dict:
+        cached = self.cached_intel(ip)
         with self.lock:
             rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
                                    "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
@@ -841,7 +846,7 @@ class ThreatMonitor:
                          "name": self.nm.label(by_ip[l]) if l in by_ip else l,
                          "type": by_ip.get(l, {}).get("type", "unknown")} for l, n in targets.most_common(8)],
             "sensors": [{"name": s, "count": n} for s, n in sensors.most_common(5)],
-            "hourly": hourly, "recent": recent, "credentials": [], "intel": self.intel(ip),
+            "hourly": hourly, "recent": recent, "credentials": [], "intel": cached or {},
             "tag": self.tags.cache.get(ip),
             "signatures": [{"name": n, "count": c} for n, c in collections.Counter(
                 r[7] for r in rows if r[7] and "IPS" in (r[6] or "")).most_common(8)],
@@ -866,13 +871,33 @@ class ThreatMonitor:
                 out["reached"] = 0
                 out["ports"] = [{"port": h["port"], "service": SERVICES_LABEL(h["service"]), "count": h["n"]}
                                 for h in _ports_from(hp["hits"])]
+        if cached is None:
+            out["intel_pending"] = True            # the page asks for the outside lookups next (ip_extra)
+        else:
+            out["context"] = self._context(ip, rows, out["intel"], out["tag"])
+        return out
+
+    def _context(self, ip, rows, intel, tag):
         try:
-            gn = (out["intel"].get("greynoise") or {}).get("classification", "")
-            tag = (out["tag"] or {}).get("label", "") if isinstance(out.get("tag"), dict) else ""
-            out["context"] = ipcontext.build(self.nm, ip, rows, tag, gn)
+            gn = (intel.get("greynoise") or {}).get("classification", "")
+            label = (tag or {}).get("label", "") if isinstance(tag, dict) else ""
+            return ipcontext.build(self.nm, ip, rows, label, gn)
         except Exception:
             log.debug("ip context skipped", exc_info=True)
-        return out
+            return None
+
+    def ip_extra(self, ip: str) -> dict:
+        """The slower half of the IP box: outside lookups (in parallel) and the extra context."""
+        with self.lock:
+            rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
+                                   "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
+        intel = self.intel(ip)
+        tag = self.tags.cache.get(ip)
+        return {"intel": intel, "tag": tag, "context": self._context(ip, rows, intel, tag)}
+
+    def cached_intel(self, ip: str):
+        hit = self.intel_cache.get(ip)
+        return hit[1] if hit and time.time() - hit[0] < 6 * 3600 else None
 
     def reached_ips(self, hours: int = 168) -> set:
         with self.lock:
@@ -906,70 +931,95 @@ class ThreatMonitor:
             return info
         info = {"rdns": "", "isp": "", "org": "", "asn": "", "as_name": "", "hosting": None, "proxy": None,
                 "mobile": None, "abuse": None, "shodan": None, "errors": {}}
-        try:
-            info["rdns"] = socket.gethostbyaddr(ip)[0]
-        except Exception:
-            pass
-        try:
-            r = _get_json(f"http://ip-api.com/json/{ip}?fields=status,message,isp,org,as,asname,mobile,proxy,hosting")
-            if r.get("status") == "success":
-                info.update({"isp": r.get("isp", ""), "org": r.get("org", ""), "asn": (r.get("as") or "").split(" ")[0],
-                             "as_name": r.get("asname", ""), "hosting": r.get("hosting"), "proxy": r.get("proxy"),
-                             "mobile": r.get("mobile")})
-        except Exception as e:
-            info["errors"]["ip-api"] = str(e)
-        try:
-            s = _get_json(f"https://internetdb.shodan.io/{ip}")
-            info["shodan"] = {"ports": s.get("ports", []), "vulns": s.get("vulns", [])[:12], "tags": s.get("tags", []),
-                              "hostnames": s.get("hostnames", [])[:5]}
-        except urllib.error.HTTPError as e:
-            info["shodan"] = {"ports": [], "vulns": [], "tags": [], "hostnames": []} if e.code == 404 else None
-        except Exception as e:
-            info["errors"]["shodan"] = str(e)
-        key = self.cfg.get("abuseipdb_key")
-        if key:
+        # Every lookup talks to a different outside service, so run them side by side. One slow or unreachable
+        # service used to hold up the whole panel for its full timeout, one after another.
+        def look_rdns():
             try:
-                a = _get_json(f"https://api.abuseipdb.com/api/v2/check?ipAddress={ip}&maxAgeInDays=90",
-                              {"Key": key})["data"]
-                info["abuse"] = {"score": a.get("abuseConfidenceScore"), "reports": a.get("totalReports"),
-                                 "usage": a.get("usageType", ""), "tor": a.get("isTor"), "domain": a.get("domain", "")}
+                info["rdns"] = socket.gethostbyaddr(ip)[0]
+            except Exception:
+                pass
+        def look_ipapi():
+            try:
+                r = _get_json(f"http://ip-api.com/json/{ip}?fields=status,message,isp,org,as,asname,mobile,proxy,hosting")
+                if r.get("status") == "success":
+                    info.update({"isp": r.get("isp", ""), "org": r.get("org", ""), "asn": (r.get("as") or "").split(" ")[0],
+                                 "as_name": r.get("asname", ""), "hosting": r.get("hosting"), "proxy": r.get("proxy"),
+                                 "mobile": r.get("mobile")})
             except Exception as e:
-                info["errors"]["abuseipdb"] = str(e)
-        try:
-            gn = _get_json(f"https://api.greynoise.io/v3/community/{ip}")
-            info["greynoise"] = {"classification": gn.get("classification", ""), "name": gn.get("name", ""),
-                                 "noise": gn.get("noise"), "riot": gn.get("riot"), "last_seen": gn.get("last_seen", "")}
-            if gn.get("classification") == "benign" and gn.get("name") and not self.tags.cache.get(ip):
-                self.tags.set(ip, {"tag": "scanner", "label": gn["name"], "host": "GreyNoise"})
-        except urllib.error.HTTPError as e:
-            info["greynoise"] = {"classification": "unknown", "name": "", "noise": False, "riot": False} if e.code == 404 else None
-        except Exception as e:
-            info["errors"]["greynoise"] = str(e)
-        # abuse.ch ThreatFox: is this IP a known malware command-and-control / botnet address?
-        # ThreatFox now requires a free abuse.ch Auth-Key (the same one the malware list uses, Settings > DNS).
-        tf_key = (self.nm.settings.get("dns", {}).get("abuse_key") or self.cfg.get("abuse_key") or "").strip()
-        if not tf_key:
-            info["threatfox"] = {"found": False, "need_key": True}
-        else:
+                info["errors"]["ip-api"] = str(e)
+        def look_shodan():
             try:
-                tf = _post_json(THREATFOX_API, {"query": "search_ioc", "search_term": ip}, {"Auth-Key": tf_key})
-                if tf.get("query_status") == "ok" and tf.get("data"):
-                    rows = tf["data"][:5]
-                    info["threatfox"] = {"found": True, "count": len(tf["data"]),
-                                         "malware": sorted({r.get("malware_printable") or r.get("malware") or "" for r in rows if r.get("malware_printable") or r.get("malware")})[:5],
-                                         "types": sorted({r.get("threat_type") or "" for r in rows if r.get("threat_type")})[:4]}
-                else:
-                    info["threatfox"] = {"found": False}
+                s = _get_json(f"https://internetdb.shodan.io/{ip}")
+                info["shodan"] = {"ports": s.get("ports", []), "vulns": s.get("vulns", [])[:12], "tags": s.get("tags", []),
+                                  "hostnames": s.get("hostnames", [])[:5]}
             except urllib.error.HTTPError as e:
-                info["threatfox"] = {"found": False, "need_key": True} if e.code in (401, 403) else None
-                if e.code not in (401, 403):
-                    info["errors"]["threatfox"] = f"HTTP {e.code}"
+                info["shodan"] = {"ports": [], "vulns": [], "tags": [], "hostnames": []} if e.code == 404 else None
             except Exception as e:
-                info["errors"]["threatfox"] = str(e)[:120]
-        # Tor exit node?
-        self.refresh_tor()
-        if self.tor_exits:
-            info["tor"] = ip in self.tor_exits
+                info["errors"]["shodan"] = str(e)
+        def look_abuse():
+            key = self.cfg.get("abuseipdb_key")
+            if key:
+                try:
+                    a = _get_json(f"https://api.abuseipdb.com/api/v2/check?ipAddress={ip}&maxAgeInDays=90",
+                                  {"Key": key})["data"]
+                    info["abuse"] = {"score": a.get("abuseConfidenceScore"), "reports": a.get("totalReports"),
+                                     "usage": a.get("usageType", ""), "tor": a.get("isTor"), "domain": a.get("domain", "")}
+                except Exception as e:
+                    info["errors"]["abuseipdb"] = str(e)
+        def look_greynoise():
+            try:
+                gn = _get_json(f"https://api.greynoise.io/v3/community/{ip}")
+                info["greynoise"] = {"classification": gn.get("classification", ""), "name": gn.get("name", ""),
+                                     "noise": gn.get("noise"), "riot": gn.get("riot"), "last_seen": gn.get("last_seen", "")}
+                if gn.get("classification") == "benign" and gn.get("name") and not self.tags.cache.get(ip):
+                    self.tags.set(ip, {"tag": "scanner", "label": gn["name"], "host": "GreyNoise"})
+            except urllib.error.HTTPError as e:
+                info["greynoise"] = {"classification": "unknown", "name": "", "noise": False, "riot": False} if e.code == 404 else None
+            except Exception as e:
+                info["errors"]["greynoise"] = str(e)
+        def look_threatfox():
+            # abuse.ch ThreatFox: is this IP a known malware command-and-control / botnet address?
+            # ThreatFox now requires a free abuse.ch Auth-Key (the same one the malware list uses, Settings > DNS).
+            tf_key = (self.nm.settings.get("dns", {}).get("abuse_key") or self.cfg.get("abuse_key") or "").strip()
+            if not tf_key:
+                info["threatfox"] = {"found": False, "need_key": True}
+            else:
+                try:
+                    tf = _post_json(THREATFOX_API, {"query": "search_ioc", "search_term": ip}, {"Auth-Key": tf_key})
+                    if tf.get("query_status") == "ok" and tf.get("data"):
+                        rows = tf["data"][:5]
+                        info["threatfox"] = {"found": True, "count": len(tf["data"]),
+                                             "malware": sorted({r.get("malware_printable") or r.get("malware") or "" for r in rows if r.get("malware_printable") or r.get("malware")})[:5],
+                                             "types": sorted({r.get("threat_type") or "" for r in rows if r.get("threat_type")})[:4]}
+                    else:
+                        info["threatfox"] = {"found": False}
+                except urllib.error.HTTPError as e:
+                    info["threatfox"] = {"found": False, "need_key": True} if e.code in (401, 403) else None
+                    if e.code not in (401, 403):
+                        info["errors"]["threatfox"] = f"HTTP {e.code}"
+                except Exception as e:
+                    info["errors"]["threatfox"] = str(e)[:120]
+        def look_tor():
+            self.refresh_tor()
+            if self.tor_exits:
+                info["tor"] = ip in self.tor_exits
+        jobs = {"rdns": look_rdns, "ip-api": look_ipapi, "shodan": look_shodan, "abuseipdb": look_abuse,
+                "greynoise": look_greynoise, "threatfox": look_threatfox, "tor": look_tor}
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="intel")
+        started = time.time()
+        futs = {pool.submit(f): k for k, f in jobs.items()}
+        done, late = concurrent.futures.wait(futs, timeout=INTEL_DEADLINE)
+        pool.shutdown(wait=False)
+        for f in late:
+            info["errors"][futs[f]] = "took too long"
+        for f in done:
+            if f.exception():
+                info["errors"][futs[f]] = str(f.exception())[:120]
+        log.debug("intel for %s took %.1fs (%d late)", ip, time.time() - started, len(late))
+        if late:
+            # do not cache a partial answer for hours; try again soon
+            self.intel_cache[ip] = (time.time() - 6 * 3600 + 120, info)
+            return info
         self.intel_cache[ip] = (time.time(), info)
         return info
 

@@ -703,6 +703,15 @@ async function openIp(ip) {
   if (!d || selectedIp !== ip) return;
   renderIpPanel(d);
   if (view === "threats" && d.geo && d.geo.lat != null) flyTo([d.geo.lon, d.geo.lat], Math.max(geoView().zoom, 4));
+  if (d.intel_pending) {      // the outside lookups (ISP, abuse score, Shodan...) can be slow, so they fill in afterwards
+    const x = await api(`/api/threats/ip/${encodeURIComponent(ip)}/extra`, "GET");
+    if (selectedIp !== ip) return;
+    d.intel_pending = false;
+    if (x) { d.intel = x.intel || {}; d.tag = x.tag || d.tag; d.context = x.context; }
+    const keep = [$("panelBody"), $("panel")].map((el) => el ? el.scrollTop : 0);     // do not jump back to the top
+    renderIpPanel(d);
+    [$("panelBody"), $("panel")].forEach((el, i) => { if (el) el.scrollTop = keep[i]; });
+  }
 }
 
 function blockRules(ip) {
@@ -820,7 +829,9 @@ function renderIpPanel(d) {
         : d.honeypot ? `<div class="ok-line"><i class="fa-solid fa-shield-halved"></i>No real LAN device was reached. ${fmtN(d.honeypot.total)} honeypot session${d.honeypot.total === 1 ? "" : "s"} reached decoy services only.</div>` : `<div class="ok-line"><i class="fa-solid fa-shield-halved"></i>Every attempt was stopped at your router.</div>`}
     </div>
 
-    <div class="p-sec"><h4>IP intelligence</h4><dl class="kv">
+    <div class="p-sec"><h4>IP intelligence</h4>
+    ${d.intel_pending ? '<div class="loading-line"><i class="fa-solid fa-spinner fa-spin"></i>Checking ISP, abuse reports and scanner lists…</div>' : ""}
+    <dl class="kv">
       ${row("Location", esc([g.city, g.region, g.country].filter(Boolean).join(", ") || "Unknown"))}
       ${row("ISP", esc(it.isp))}${row("Organization", esc(it.org))}
       ${row("Network", esc([it.asn, it.as_name].filter(Boolean).join(" ")))}

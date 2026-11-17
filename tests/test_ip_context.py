@@ -100,5 +100,72 @@ class OutboundFlows(unittest.TestCase):
         self.assertEqual(fl.to_dest("192.0.2.1")["devices"], [])
 
 
+class IntelSpeed(unittest.TestCase):
+    """The outside lookups run side by side with a deadline, and the panel opens before they finish."""
+
+    def setUp(self):
+        try:
+            import threats
+        except Exception as e:                       # the dashboard's own dependencies may be missing here
+            self.skipTest(f"threats module not importable: {e}")
+        self.threats = threats
+        self.tmp = tempfile.TemporaryDirectory()
+        nm = types.SimpleNamespace(args=types.SimpleNamespace(demo=False), data_dir=pathlib.Path(self.tmp.name), devices={},
+                                   label=lambda d: d.get("ip"), settings={"threats": {"ignore_noise": False}, "dns": {}},
+                                   honeyan=None, flows=None, honeypot=None)
+        self.tm = threats.ThreatMonitor(nm)
+        self.tm.tor_loaded = time.time()
+        self.tm.refresh_tor = lambda: None
+
+    def tearDown(self):
+        self.tm.db.close()
+        self.tmp.cleanup()
+
+    def test_slow_services_do_not_add_up(self):
+        t = self.threats
+
+        def slow(url, headers=None, timeout=8):
+            time.sleep(1.0)
+            return {}
+        orig, orig_dns = t._get_json, t.socket.gethostbyaddr
+        t._get_json, t.socket.gethostbyaddr = slow, lambda ip: (time.sleep(1.0), ("h", [], [ip]))[1]
+        try:
+            start = time.time()
+            self.tm.intel("203.0.113.9")
+            took = time.time() - start
+        finally:
+            t._get_json, t.socket.gethostbyaddr = orig, orig_dns
+        self.assertLess(took, 3.0, f"lookups ran one after another ({took:.1f}s)")
+
+    def test_a_hung_service_is_cut_off_and_not_cached_for_hours(self):
+        t = self.threats
+        t.INTEL_DEADLINE = 1
+        orig = t._get_json
+        t._get_json = lambda *a, **k: time.sleep(4) or {}
+        try:
+            start = time.time()
+            info = self.tm.intel("203.0.113.10")
+            took = time.time() - start
+        finally:
+            t._get_json = orig
+            t.INTEL_DEADLINE = 9
+        self.assertLess(took, 2.5)
+        self.assertIn("took too long", info["errors"].values())
+        self.assertLess(self.tm.intel_cache["203.0.113.10"][0] + 6 * 3600 - time.time(), 130)
+
+    def test_investigate_does_not_wait_for_outside_lookups(self):
+        t = self.threats
+        orig = t._get_json
+        t._get_json = lambda *a, **k: time.sleep(3) or {}
+        try:
+            start = time.time()
+            d = self.tm.investigate("203.0.113.11")
+            took = time.time() - start
+        finally:
+            t._get_json = orig
+        self.assertLess(took, 1.0)
+        self.assertTrue(d["intel_pending"])
+
+
 if __name__ == "__main__":
     unittest.main()

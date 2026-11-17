@@ -131,6 +131,19 @@ def main() -> int:
                     if geo["overlap"] > 4:
                         problems.append(f"[tablet topology] the search bar covers the bottom {geo['overlap']:.0f}px of the diagram")
                 page.screenshot(path=os.path.join(ROOT, "browser-tablet-topology.png"))
+                # The side panel keeps its normal size on a tablet and gets wider only when asked.
+                widths = page.evaluate("""() => {
+                  const p = document.getElementById('panel'); p.classList.add('open');
+                  const normal = p.getBoundingClientRect().width;
+                  document.getElementById('btnExpand').click();
+                  const wide = p.getBoundingClientRect().width;
+                  document.getElementById('btnExpand').click(); p.classList.remove('open');
+                  return {normal, wide, vw: window.innerWidth};
+                }""")
+                if widths["normal"] > widths["vw"] * 0.7:
+                    problems.append(f"[tablet panel] the side panel covers {widths['normal']:.0f}px of a {widths['vw']}px screen by default")
+                if widths["wide"] <= widths["normal"] + 100:
+                    problems.append("[tablet panel] the wider-panel button did not make the panel wider")
                 browser.close()
         finally:
             proc.terminate()

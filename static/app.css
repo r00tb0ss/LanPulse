@@ -2088,3 +2088,10 @@ html[data-pretheme="sand"]{background:#f4efe6}
 /* Tablet: the device search sits along the bottom (not under the view buttons), so Topology needs less room above
    and must leave room below, or its toolbar floats far from the buttons and the minimap hides behind the search bar. */
 @media (max-width:900px){.topo{padding-top:56px;padding-bottom:64px}}
+
+/* Side panel: normal size by default (also on tablets), with a button to make it wider */
+.panel .expand{position:absolute;right:62px;top:14px;z-index:2}
+.panel .p-head{padding-right:112px}
+@media (max-width:900px) and (min-width:561px){.panel{width:440px}}
+.panel.wide{width:min(860px,100%)}
+@media (max-width:560px){.panel .expand{display:none}.panel .p-head{padding-right:64px}}
