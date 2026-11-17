@@ -289,13 +289,13 @@ Notes: it runs as root for ARP and OS detection. The Topology view draws your re
 
 Only scan networks you own or are allowed to scan.
 
-## DNS (Pi-hole)
+## DNS lookups
 
-The **DNS** tab shows what every device looks up, read from your Pi-hole's query log (Pi-hole v6, or v5 with its API
+The **DNS** tab shows what every device looks up, read from your DNS resolver's query log (supported source: Pi-hole v6, or v5 with its API
 token): lookups and blocks over time, top domains, top blocked domains, a live list, and lookups per device. Each lookup is
 checked against the abuse.ch URLhaus malware host list; a device looking up a malware domain raises an alert.
 Connect it from the DNS tab (address + password; Pi-hole's "App password" is the cleanest). If almost every lookup comes
-from your router, hand out Pi-hole as the DNS server directly (UniFi: Settings > Networks > DHCP > DNS Server) so Pi-hole
+from your router, hand out the resolver as the DNS server directly (UniFi: Settings > Networks > DHCP > DNS Server) so it
 can tell devices apart. Lookups are kept as per-minute totals for 7 days.
 
 ## Vulnerabilities

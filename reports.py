@@ -380,7 +380,7 @@ def build_threats(s: dict, local: dict | None, hours: int) -> Doc:
 def build_dns(s: dict, hours: int) -> Doc:
     doc = Doc("DNS activity", f"What devices looked up, {hours_label(hours)}.")
     if not s.get("enabled", True):
-        doc.p("DNS monitoring is not set up, so there is nothing to report. Connect a Pi-hole or AdGuard Home in Settings.")
+        doc.p("DNS monitoring is not set up, so there is nothing to report. Connect a DNS source from the DNS tab.")
         return doc
     total, blocked = s.get("total", 0), s.get("blocked", 0)
     doc.kpi("Lookups", f"{total:,}").kpi("Blocked", _pct(blocked, total), "good").kpi("Distinct domains", f"{s.get('domains', 0):,}")

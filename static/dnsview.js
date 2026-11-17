@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 The LanPulse authors
 "use strict";
-/* DNS tab: what every device looks up, from Pi-hole. */
+/* DNS tab: what every device looks up, from your DNS resolver (currently Pi-hole). */
 
 let dnsData = null, dnsHours = 24, dnsDev = "", dnsLoadedAt = 0, dnsMalSeen = 0;
 
@@ -19,13 +19,13 @@ function renderDns() {
   const configured = s.enabled;
   $("dnsBody").classList.toggle("hidden", !configured);
   if (!configured) {
-    $("dnsSub").textContent = "connect your Pi-hole to see what each device looks up";
+    $("dnsSub").textContent = "connect a DNS source to see what each device looks up";
     if ($("dnsSetup").classList.contains("hidden")) showDnsSetup(true);
     return;
   }
   if (!$("dnsSetup").dataset.open) $("dnsSetup").classList.add("hidden");
   $("dnsSub").innerHTML = st.state === "error" ? `<span style="color:#fca5a5"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(st.error)}</span>`
-    : st.last_poll ? `from your Pi-hole${st.version ? ` (v${esc(st.version)})` : ""} · updated ${ago(st.last_poll)}` : "connecting to Pi-hole…";
+    : st.last_poll ? `from your DNS resolver${st.version ? ` (v${esc(st.version)})` : ""} · updated ${ago(st.last_poll)}` : "connecting to the DNS source…";
   const pct = s.total ? Math.round(100 * s.blocked / s.total) : 0;
   const mal = s.malware || [];
   $("dnsKpis").innerHTML = `
@@ -49,8 +49,8 @@ function renderDns() {
   };
   $("dnsRouterNote").classList.toggle("hidden", !s.router_only);
   if (s.router_only) $("dnsRouterNote").innerHTML = `<i class="fa-solid fa-circle-info"></i><div><b>Almost every lookup comes from your router,</b>
-    so Pi-hole can't tell devices apart. Hand out Pi-hole as the DNS server directly: on a UDM, Settings &gt; Networks &gt; your LAN &gt;
-    DHCP Service Management &gt; DNS Server, set it to your Pi-hole's IP. Devices pick it up as their leases renew.</div>`;
+    so the resolver can't tell devices apart. Hand out your resolver as the DNS server directly: on a UDM, Settings &gt; Networks &gt; your LAN &gt;
+    DHCP Service Management &gt; DNS Server, set it to the resolver's IP. Devices pick it up as their leases renew.</div>`;
   $("dnsMalCard").classList.toggle("hidden", !mal.length);
   $("dnsMal").innerHTML = mal.map((m) => `<button class="mal-row" data-dev-id="${esc(m.id)}">
       <i class="fa-solid fa-skull-crossbones"></i><span class="nm">${esc(m.name)}</span><span class="dom">${esc(m.domain)}</span>
@@ -105,7 +105,7 @@ function updateDnsBadge() {
   if (b) { b.textContent = String(dnsMalSeen); b.classList.toggle("hidden", !dnsMalSeen || view === "dns"); }
 }
 
-/* ---- Pi-hole setup */
+/* ---- DNS source setup */
 async function showDnsSetup(force) {
   const box = $("dnsSetup");
   if (!force && !box.classList.contains("hidden")) { box.classList.add("hidden"); delete box.dataset.open; return; }
@@ -114,19 +114,19 @@ async function showDnsSetup(force) {
   const c = set.dns || {};
   box.dataset.open = force && !dnsData?.enabled ? "" : "1";
   box.classList.remove("hidden");
-  box.innerHTML = `<div class="t-card"><h4><span><i class="fa-solid fa-plug"></i> Connect your Pi-hole</span></h4>
-    <p class="hint">LanPulse reads Pi-hole's query log to show what each device looks up, and warns you when one looks up a known
-      malware domain. Works with Pi-hole v6 (and v5).</p>
+  box.innerHTML = `<div class="t-card"><h4><span><i class="fa-solid fa-plug"></i> Connect a DNS source</span></h4>
+    <p class="hint">LanPulse reads your DNS resolver's query log to show what each device looks up, and warns you when one looks up a known
+      malware domain. Supported source: <b>Pi-hole</b> (v6 and v5).</p>
     <div class="chan-fields" style="padding:0">
-      <label class="full">Pi-hole address<input id="dnsUrl" value="${esc(c.url || "")}" placeholder="http://192.168.0.138"></label>
+      <label class="full">Resolver address<input id="dnsUrl" value="${esc(c.url || "")}" placeholder="http://192.168.0.138"></label>
       <label class="full">Password<input id="dnsPw" type="password" value="${esc(c.password || "")}" autocomplete="off"
         placeholder="web interface password, or an app password"></label>
       <label class="full chk-line"><input type="checkbox" id="dnsMalOn" ${c.malware !== false ? "checked" : ""}> Check lookups against the abuse.ch URLhaus malware list</label>
       <label class="full">abuse.ch Auth-Key (optional, free at auth.abuse.ch)<input id="dnsAbuseKey" type="password" value="${esc(c.abuse_key || "")}" autocomplete="off"
         placeholder="not needed: LanPulse falls back to a mirror of the same list"></label>
-      <label class="full chk-line"><input type="checkbox" id="dnsTls" ${c.verify_tls ? "checked" : ""}> Verify Pi-hole's HTTPS certificate</label>
+      <label class="full chk-line"><input type="checkbox" id="dnsTls" ${c.verify_tls ? "checked" : ""}> Verify the resolver's HTTPS certificate</label>
     </div>
-    <p class="hint" style="font-size:12px">Tip: in Pi-hole, Settings &gt; Web interface / API &gt; <b>App password</b> creates a separate password just for LanPulse.
+    <p class="hint" style="font-size:12px">Pi-hole tip: Settings &gt; Web interface / API &gt; <b>App password</b> creates a separate password just for LanPulse.
       For Pi-hole v5, paste the API token instead.</p>
     <div class="modal-foot" style="position:static;padding:10px 0 0"><span class="test-res" id="dnsRes"></span>
       ${c.enabled ? `<button class="btn danger" id="dnsOff">Disconnect</button>` : ""}
@@ -138,18 +138,18 @@ async function showDnsSetup(force) {
     $("dnsRes").className = "test-res"; $("dnsRes").textContent = "Testing…";
     const r = await api("/api/dns/test", "POST", form(true), true);
     $("dnsRes").className = `test-res ${r && r.ok ? "ok" : "bad"}`;
-    $("dnsRes").textContent = r && r.ok ? `Connected to Pi-hole v${r.version}. ${r.recent} lookups in the last 10 minutes.` : (r?.error || "No response");
+    $("dnsRes").textContent = r && r.ok ? `Connected to the DNS source (Pi-hole v${r.version}). ${r.recent} lookups in the last 10 minutes.` : (r?.error || "No response");
   };
   $("dnsSave").onclick = async () => {
-    if (!$("dnsUrl").value.trim()) { $("dnsRes").className = "test-res bad"; $("dnsRes").textContent = "Enter your Pi-hole's address."; return; }
+    if (!$("dnsUrl").value.trim()) { $("dnsRes").className = "test-res bad"; $("dnsRes").textContent = "Enter the resolver's address."; return; }
     if (await api("/api/settings", "POST", {dns: form(true)})) {
-      toast("Pi-hole connected. Lookups appear within a minute.");
+      toast("DNS source connected. Lookups appear within a minute.");
       if (!dnsData?.malware_list) api("/api/dns/malware-refresh", "POST").then(() => loadDns());
       box.classList.add("hidden"); delete box.dataset.open;
       setTimeout(loadDns, 1500);
     }
   };
-  if ($("dnsOff")) $("dnsOff").onclick = async () => { if (await api("/api/settings", "POST", {dns: {enabled: false}})) { toast("Pi-hole disconnected"); loadDns(); } };
+  if ($("dnsOff")) $("dnsOff").onclick = async () => { if (await api("/api/settings", "POST", {dns: {enabled: false}})) { toast("DNS source disconnected"); loadDns(); } };
 }
 
 /* ---- device panel: what it looks up */
@@ -163,7 +163,7 @@ async function loadDeviceDns(id) {
   box.classList.remove("hidden");
   const max = Math.max(1, ...s.top.map((t) => t.count));
   box.innerHTML = `<h4>What it looks up · last 24h</h4>
-    <div class="muted" style="font-size:12px;margin-bottom:6px">${fmtN(s.total)} lookups · ${fmtN(s.blocked)} blocked by Pi-hole · ${fmtN(s.domains)} domains</div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">${fmtN(s.total)} lookups · ${fmtN(s.blocked)} blocked by your resolver · ${fmtN(s.domains)} domains</div>
     ${(s.malware || []).length ? `<div class="finding"><span class="sev high">malware</span><span>Looked up ${s.malware.map((m) => esc(m.domain)).slice(0, 3).join(", ")}</span></div>` : ""}
     <div class="rank">${s.top.slice(0, 6).map((t) => `<div class="rk"><span class="ico"><i class="fa-solid fa-globe" style="color:#5b6b88"></i></span>
       <span class="nm">${esc(t.domain)}</span><span class="ct">${fmtN(t.count)}</span><div class="bar"><i style="width:${(100 * t.count / max).toFixed(1)}%;background:#2dd4bf"></i></div></div>`).join("")}</div>
