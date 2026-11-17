@@ -423,13 +423,27 @@ function flyTo(center, zoom, ms = 650) {
 function zoomBy(f) { const v = geoView(); flyTo(v.center, v.zoom * f, 260); }
 function panBy(dx, dy) { const v = geoView(); const s = 40 / v.zoom; flyTo([v.center[0] + dx * s, v.center[1] + dy * s], v.zoom, 200); }
 function flyToRegion(key) { const r = REGIONS[key] || REGIONS.world; flyTo(r[0], r[1]); }
+function resizeThreatMap() {
+  if (!tChart) return;
+  requestAnimationFrame(() => tChart && tChart.resize());
+}
+function toggleMapWide(on) {
+  const main = $("mapCard").parentElement;
+  const wide = on ?? !main.classList.contains("map-wide");
+  main.classList.toggle("map-wide", wide);
+  const button = $("mapCtrl").querySelector('[data-act="wide"]');
+  button.innerHTML = `<i class="fa-solid ${wide ? "fa-compress" : "fa-arrows-left-right"}"></i>`;
+  button.title = wide ? "Restore map and feed layout" : "Make map wider in dashboard";
+  button.setAttribute("aria-label", button.title);
+  resizeThreatMap();
+}
 function toggleMapFull(on) {
   const full = on ?? !mapIsFull();
   $("mapCard").classList.toggle("full", full);
   document.body.classList.toggle("map-full", full);
   $("mapCtrl").querySelector('[data-act="full"]').innerHTML = `<i class="fa-solid ${full ? "fa-compress" : "fa-expand"}"></i>`;
   $("mapCtrl").querySelector('[data-act="full"]').title = full ? "Exit full screen" : "Full screen";
-  if (tChart) { tChart.setOption({geo: {roam: mapRoam()}}); setTimeout(() => tChart.resize(), 30); }
+  if (tChart) { tChart.setOption({geo: {roam: mapRoam()}}); setTimeout(resizeThreatMap, 30); }
 }
 function flyToCountry(iso) {
   const pts = (tSummary?.attackers || []).filter((a) => a.iso === iso && a.lat != null);
@@ -979,7 +993,7 @@ function initThreatUI() {
     const b = e.target.closest("button"); if (!b) return;
     ({in: () => zoomBy(1.6), out: () => zoomBy(1 / 1.6), reset: () => { $("tRegion").value = "world"; flyToRegion("world"); },
       home: () => { const h = homeCoord(); if (h) flyTo(h, 4.5); else toast("Your network's location isn't known yet"); },
-      full: () => toggleMapFull()})[b.dataset.act]?.();
+      wide: () => toggleMapWide(), full: () => toggleMapFull()})[b.dataset.act]?.();
   });
   $("tRegion").onchange = (e) => flyToRegion(e.target.value);
   $("tCountries").addEventListener("click", (e) => { const r = e.target.closest("[data-iso]"); if (r) flyToCountry(r.dataset.iso); });
