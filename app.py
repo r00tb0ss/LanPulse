@@ -39,6 +39,7 @@ import uvicorn
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 
 import alerts
 from auth import Auth
@@ -63,7 +64,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.38.6"
+VERSION = "1.38.7"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1252,6 +1253,16 @@ padding:8px 10px;border-radius:8px}</style></head><body><form method="post" acti
 <button type="submit">Sign in</button></form></body></html>"""
 
 
+class SelectiveGzip(GZipMiddleware):
+    """Compress pages, scripts and JSON (about five times smaller) but leave backup archives, which are already gzip."""
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/api/backups/"):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
 def build_app(nm: LanPulse) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
@@ -1282,6 +1293,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         nm.save()
 
     app = FastAPI(title="LanPulse", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
+    app.add_middleware(SelectiveGzip, minimum_size=1024, compresslevel=5)
     @app.exception_handler(json.JSONDecodeError)
     @app.exception_handler(UnicodeDecodeError)
     async def bad_json(request: Request, exc):
@@ -1321,7 +1333,11 @@ def build_app(nm: LanPulse) -> FastAPI:
             resp = JSONResponse({"error": "Sign in required"}, 401)
         else:
             resp = RedirectResponse("/login", 303)
-        if path == "/" or path.startswith("/static/") and not path.startswith("/static/vendor/"):
+        if path.startswith("/static/") and request.query_params.get("v") == VERSION:
+            # The page stamps every file with the release number, so a stamped file never changes: keep it for a year
+            # and skip the 30 "has this changed?" checks on every page load.
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path == "/" or path.startswith("/static/") and not path.startswith("/static/vendor/"):
             resp.headers["Cache-Control"] = "no-cache"      # always check for a newer version after upgrades
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["X-Content-Type-Options"] = "nosniff"
