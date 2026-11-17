@@ -96,8 +96,8 @@ PORT_TECH = {
 
 # Services that commonly ship with known default credentials (flagged only - never tried).
 DEFAULT_CRED_HINTS = re.compile(
-    r"tomcat|jboss|jenkins|grafana|pi-?hole|phpmyadmin|webmin|router|camera|hikvision|dahua|ipcam|printer|"
-    r"ilo|idrac|ipmi|mongodb|redis|elasticsearch|memcached|vnc|telnet|ftp", re.I)
+    r"tomcat|jboss|jenkins|grafana|pi-?hole|phpmyadmin|webmin|\brouter|camera|hikvision|dahua|ipcam|printer|"
+    r"\bilo\d?\b|idrac|ipmi|mongodb|redis|elasticsearch|memcached|\bvnc|telnet|(?<![a-z])ftp|vsftpd", re.I)
 
 MODULE_RE = re.compile(r"^(?:auxiliary|exploit|post|encoder|nop|payload)/[\w./-]{1,160}$")
 
