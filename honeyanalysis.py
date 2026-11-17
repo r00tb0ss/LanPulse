@@ -1106,7 +1106,7 @@ class HoneyAnalysis:
         since = time.time() - hours * 3600
         with self.lock:
             sessions = self.db.execute(
-                "SELECT id, ip, start, hassh, commands, files, tags FROM sessions "
+                "SELECT id, ip, sensor, start, hassh, commands, files, tags FROM sessions "
                 "WHERE start >= ? ORDER BY start DESC LIMIT 20000", (since,)).fetchall()
             samples = self.db.execute(
                 "SELECT sha256, ips, urls, analysis, last_seen FROM samples "
@@ -1114,7 +1114,7 @@ class HoneyAnalysis:
 
         groups = {}
 
-        def add(kind, value, ip, started, session_id="", sha="", confidence="low"):
+        def add(kind, value, ip, started, session_id="", sha="", confidence="low", sensor=""):
             value = str(value or "").strip()
             ip = str(ip or "").strip()
             if not value or not ip:
@@ -1123,13 +1123,15 @@ class HoneyAnalysis:
                 return
             key = (kind, value)
             item = groups.setdefault(key, {"kind": kind, "value": value, "ips": set(),
-                "sessions": set(), "samples": set(), "first_seen": started, "last_seen": started,
+                "sessions": set(), "samples": set(), "sensors": set(), "first_seen": started, "last_seen": started,
                 "confidence": confidence})
             item["ips"].add(ip)
             if session_id:
                 item["sessions"].add(session_id)
             if sha:
                 item["samples"].add(sha)
+            if sensor:
+                item["sensors"].add(str(sensor))
             if started:
                 item["first_seen"] = min(item["first_seen"], started)
                 item["last_seen"] = max(item["last_seen"], started)
@@ -1138,33 +1140,33 @@ class HoneyAnalysis:
             elif confidence == "moderate" and item["confidence"] == "low":
                 item["confidence"] = "moderate"
 
-        for sid, ip, started, hassh, commands_json, files_json, tags_json in sessions:
+        for sid, ip, sensor, started, hassh, commands_json, files_json, tags_json in sessions:
             if hassh:
-                add("SSH client fingerprint", hassh.lower(), ip, started, sid, confidence="moderate")
+                add("SSH client fingerprint", hassh.lower(), ip, started, sid, confidence="moderate", sensor=sensor)
             commands = json.loads(commands_json or "[]")
             files = json.loads(files_json or "[]")
             tags = sorted(set(json.loads(tags_json or "[]")) - {"logged-in"})
             if len(tags) >= 3:
-                add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low")
+                add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low", sensor=sensor)
             iocs = find_iocs("\n".join(commands))
             for indicator in iocs.get("ips", []):
-                add("Public IP", indicator["value"], ip, started, sid, confidence="low")
+                add("Public IP", indicator["value"], ip, started, sid, confidence="low", sensor=sensor)
             for indicator in iocs.get("domains", []):
-                add("Domain", indicator["value"], ip, started, sid, confidence="low")
+                add("Domain", indicator["value"], ip, started, sid, confidence="low", sensor=sensor)
             for indicator in iocs.get("irc_servers", []):
-                add("IRC command-and-control", indicator, ip, started, sid, confidence="moderate")
+                add("IRC command-and-control", indicator, ip, started, sid, confidence="moderate", sensor=sensor)
             for indicator in iocs.get("irc_channels", []):
-                add("IRC channel", indicator, ip, started, sid, confidence="low")
+                add("IRC channel", indicator, ip, started, sid, confidence="low", sensor=sensor)
             for key_text in iocs.get("ssh_keys", []):
-                add("SSH key fingerprint", _ssh_key_fingerprint(key_text), ip, started, sid, confidence="high")
+                add("SSH key fingerprint", _ssh_key_fingerprint(key_text), ip, started, sid, confidence="high", sensor=sensor)
             for f in files:
                 sha = str(f.get("sha256") or "").lower()
                 if HEX64.match(sha):
-                    add("Malware SHA-256", sha, ip, started, sid, sha, confidence="high")
+                    add("Malware SHA-256", sha, ip, started, sid, sha, confidence="high", sensor=sensor)
                 url = str(f.get("url") or "")
                 host = re.sub(r"^\w+(?:\+\w+)?://([^/:]+).*", r"\1", url).lower()
                 if host and host != url.lower():
-                    add("File transfer host", host, ip, started, sid, sha, confidence="moderate")
+                    add("File transfer host", host, ip, started, sid, sha, confidence="moderate", sensor=sensor)
 
         for sha, ips_json, urls_json, analysis_json, last_seen in samples:
             analysis = json.loads(analysis_json or "{}")
@@ -1192,6 +1194,7 @@ class HoneyAnalysis:
             out.append({
                 "kind": item["kind"], "value": item["value"], "confidence": item["confidence"],
                 "sources": len(item["ips"]), "source_ips": sorted(item["ips"])[:30],
+                "sensors": sorted(item["sensors"]),
                 "sessions": len(item["sessions"]), "session_ids": sorted(item["sessions"])[:20],
                 "samples": len(item["samples"]), "sample_hashes": sorted(item["samples"])[:10],
                 "first_seen": item["first_seen"], "last_seen": item["last_seen"],
