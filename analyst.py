@@ -204,7 +204,7 @@ LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubun
 - Red Team: an attacker's-eye report built from LanPulse's own scan data (exposed apps, unpatched flaws, attack paths), exportable.
 - Honeypot: built-in decoy Telnet, FTP, SMB, RDP, MySQL (optional SSH and HTTP) that log probes and credentials; any hit from inside the LAN flags a likely-compromised device. Under Captured attacks and malware: Sessions, Samples and Sensors. A sensor is an optional Cowrie SSH/Telnet honeypot on a Raspberry Pi, Linux box or container (Add sensor shows a one-line install command; Customize sets ports, fake hostname/OS, which logins work, limits, and optional FTP and web decoys that keep uploaded files). Captured files are analysed statically (hashes, type, strings, families, tags, score and optional YARA matches) and are never run. YARA results are cached with the rule-set fingerprint and refreshed when rules change; no match does not prove a file is safe.
 - Security score (risk profile) with the biggest fixes, daily summary, alerts by ntfy, Telegram, webhook (Discord, Slack, Home Assistant), email or IRC, login with a hashed password and optional HTTPS, Wake-on-LAN, CSV export. This analyst can use Ollama, any OpenAI-compatible server or Anthropic; it is read-only and cannot change anything.
-- Updates: Settings > Update > Check for updates, then hard-refresh the page. Source and releases: gitlab.com/r00tb0ss/lanpulse."""
+- Updates: Settings > Update > Check for updates, then hard-refresh the page. Source and releases: github.com/r00tb0ss/lanpulse."""
 
 TOPIC_WORDS = {
     "honeypot": ("honeypot", "honey", "cowrie", "sensor", "password", "username", "credential", "brute", "malware", "sample", "captured",

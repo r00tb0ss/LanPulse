@@ -572,6 +572,7 @@ function feedGroupKey(e) {
   return [e.src, e.dport || "", e.service || "", e.action || "", e.lan_id || e.lan_name || e.lan || ""].join("|");
 }
 function renderFeed(list, full) {
+  const openGroups = new Set([...$("tFeed").querySelectorAll("details.fi-group[open]")].map((d) => d.dataset.gk));   // a new event must not close a group being read
   feedEvents = list.slice(0, 80);
   feedKeys.clear();
   feedEvents.forEach((e) => feedKeys.add(`${e.t}|${e.src}|${e.dport}`));
@@ -586,7 +587,8 @@ function renderFeed(list, full) {
     if (events.length === 1) return feedItem(events[0]);
     const e = events[0], reached = isReached(e);
     const target = e.lan_name ? esc(e.lan_name) : e.lan ? esc(e.lan) : e.action === "blocked" ? "blocked at router" : "your router";
-    return `<details class="fi-group ${reached ? "reached" : ""}">
+    const gk = feedGroupKey(e);
+    return `<details class="fi-group ${reached ? "reached" : ""}" data-gk="${esc(gk)}"${openGroups.has(gk) ? " open" : ""}>
       <summary><span class="flag">${flagHtml(e.iso)}</span><span class="ip">${esc(e.src)}${isScanner(e) ? ` <span class="tagchip">${esc(e.tag.label)}</span>` : ""}${blockChip(e.src)}</span>
       <span class="when">${clock(e.t)}</span><span class="what"><b>${esc(e.service)}</b>${e.dport ? ` :${e.dport}` : ""} → <span class="tgt">${target}</span></span>
       <span class="fi-count">${fmtN(events.length)} attempts</span></summary>

@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import pathlib
+import threading
 
 log = logging.getLogger("lanpulse.yaralook")
 
@@ -37,6 +38,7 @@ class YaraRules:
 
     def __init__(self, folder: pathlib.Path):
         self.folder = pathlib.Path(folder)
+        self._lock = threading.RLock()      # scans can start from several threads while the rule files are reloaded
         self._sig = None
         self._rules: list = []
         self._errors: list[str] = []
@@ -55,6 +57,8 @@ class YaraRules:
                 if p.is_symlink() or not p.is_file() or p.suffix.lower() not in (".yar", ".yara"):
                     continue
                 rel = p.relative_to(self.folder)
+                if any(part.startswith(".") for part in rel.parts):
+                    continue                    # update staging (.yara-update-*) and the previous package (.managed-previous) are not rules in use
                 (managed if rel.parts and rel.parts[0] == "managed" else custom).append(p)
             except (OSError, ValueError):
                 continue
@@ -95,6 +99,10 @@ class YaraRules:
         return total
 
     def _load(self):
+        with self._lock:
+            self._load_locked()
+
+    def _load_locked(self):
         managed, custom = self._files()
         all_files = managed + custom
         try:
@@ -112,7 +120,11 @@ class YaraRules:
         self._compile_group(custom, "custom rule", total)
 
     def status(self) -> dict:
-        self._load()
+        with self._lock:
+            return self._status_locked()
+
+    def _status_locked(self) -> dict:
+        self._load_locked()
         meta = {}
         try:
             p = self.folder.parent / "yara-status.json"
@@ -128,11 +140,13 @@ class YaraRules:
                 "fingerprint": hashlib.sha256(repr(self._sig).encode("utf-8")).hexdigest()}
 
     def scan(self, data: bytes) -> dict:
-        out = self.status()
+        with self._lock:
+            out = self._status_locked()
+            rules_now = list(self._rules)      # a reload by another thread can no longer empty the list under this scan
         out["matches"] = []
-        if yara is None or not self._rules:
+        if yara is None or not rules_now:
             return out
-        for name, rules in self._rules:
+        for name, rules in rules_now:
             try:
                 found = rules.match(data=data, timeout=SCAN_SECONDS)
             except Exception as e:
