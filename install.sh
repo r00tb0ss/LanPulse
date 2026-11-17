@@ -195,6 +195,8 @@ echo "==> Creating Python environment"
 python3 -m venv "$DEST/venv"
 "$DEST/venv/bin/pip" install -q --upgrade pip
 "$DEST/venv/bin/pip" install -q -r "$DEST/requirements.txt"
+# Optional: PDF reports. Without it the HTML reports still work and can be saved as PDF from the browser's print dialog.
+"$DEST/venv/bin/pip" install -q "reportlab>=4.0" || echo "    note: reportlab not installed; reports stay available as printable HTML."
 # Populate YARA Forge Core on first install/upgrade; keep the install working if upstream is temporarily unavailable.
 if ! /usr/local/sbin/lanpulse-yara-update; then
   echo "    warning: YARA rules could not be downloaded now; the weekly updater will retry."

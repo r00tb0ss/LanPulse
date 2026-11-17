@@ -51,6 +51,7 @@ from flows import FlowStore
 from dns import DnsMonitor
 from vulns import VulnScanner
 import redteam
+import reports
 import analyst
 from openvas import OpenVAS
 from services import ServiceMonitor
@@ -62,7 +63,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, list_backup_archives
 
-VERSION = "1.36.11"
+VERSION = "1.37.0"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1937,6 +1938,37 @@ def build_app(nm: LanPulse) -> FastAPI:
         def build():
             return redteam.report_html(nm, nm.vulns.results, nm.vulns.kev)
         return HTMLResponse(await asyncio.to_thread(build))
+
+    @app.get("/api/report/info")
+    async def report_info():
+        return {"pdf": reports.pdf_available(),
+                "kinds": {k: {"title": v[0], "tab": v[1], "hours": v[2]} for k, v in reports.KINDS.items()}}
+
+    @app.get("/api/report/{name}")
+    async def report_get(name: str, hours: int = 168):
+        """/api/report/<kind>.html or .pdf, built from data LanPulse already holds (no scans, nothing is run)."""
+        kind, _, fmt = name.rpartition(".")
+        if kind not in reports.KINDS or fmt not in ("html", "pdf"):
+            return JSONResponse({"error": "Unknown report"}, 404)
+        if fmt == "pdf" and not reports.pdf_available():
+            return JSONResponse({"error": "PDF reports need the reportlab package. Run: sudo /opt/lanpulse/venv/bin/pip install reportlab, "
+                                          "then restart LanPulse. The HTML report works now and can be saved as PDF from the print dialog."}, 501)
+
+        def build():
+            doc = reports.gather(nm, kind, hours)
+            meta = reports.meta_for(nm, VERSION)
+            return reports.render_pdf(doc, meta) if fmt == "pdf" else reports.render_html(doc, meta).encode("utf-8")
+        try:
+            body = await asyncio.to_thread(build)
+        except Exception:
+            log.exception("report %s failed", kind)
+            return JSONResponse({"error": "The report could not be built. See the LanPulse log."}, 500)
+        stamp = time.strftime("%Y%m%d-%H%M")
+        if fmt == "pdf":
+            return Response(body, media_type="application/pdf",
+                            headers={"Content-Disposition": f'attachment; filename="lanpulse-{kind}-{stamp}.pdf"'})
+        return Response(body, media_type="text/html; charset=utf-8",
+                        headers={"Content-Disposition": f'inline; filename="lanpulse-{kind}-{stamp}.html"'})
 
     @app.get("/api/export/attack-layer.json")
     async def export_attack_layer():
