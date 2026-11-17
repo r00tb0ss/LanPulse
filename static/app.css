@@ -921,7 +921,7 @@ label.check input { width: auto; }
 /* Enterprise Light — clean white, blue accents, for a professional look */
 body[data-theme="light"]{
   --bg:#f1f5f9; --bg2:#ffffff; --panel:#ffffff; --panel2:#f1f5f9; --border:#d8e0ea; --border2:#c3cedc;
-  --text:#0f172a; --muted:#475569; --dim:#8294ab; --accent:#0284c7; --accent2:#0369a1;
+  --text:#0f172a; --muted:#475569; --dim:#64748b; --accent:#0284c7; --accent2:#0369a1;
   --green:#16a34a; --red:#dc2626; --amber:#d97706;
   --topbar:linear-gradient(180deg,#ffffff,#eef2f7); --map-area:#1a2742; --map-border:#2b4170;
   --ctrl:#ffffff; --ctrl-solid:#ffffff; --glow:#e4ecf5;
@@ -992,7 +992,7 @@ body[data-theme="frost"] .brand i,body[data-theme="frost"] .brand b{color:var(--
 /* Sand — warm paper light theme with terracotta accents, gentler than pure white */
 body[data-theme="sand"]{
   --bg:#f4efe6; --bg2:#fbf8f2; --panel:#fbf8f2; --panel2:#efe8dc; --border:#ddd2c0; --border2:#c9bba3;
-  --text:#2b2118; --muted:#6a5a48; --dim:#988873; --accent:#c2562a; --accent2:#a4441d;
+  --text:#2b2118; --muted:#6a5a48; --dim:#7a6a56; --accent:#c2562a; --accent2:#a4441d;
   --green:#3f8a4f; --red:#c93a3a; --amber:#b9770e;
   --topbar:linear-gradient(180deg,#fbf8f2,#efe8dc); --map-area:#3b3026; --map-border:#6e5b45;
   --ctrl:#fbf8f2; --ctrl-solid:#fbf8f2; --glow:#eadfcd; --map-glow:#4a3c2e; --map-deep:#2a2119;
