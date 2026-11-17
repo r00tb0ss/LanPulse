@@ -1746,3 +1746,106 @@ html[data-pretheme="sand"]{background:#f4efe6}
   .topo-bar{padding-left:7px;padding-right:7px}
   .topo-info{left:6px;right:6px;bottom:6px;max-height:45%}
 }
+
+
+/* Threat operations redesign: stronger hierarchy, a true map workspace, and denser local-event cards. */
+#threatView{
+  gap:16px;
+  padding:18px clamp(14px,2vw,30px) 30px;
+  background:
+    radial-gradient(ellipse at 12% 0%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 34%),
+    radial-gradient(ellipse at 88% 12%,color-mix(in srgb,var(--threat) 6%,transparent),transparent 28%),
+    var(--bg);
+}
+#threatView .t-kpis{gap:12px}
+#threatView .kpi{
+  position:relative;overflow:hidden;min-height:104px;padding:15px 16px;
+  border-radius:13px;background:linear-gradient(155deg,var(--panel2),var(--panel) 68%);
+  box-shadow:0 8px 24px rgba(0,0,0,.10);
+}
+#threatView .kpi:before{
+  content:"";position:absolute;inset:0 0 auto;height:2px;
+  background:linear-gradient(90deg,var(--accent),transparent 78%);opacity:.8
+}
+#threatView .kpi.danger:before{background:linear-gradient(90deg,var(--threat),transparent 78%)}
+#threatView .k-lbl{font-size:10px;font-weight:700;letter-spacing:.09em}
+#threatView .k-num{font-size:30px;letter-spacing:-.045em}
+#threatView .k-sub{font-size:11px}
+#threatView .t-main{grid-template-columns:minmax(0,1fr) minmax(310px,370px);gap:16px;align-items:stretch}
+#threatView .t-mapcard{
+  min-height:520px;border-radius:17px;border-color:color-mix(in srgb,var(--accent) 24%,var(--border));
+  box-shadow:0 14px 36px rgba(0,0,0,.18);
+}
+#threatView .map-title{font-size:13px;padding:8px 12px;border-radius:10px}
+#threatView .map-top{left:16px;right:64px;top:16px}
+#threatView .map-legend{left:16px;bottom:16px;padding:8px 12px;border-radius:10px}
+#threatView .map-src{right:16px;bottom:16px;padding:8px 12px;border-radius:10px}
+#threatView .map-ctrl{right:12px;top:50%;transform:translateY(-50%);gap:8px}
+#threatView .map-ctrl .icon-btn{
+  width:40px;height:40px;border-radius:11px;
+  background:color-mix(in srgb,var(--panel) 88%,transparent);
+  border:1px solid var(--border2);box-shadow:0 4px 12px rgba(0,0,0,.18)
+}
+#threatView .t-card{
+  border-radius:14px;padding:16px 17px;
+  background:linear-gradient(160deg,var(--panel2),var(--panel) 55%);
+  box-shadow:0 8px 24px rgba(0,0,0,.09);
+}
+#threatView .t-card>h4{
+  min-height:28px;align-items:center;margin-bottom:13px;padding-bottom:10px;
+  border-bottom:1px solid var(--border);font-size:12px;font-weight:750;letter-spacing:.055em;color:var(--text)
+}
+#threatView .t-card>h4 .muted{font-size:11px;color:var(--muted);font-weight:500}
+#threatView .t-feed{max-height:520px}
+#threatView .feed{gap:5px;margin:0 -4px}
+#threatView .fi{padding:10px 9px;border-radius:9px;background:var(--bg2)}
+#threatView .fi:hover{background:var(--panel2)}
+#threatView #tLocalCard{padding:17px}
+#threatView #tLocal .lrows{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;
+  max-height:460px;overflow:auto;padding:1px 4px 2px 1px
+}
+#threatView #tLocal .lrow{
+  min-width:0;min-height:66px;gap:9px;padding:10px 11px;border-radius:11px;
+  background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--accent);
+  box-shadow:0 3px 10px rgba(0,0,0,.06);transition:background .15s,border-color .15s,transform .15s
+}
+#threatView #tLocal .lrow:hover{background:var(--panel2);border-color:var(--border2);transform:translateY(-1px)}
+#threatView #tLocal .lrow.high{border-left-color:var(--threat)}
+#threatView #tLocal .lrow .lic{width:34px;height:34px;border-radius:10px}
+#threatView #tLocal .lrow .ltxt{font-size:12px;line-height:1.4}
+#threatView #tLocal .lrow .lwho{font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+#threatView #tLocal .lrow time{font-size:10px}
+#threatView .t-grid{gap:14px}
+#threatView .t-grid>.t-card{min-height:180px}
+#threatView .t-security-grid{gap:14px}
+@media(max-width:1100px){
+  #threatView .t-main{grid-template-columns:minmax(0,1fr) minmax(270px,320px)}
+  #threatView .t-mapcard{min-height:460px}
+  #threatView #tLocal .lrows{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:900px){
+  #threatView{padding:13px 12px 22px;gap:12px}
+  #threatView .t-main{grid-template-columns:minmax(0,1fr)}
+  #threatView .t-mapcard{min-height:440px}
+  #threatView .t-feed{max-height:360px}
+  #threatView #tLocal .lrows{grid-template-columns:repeat(2,minmax(0,1fr));max-height:420px}
+}
+@media(max-width:560px){
+  #threatView{padding:10px 9px 18px;gap:10px}
+  #threatView .t-kpis{gap:7px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #threatView .t-kpis .kpi{min-height:88px;padding:10px 11px}
+  #threatView .t-kpis .kpi:last-child{grid-column:1/-1}
+  #threatView .k-num{font-size:24px}
+  #threatView .t-mapcard{min-height:390px;border-radius:13px}
+  #threatView .map-top{left:8px;right:54px;top:8px}
+  #threatView .map-chips{max-width:100%;gap:5px}
+  #threatView .map-chips select{max-width:38vw;font-size:10px}
+  #threatView .map-legend{left:8px;right:8px;bottom:8px;gap:8px;font-size:9px}
+  #threatView .map-src{display:none}
+  #threatView .map-ctrl{right:7px;gap:6px}
+  #threatView .map-ctrl .icon-btn{width:38px;height:38px;min-width:38px}
+  #threatView #tLocal .lrows{grid-template-columns:minmax(0,1fr);max-height:420px}
+  #threatView .t-card{padding:12px}
+  #threatView .t-card>h4{font-size:11px}
+}
