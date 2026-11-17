@@ -57,8 +57,9 @@ def compute(nm) -> dict:
             counts["confirmed"] += 1
             findings.append(("confirmed", WEIGHTS["confirmed"][0],
                              f"{nm.label(d)} has {confirmed} flaw{'s' if confirmed > 1 else ''} confirmed by an active check"))
-        kev = sum(1 for f in dv if f.get("kev"))
-        msf = sum(1 for f in dv if f.get("msf") and not f.get("kev"))
+        # A match on a distro package may already be patched by a backport; it stays listed but does not cost score.
+        kev = sum(1 for f in dv if f.get("kev") and not f.get("distro"))
+        msf = sum(1 for f in dv if f.get("msf") and not f.get("kev") and not f.get("distro"))
         if kev:
             counts["kev"] += 1
             findings.append(("kev", WEIGHTS["kev"][0], f"{nm.label(d)} runs software with an actively exploited flaw ({kev} CVE{'s' if kev > 1 else ''})"))
@@ -72,7 +73,9 @@ def compute(nm) -> dict:
         if dc:
             counts["default_cred"] += 1
             findings.append(("default_cred", WEIGHTS["default_cred"][0], f"{nm.label(d)} exposes {dc[0]['service']} (often ships with a default login)"))
-        ct = redteam.cleartext_exposures(d)
+        # Plain HTTP on port 80 is on nearly every device and is only a risk if it serves a login, which we cannot
+        # tell from a port number, so it is listed on the red-team view but does not cost score here.
+        ct = [x for x in redteam.cleartext_exposures(d) if x["port"] != 80]
         if ct:
             counts["cleartext"] += 1
             findings.append(("cleartext", WEIGHTS["cleartext"][0], f"{nm.label(d)} runs {ct[0]['proto']} (sends data unencrypted)"))
