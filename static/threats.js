@@ -642,7 +642,21 @@ function renderLocalCard() {
       ${st.dhcp_check === false ? "" : `<span><i class="fa-solid fa-network-wired"></i>DHCP servers: ${dh.length
         ? dh.map((d) => `<span class="${d.allowed ? "" : "bad-txt"}">${esc(d.ip)}${d.allowed ? "" : " (unknown!)"}</span>`).join(", ")
         : "checking…"}</span>`}</div>`;
-  $("tLocal").innerHTML = ((L.events || []).length ? L.events.slice(0, 12).map(localRow).join("")
+  const events = (L.events || []).slice(0, 60);
+  const grouped = new Map();
+  events.forEach((e) => {
+    const key = [e.src_id || e.src || e.mac || "", e.target_id || e.target || "", e.kind || "", e.title || "", e.dport || "", e.severity || ""].join("|");
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(e);
+  });
+  const rows = [...grouped.values()].sort((a, b) => (b[0].t || 0) - (a[0].t || 0)).slice(0, 12).map((items) => {
+    if (items.length === 1) return localRow(items[0]);
+    const summary = localRow(items[0]).replace('class="lrow ', 'class="lrow lrow-summary ')
+      .replace(/ data-src="[^"]*"/, "");
+    return `<details class="lgroup"><summary>${summary}<span class="lgroup-count">${fmtN(items.length)} events</span></summary>
+      <div class="lgroup-items">${items.map(localRow).join("")}</div></details>`;
+  });
+  $("tLocal").innerHTML = (rows.length ? rows.join("")
     : `<div class="ok-line"><i class="fa-solid fa-circle-check"></i>No scans, spoofing or honeypot hits from devices inside your network.</div>`) + guard;
 }
 function onLocalSummary(L) {
