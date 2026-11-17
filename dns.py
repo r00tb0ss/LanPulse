@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2026 The LanPulse authors
 """
-DNS: what every device looks up, from your Pi-hole's query log.
+DNS: what every device looks up, from your DNS resolver's query log.
 
-Works with Pi-hole v6 (REST API: POST /api/auth, GET /api/queries) and falls back to the v5 api.php. Lookups are
+Supported sources: Pi-hole v6 (REST API: POST /api/auth, GET /api/queries, with a fallback to the v5 api.php) and
+AdGuard Home (GET /control/status and /control/querylog with HTTP Basic login). Lookups are
 stored as per-minute totals per (device, domain, blocked) for 7 days. Domains are checked against the abuse.ch
 URLhaus malware host list (public domain, refreshed daily); a device looking one up raises an alert.
 """
@@ -69,8 +70,42 @@ def clean_domain(d) -> str:
     return d if _DOMAIN_OK.match(d) else ""
 
 
-class PiHoleError(Exception):
+class DnsSourceError(Exception):
+    """A DNS source could not be reached, rejected the login or answered with something unusable."""
+
+
+class PiHoleError(DnsSourceError):
     pass
+
+
+class AdGuardError(DnsSourceError):
+    pass
+
+
+SOURCES = {"pihole": "Pi-hole", "adguard": "AdGuard Home"}
+_RFC3339 = re.compile(r"^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$")
+
+
+def parse_rfc3339(v) -> float:
+    """AdGuard Home timestamps look like 2026-11-17T05:00:01.123456789-05:00. 0.0 when it isn't one."""
+    import datetime
+    m = _RFC3339.match(str(v or "").strip())
+    if not m:
+        return 0.0
+    base, frac, tz = m.groups()
+    tz = "+00:00" if tz in (None, "Z") else (tz if ":" in tz else tz[:3] + ":" + tz[3:])
+    try:
+        t = datetime.datetime.fromisoformat(base.replace(" ", "T") + tz).timestamp()
+    except ValueError:
+        return 0.0
+    return t + (float("0" + frac[:7]) if frac else 0.0)
+
+
+def is_adguard_blocked(reason) -> bool:
+    """AdGuard Home reasons: NotFiltered*, Filtered* (BlackList, SafeBrowsing, Parental, Invalid, BlockedService) and Rewrite*.
+    Safe-search is a rewrite, not a block."""
+    r = str(reason or "")
+    return r.startswith("Filtered") and r != "FilteredSafeSearch"
 
 
 class PiHole:
@@ -176,6 +211,92 @@ class PiHole:
         self.sid = None
 
 
+class AdGuardHome:
+    """Minimal client for AdGuard Home's query log. Same interface as PiHole, so the monitor treats them alike."""
+    PAGE = 500
+    MAX_PAGES = 20
+
+    def __init__(self, cfg: dict):
+        import base64
+        self.url = (cfg.get("url") or "").rstrip("/")
+        self.username = cfg.get("username") or ""
+        self.password = cfg.get("password") or ""
+        self.auth = ("Basic " + base64.b64encode(f"{self.username}:{self.password}".encode()).decode()) if (self.username or self.password) else ""
+        self.ctx = ssl.create_default_context()
+        if not cfg.get("verify_tls"):
+            self.ctx.check_hostname = False
+            self.ctx.verify_mode = ssl.CERT_NONE
+        self.sid = None
+        self.version = None
+
+    def _get(self, path: str, timeout: int = 20):
+        headers = {"Accept": "application/json", "User-Agent": "LanPulse"}
+        if self.auth:
+            headers["Authorization"] = self.auth
+        req = urllib.request.Request(self.url + path, method="GET", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=self.ctx) as r:
+                return r.status, json.loads(r.read(20_000_000) or b"{}")
+        except urllib.error.HTTPError as e:
+            return e.code, {}
+        except urllib.error.URLError as e:
+            raise AdGuardError(f"Can't reach AdGuard Home at {self.url}: {getattr(e, 'reason', e)}")
+        except ValueError:
+            raise AdGuardError("AdGuard Home answered with something that isn't JSON. Check the address (use the web interface address).")
+
+    def login(self):
+        if not self.url:
+            raise AdGuardError("AdGuard Home address isn't set.")
+        code, data = self._get("/control/status")
+        if code in (401, 403):
+            raise AdGuardError("AdGuard Home rejected the username or password.")
+        if code == 429:
+            raise AdGuardError("AdGuard Home is rate-limiting logins. Wait a minute and try again.")
+        if code != 200 or not isinstance(data, dict):
+            raise AdGuardError(f"AdGuard Home status request failed (HTTP {code}). Check the address.")
+        self.version = str(data.get("version") or "").lstrip("v") or "?"
+
+    def queries(self, since: float, until: float) -> list[dict]:
+        """Lookups between two times, oldest first: {id, t, client, client_name, domain, blocked}."""
+        if self.version is None:
+            self.login()
+        out, older = [], ""
+        for _ in range(self.MAX_PAGES):
+            q = {"limit": self.PAGE}
+            if older:
+                q["older_than"] = older
+            code, data = self._get("/control/querylog?" + urllib.parse.urlencode(q), timeout=30)
+            if code in (401, 403):
+                raise AdGuardError("AdGuard Home rejected the username or password.")
+            if code != 200 or not isinstance(data, dict):
+                raise AdGuardError(f"AdGuard Home query log request failed (HTTP {code}).")
+            page = data.get("data") or []
+            oldest_t = None
+            for x in page:
+                if not isinstance(x, dict):
+                    continue
+                t = parse_rfc3339(x.get("time"))
+                if not t:
+                    continue
+                oldest_t = t if oldest_t is None else min(oldest_t, t)
+                if since <= t <= until + 1:
+                    info = x.get("client_info") if isinstance(x.get("client_info"), dict) else {}
+                    out.append({"id": None, "t": t, "client": str(x.get("client") or ""), "client_name": str(info.get("name") or ""),
+                                "domain": clean_domain((x.get("question") or {}).get("name")), "blocked": is_adguard_blocked(x.get("reason"))})
+            older = str(data.get("oldest") or "")
+            if not page or not older or oldest_t is None or oldest_t < since or len(page) < self.PAGE:
+                break
+        out.sort(key=lambda r: r["t"])
+        return out
+
+    def logout(self):
+        pass
+
+
+def make_client(cfg: dict):
+    return AdGuardHome(cfg) if cfg.get("provider") == "adguard" else PiHole(cfg)
+
+
 class DnsMonitor:
     POLL = 30
 
@@ -189,7 +310,7 @@ class DnsMonitor:
         self.db.execute("CREATE TABLE IF NOT EXISTS hits (t REAL, client TEXT, domain TEXT)")
         self.db.commit()
         self.lock = threading.Lock()
-        self.client: PiHole | None = None
+        self.client = None
         self.cfg_sig = None
         self.last_t = 0.0
         self.last_id = -1
@@ -285,22 +406,27 @@ class DnsMonitor:
             await asyncio.sleep(self.POLL)
 
     def fetch_new(self) -> list[dict]:
-        sig = (self.cfg.get("url"), self.cfg.get("password"), self.cfg.get("verify_tls"))
+        sig = (self.cfg.get("provider"), self.cfg.get("url"), self.cfg.get("username"), self.cfg.get("password"), self.cfg.get("verify_tls"))
         if sig != self.cfg_sig or self.client is None:
             if self.client:
                 self.client.logout()
-            self.client = PiHole(self.cfg)
+            self.client = make_client(self.cfg)
             self.cfg_sig = sig
+            where = (self.cfg.get("provider"), self.cfg.get("url"))
+            if where != getattr(self, "where", where):
+                self.last_t, self.last_id = 0.0, -1    # a different source has its own clock and ids
+            self.where = where
         now = time.time()
         since = self.last_t or now - 3600
         try:
             rows = self.client.queries(since, now)
-        except PiHoleError as e:
+        except DnsSourceError as e:
             self.status.update(state="error", error=str(e), last_poll=now)
             self.client.sid = None
             self.client.version = None
             return []
-        self.status.update(state="ok", error="", last_poll=now, version=self.client.version)
+        self.status.update(state="ok", error="", last_poll=now, version=self.client.version,
+                           source=SOURCES.get(self.cfg.get("provider"), "Pi-hole"))
         return rows
 
     def ingest(self, rows: list[dict]):
@@ -413,11 +539,11 @@ class DnsMonitor:
         }
 
     def test(self, cfg: dict) -> dict:
-        c = PiHole(cfg)
+        c = make_client(cfg)
         try:
             rows = c.queries(time.time() - 600, time.time())
-            return {"ok": True, "version": c.version, "recent": len(rows)}
-        except PiHoleError as e:
+            return {"ok": True, "version": c.version, "recent": len(rows), "source": SOURCES.get(cfg.get("provider"), "Pi-hole")}
+        except DnsSourceError as e:
             return {"ok": False, "error": str(e)}
         finally:
             c.logout()

@@ -291,10 +291,10 @@ Only scan networks you own or are allowed to scan.
 
 ## DNS lookups
 
-The **DNS** tab shows what every device looks up, read from your DNS resolver's query log (supported source: Pi-hole v6, or v5 with its API
-token): lookups and blocks over time, top domains, top blocked domains, a live list, and lookups per device. Each lookup is
+The **DNS** tab shows what every device looks up, read from your DNS resolver's query log (supported sources: **Pi-hole** v6, or v5 with its API
+token, and **AdGuard Home**): lookups and blocks over time, top domains, top blocked domains, a live list, and lookups per device. Each lookup is
 checked against the abuse.ch URLhaus malware host list; a device looking up a malware domain raises an alert.
-Connect it from the DNS tab (address + password; Pi-hole's "App password" is the cleanest). If almost every lookup comes
+Connect it from the DNS tab: choose Pi-hole or AdGuard Home, then enter the address and password (Pi-hole's "App password" is the cleanest; AdGuard Home also needs its username). LanPulse only reads the query log. If almost every lookup comes
 from your router, hand out the resolver as the DNS server directly (UniFi: Settings > Networks > DHCP > DNS Server) so it
 can tell devices apart. Lookups are kept as per-minute totals for 7 days.
 

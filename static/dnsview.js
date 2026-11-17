@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 The LanPulse authors
 "use strict";
-/* DNS tab: what every device looks up, from your DNS resolver (currently Pi-hole). */
+/* DNS tab: what every device looks up, from your DNS resolver (Pi-hole or AdGuard Home). */
 
 let dnsData = null, dnsHours = 24, dnsDev = "", dnsLoadedAt = 0, dnsMalSeen = 0;
 
@@ -25,7 +25,7 @@ function renderDns() {
   }
   if (!$("dnsSetup").dataset.open) $("dnsSetup").classList.add("hidden");
   $("dnsSub").innerHTML = st.state === "error" ? `<span style="color:#fca5a5"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(st.error)}</span>`
-    : st.last_poll ? `from your DNS resolver${st.version ? ` (v${esc(st.version)})` : ""} · updated ${ago(st.last_poll)}` : "connecting to the DNS source…";
+    : st.last_poll ? `from ${esc(st.source || "your DNS resolver")}${st.version ? ` (v${esc(st.version)})` : ""} · updated ${ago(st.last_poll)}` : "connecting to the DNS source…";
   const pct = s.total ? Math.round(100 * s.blocked / s.total) : 0;
   const mal = s.malware || [];
   $("dnsKpis").innerHTML = `
@@ -116,9 +116,12 @@ async function showDnsSetup(force) {
   box.classList.remove("hidden");
   box.innerHTML = `<div class="t-card"><h4><span><i class="fa-solid fa-plug"></i> Connect a DNS source</span></h4>
     <p class="hint">LanPulse reads your DNS resolver's query log to show what each device looks up, and warns you when one looks up a known
-      malware domain. Supported source: <b>Pi-hole</b> (v6 and v5).</p>
+      malware domain. Supported sources: <b>Pi-hole</b> (v6 and v5) and <b>AdGuard Home</b>.</p>
     <div class="chan-fields" style="padding:0">
+      <label class="full">DNS source<select id="dnsProv"><option value="pihole" ${c.provider !== "adguard" ? "selected" : ""}>Pi-hole</option>
+        <option value="adguard" ${c.provider === "adguard" ? "selected" : ""}>AdGuard Home</option></select></label>
       <label class="full">Resolver address<input id="dnsUrl" value="${esc(c.url || "")}" placeholder="http://192.168.0.138"></label>
+      <label class="full" id="dnsUserRow">Username<input id="dnsUser" value="${esc(c.username || "")}" autocomplete="off" placeholder="your AdGuard Home login"></label>
       <label class="full">Password<input id="dnsPw" type="password" value="${esc(c.password || "")}" autocomplete="off"
         placeholder="web interface password, or an app password"></label>
       <label class="full chk-line"><input type="checkbox" id="dnsMalOn" ${c.malware !== false ? "checked" : ""}> Check lookups against the abuse.ch URLhaus malware list</label>
@@ -126,19 +129,23 @@ async function showDnsSetup(force) {
         placeholder="not needed: LanPulse falls back to a mirror of the same list"></label>
       <label class="full chk-line"><input type="checkbox" id="dnsTls" ${c.verify_tls ? "checked" : ""}> Verify the resolver's HTTPS certificate</label>
     </div>
-    <p class="hint" style="font-size:12px">Pi-hole tip: Settings &gt; Web interface / API &gt; <b>App password</b> creates a separate password just for LanPulse.
+    <p class="hint" style="font-size:12px" id="dnsTipAg">AdGuard Home: use the web interface address and the login you use to open it. LanPulse only reads the query log.</p>
+    <p class="hint" style="font-size:12px" id="dnsTipPh">Pi-hole tip: Settings &gt; Web interface / API &gt; <b>App password</b> creates a separate password just for LanPulse.
       For Pi-hole v5, paste the API token instead.</p>
     <div class="modal-foot" style="position:static;padding:10px 0 0"><span class="test-res" id="dnsRes"></span>
       ${c.enabled ? `<button class="btn danger" id="dnsOff">Disconnect</button>` : ""}
       <button class="btn" id="dnsTest"><i class="fa-solid fa-vial"></i>Test</button>
       <button class="btn primary" id="dnsSave"><i class="fa-solid fa-floppy-disk"></i>Save and connect</button></div></div>`;
-  const form = (enabled) => ({url: $("dnsUrl").value.trim(), password: $("dnsPw").value, malware: $("dnsMalOn").checked, abuse_key: $("dnsAbuseKey").value.trim(),
+  const syncProv = () => { const ag = $("dnsProv").value === "adguard"; $("dnsUserRow").classList.toggle("hidden", !ag);
+    $("dnsTipAg").classList.toggle("hidden", !ag); $("dnsTipPh").classList.toggle("hidden", ag); };
+  $("dnsProv").onchange = syncProv; syncProv();
+  const form = (enabled) => ({provider: $("dnsProv").value, username: $("dnsUser").value.trim(), url: $("dnsUrl").value.trim(), password: $("dnsPw").value, malware: $("dnsMalOn").checked, abuse_key: $("dnsAbuseKey").value.trim(),
     verify_tls: $("dnsTls").checked, enabled});
   $("dnsTest").onclick = async () => {
     $("dnsRes").className = "test-res"; $("dnsRes").textContent = "Testing…";
     const r = await api("/api/dns/test", "POST", form(true), true);
     $("dnsRes").className = `test-res ${r && r.ok ? "ok" : "bad"}`;
-    $("dnsRes").textContent = r && r.ok ? `Connected to the DNS source (Pi-hole v${r.version}). ${r.recent} lookups in the last 10 minutes.` : (r?.error || "No response");
+    $("dnsRes").textContent = r && r.ok ? `Connected to ${r.source || "the DNS source"} v${r.version}. ${r.recent} lookups in the last 10 minutes.` : (r?.error || "No response");
   };
   $("dnsSave").onclick = async () => {
     if (!$("dnsUrl").value.trim()) { $("dnsRes").className = "test-res bad"; $("dnsRes").textContent = "Enter the resolver's address."; return; }
