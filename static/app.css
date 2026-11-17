@@ -2245,9 +2245,17 @@ body[data-theme="light"] :not(.t-mapcard *)[style*="color:#4ade80"],body[data-th
 body[data-theme="light"] .h-last,body[data-theme="sand"] .h-last{color:#64748b}
 /* Dark areas inside light themes (the topology canvas and the live map) keep light text on their controls */
 body[data-theme="light"] .layout-pick button,body[data-theme="sand"] .layout-pick button{color:#b8c4d8}
-body[data-theme="light"] .layout-pick button:hover,body[data-theme="sand"] .layout-pick button:hover,
-body[data-theme="light"] .layout-pick button.on,body[data-theme="sand"] .layout-pick button.on{color:#fff}
-body[data-theme="light"] .t-mapcard .map-top :is(.chip,.btn,.seg button,label,span),
-body[data-theme="sand"] .t-mapcard .map-top :is(.chip,.btn,.seg button,label,span){color:#dbe5f4}
+body[data-theme="light"] .layout-pick button:hover,body[data-theme="sand"] .layout-pick button:hover{color:#fff}
+body[data-theme="light"] .layout-pick button.on,body[data-theme="sand"] .layout-pick button.on{color:var(--text)}
+body[data-theme="light"] .t-mapcard .map-top :is(.chip,.btn,.seg button,label,span):not(.on,.on *),
+body[data-theme="sand"] .t-mapcard .map-top :is(.chip,.btn,.seg button,label,span):not(.on,.on *){color:#dbe5f4}
 body[data-theme="light"] .t-mapcard .map-top :is(.chip,.btn),body[data-theme="sand"] .t-mapcard .map-top :is(.chip,.btn){background:rgba(17,26,46,.82);border-color:rgba(255,255,255,.18)}
-body[data-theme="light"] .t-mapcard .map-top .seg button.on,body[data-theme="sand"] .t-mapcard .map-top .seg button.on{color:#fff}
+body[data-theme="light"] .t-mapcard .map-top .on,body[data-theme="light"] .t-mapcard .map-top .on *,
+body[data-theme="sand"] .t-mapcard .map-top .on,body[data-theme="sand"] .t-mapcard .map-top .on *{color:var(--text)}
+body[data-theme="light"] .mapfind .toggle,body[data-theme="sand"] .mapfind .toggle{color:#b8c4d8}
+body[data-theme="light"] pre.code,body[data-theme="sand"] pre.code{background:#0f172a;border-color:#1e293b}
+body[data-theme="light"] .sev.high,body[data-theme="sand"] .sev.high{background:#fee2e2}
+body[data-theme="light"] .rt-score.critical,body[data-theme="sand"] .rt-score.critical{background:#fee2e2;border-color:#fca5a5}
+body[data-theme="light"] .rt-score.high,body[data-theme="sand"] .rt-score.high{background:#ffedd5;border-color:#fdba74}
+body[data-theme="light"] .rt-score.medium,body[data-theme="sand"] .rt-score.medium{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+body[data-theme="light"] .rt-score.low,body[data-theme="sand"] .rt-score.low{background:#e2e8f0;color:#475569;border-color:#cbd5e1}
