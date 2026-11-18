@@ -36,12 +36,12 @@ DEFAULT_SETTINGS = {
         "services": True,          # a watched service goes down or comes back
     },
     "channels": {
-        "ntfy": {"enabled": False, "url": "https://ntfy.sh/my-lanpulse", "token": ""},
-        "telegram": {"enabled": False, "bot_token": "", "chat_id": ""},
-        "webhook": {"enabled": False, "url": ""},
-        "email": {"enabled": False, "host": "", "port": 587, "starttls": True, "user": "", "password": "",
+        "ntfy": {"enabled": False, "min_level": 1, "max_per_hour": 0, "url": "https://ntfy.sh/my-lanpulse", "token": ""},
+        "telegram": {"enabled": False, "min_level": 1, "max_per_hour": 0, "bot_token": "", "chat_id": ""},
+        "webhook": {"enabled": False, "min_level": 1, "max_per_hour": 0, "url": ""},
+        "email": {"enabled": False, "min_level": 1, "max_per_hour": 0, "host": "", "port": 587, "starttls": True, "user": "", "password": "",
                   "from": "", "to": ""},
-        "irc": {"enabled": False, "host": "", "port": 6697, "tls": True, "tls_verify": False,
+        "irc": {"enabled": False, "min_level": 1, "max_per_hour": 0, "host": "", "port": 6697, "tls": True, "tls_verify": False,
                 "nick": "lanpulse", "channel": "#alerts", "key": ""},
     },
     "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "",
@@ -53,6 +53,7 @@ DEFAULT_SETTINGS = {
     "unifi": {"host": "", "api_key": "", "username": "", "password": "", "site": "default",
               "group": "LanPulse Blocklist", "verify_tls": False},
     "snmp": {"enabled": False, "community": "", "hosts": []},
+    "notify": {"repeat_minutes": 10},   # the same alert is sent at most this often
     "quiet": {"until": 0},         # quiet mode: no alert messages are sent until this time (epoch seconds)
     "layout": {},
     "dns": {"enabled": False, "provider": "pihole", "url": "", "username": "", "password": "", "verify_tls": False, "malware": True, "abuse_key": ""},
@@ -258,6 +259,15 @@ def apply_update(current: dict, incoming: dict) -> dict:
                 if f == "url" and v and not v.lower().startswith(("http://", "https://")):
                     v = ""                          # alerts only ever go to web addresses
             ch[f] = v
+        ch["min_level"] = ch.get("min_level") if ch.get("min_level") in LEVELS else 1
+        ch["max_per_hour"] = max(0, min(int(ch.get("max_per_hour") or 0), 1000))
+    nt = incoming.get("notify")
+    if isinstance(nt, dict):
+        try:
+            minutes = int(nt.get("repeat_minutes"))
+        except (TypeError, ValueError):
+            minutes = new["notify"].get("repeat_minutes", 10)
+        new["notify"]["repeat_minutes"] = max(1, min(minutes, 1440))
     t = incoming.get("threats")
     if isinstance(t, dict):
         cur = new["threats"]
@@ -678,10 +688,64 @@ def quiet_until(body: dict, now: float, max_minutes: int = 7 * 1440) -> float:
     return now + max(1, min(minutes, max_minutes)) * 60
 
 
+# How important each kind of alert is, 1 (routine) to 5 (act now). A channel can be set to hear only 4 and up, or 5 only.
+LEVELS = (1, 4, 5)
+RULE_LEVEL = {"compromise": 5, "dns_threats": 5, "vulns": 4, "security": 4, "local_threats": 4, "services": 4}
+HELD = {"filtered": 0, "capped": 0}      # alerts a channel's importance or hourly limit kept back, since start
+_HOURLY: dict[str, dict] = {}            # channel -> {"start": window start, "sent": n, "held": n}
+
+
+def alert_level(event, priority: int) -> int:
+    return max(int(priority or 3), RULE_LEVEL.get((event or {}).get("rule"), 0))
+
+
+def channel_gate(name: str, c: dict, level: int, now: float | None = None) -> tuple[str, str]:
+    """Decide whether one channel gets this alert. Returns ("send"|"skip"|"limit", note). "limit" means this is the first
+    alert held back in the hour, so a single notice goes out in its place; the note is added to a message that follows
+    a limited hour. Daily summaries never come through here."""
+    now = now if now is not None else time.time()
+    if level < int(c.get("min_level") or 1):
+        HELD["filtered"] += 1
+        return "skip", ""
+    cap = int(c.get("max_per_hour") or 0)
+    if not cap:
+        return "send", ""
+    w = _HOURLY.get(name)
+    if not w or now - w["start"] >= 3600:
+        carried = w["held"] if w else 0
+        _HOURLY[name] = {"start": now, "sent": 1, "held": 0, "notified": False}
+        return "send", (f"{carried} more alert{'s' if carried != 1 else ''} were held back during the last hour by this "
+                        f"channel's hourly limit." if carried else "")
+    if w["sent"] < cap:
+        w["sent"] += 1
+        return "send", ""
+    w["held"] += 1
+    HELD["capped"] += 1
+    if not w["notified"]:
+        w["notified"] = True
+        return "limit", f"Hourly limit of {cap} alerts reached. Further alerts on this channel are held until the hour ends."
+    return "skip", ""
+
+
 def send_all(settings: dict, title: str, msg: str, priority: int = 3, event=None) -> dict:
     # Quiet mode holds alerts back. The daily summary is not an alert, so it still goes out.
-    if quiet_left(settings) > 0 and (event or {}).get("rule") != "summary":
+    is_summary = (event or {}).get("rule") == "summary"
+    if quiet_left(settings) > 0 and not is_summary:
         MUTED["count"] += 1
         return {}
-    return {name: send_one(settings, name, title, msg, priority, event)
-            for name, c in settings["channels"].items() if c.get("enabled")}
+    level = alert_level(event, priority)
+    out = {}
+    for name, c in settings["channels"].items():
+        if not c.get("enabled"):
+            continue
+        t, m = title, msg
+        if not is_summary:
+            verdict, note = channel_gate(name, c, level)
+            if verdict == "skip":
+                continue
+            if verdict == "limit":
+                t, m = "LanPulse alert limit reached", note
+            elif note:
+                m = f"{msg}\n\n{note}"
+        out[name] = send_one(settings, name, t, m, priority, event)
+    return out

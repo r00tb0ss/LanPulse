@@ -583,6 +583,8 @@ function renderSettings() {
     body.innerHTML = `<p class="hint">Choose what sends an alert. Pick where alerts go in the next tab.</p>
       ${RULES.map(([k, title, txt]) => `<div class="rule"><label class="switch"><input type="checkbox" id="r_${k}" ${settings.rules[k] ? "checked" : ""}><span></span></label>
         <div class="txt"><b>${title}</b><small>${txt}</small></div></div>`).join("")}
+      <div class="rule"><div class="txt"><b>Repeat the same alert</b><small>How long to wait before the same alert (same device, same message) is sent again. Longer means fewer repeats. Critical alerts follow this too, so keep it at an hour or less if you want to hear about ongoing problems.</small></div>
+        <select id="n_repeat" aria-label="Repeat the same alert">${[[10, "After 10 minutes"], [60, "After 1 hour"], [360, "After 6 hours"], [1440, "After 24 hours"]].map(([n, t]) => `<option value="${n}" ${Number((settings.notify || {}).repeat_minutes || 10) === n ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <div class="rule"><div class="txt"><b>Trust every device on the map now</b><small>${untrusted} device${untrusted === 1 ? " isn't" : "s aren't"} trusted yet. Do this once after checking the list, so only newcomers alert.</small></div>
         <button class="btn" id="bTrustAll" ${untrusted ? "" : "disabled"}><i class="fa-solid fa-user-check"></i>Trust all</button></div>
       <div class="chan"><div class="chan-head"><i class="fa-solid fa-newspaper ci"></i>
@@ -608,7 +610,7 @@ function renderSettings() {
       if (r && r.text) { $("sumText").textContent = r.text; $("sumText").classList.remove("hidden"); }
     };
   } else if (setTab === "channels") {
-    body.innerHTML = `<p class="hint">Turn on one or more ways to receive alerts, then send a test.</p>` +
+    body.innerHTML = `<p class="hint">Turn on one or more ways to receive alerts, then send a test. Each channel can listen to everything, only important alerts (a device compromised, a malware domain, an exploited flaw, a service down, a honeypot hit) or only critical ones, and can be capped per hour so a burst cannot flood it.</p>` +
       Object.entries(CHANNELS).map(([k, c]) => {
         const v = settings.channels[k];
         const fields = c.fields.map(([f, label, span, type]) => type === "checkbox"
@@ -618,6 +620,8 @@ function renderSettings() {
           <div class="txt"><b>${c.label}</b><small>${c.hint}</small></div>
           <label class="switch"><input type="checkbox" id="c_${k}_enabled" ${v.enabled ? "checked" : ""}><span></span></label></div>
           <div class="chan-fields ${v.enabled ? "" : "hidden"}" id="cf_${k}">${fields}
+          <label>Send this channel<select id="c_${k}_min_level">${[[1, "All alerts"], [4, "Important and critical only"], [5, "Critical only"]].map(([n, t]) => `<option value="${n}" ${(v.min_level || 1) === n ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+          <label>Hourly limit<select id="c_${k}_max_per_hour">${[[0, "No limit"], [5, "5 per hour"], [10, "10 per hour"], [20, "20 per hour"], [50, "50 per hour"]].map(([n, t]) => `<option value="${n}" ${(v.max_per_hour || 0) === n ? "selected" : ""}>${t}</option>`).join("")}</select></label>
           <div class="full btns"><button class="btn" data-test="${k}"><i class="fa-solid fa-vial"></i>Save &amp; send test</button>
           <span class="test-res" id="tr_${k}"></span></div></div></div>`;
       }).join("") +
@@ -827,9 +831,12 @@ function collectSettings() {
     settings.summary.time = $("s_sum_time").value || "08:00";
   }
   if (setTab === "rules") RULES.forEach(([k]) => { settings.rules[k] = $(`r_${k}`).checked; });
+  if (setTab === "rules" && $("n_repeat")) settings.notify = {repeat_minutes: Number($("n_repeat").value) || 10};
   if (setTab === "channels") {
     for (const [k, c] of Object.entries(CHANNELS)) {
       settings.channels[k].enabled = $(`c_${k}_enabled`).checked;
+      settings.channels[k].min_level = Number($(`c_${k}_min_level`).value) || 1;
+      settings.channels[k].max_per_hour = Number($(`c_${k}_max_per_hour`).value) || 0;
       for (const [f, , , type] of c.fields) {
         const el = $(`c_${k}_${f}`);
         settings.channels[k][f] = type === "checkbox" ? el.checked : el.value;
