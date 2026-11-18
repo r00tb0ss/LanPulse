@@ -13,6 +13,7 @@ import threading
 import time
 import types
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -706,6 +707,41 @@ class SensorOptions(unittest.TestCase):
         self.assertEqual((cow["mem_limit"], cow["cpus"]), ("256m", "0.50"))
         self.assertTrue(any(v.startswith("./userdb.txt:") for v in cow["volumes"]))
         self.assertEqual(pathlib.Path(d, "userdb.txt").read_text().count("# LanPulse"), 1)
+
+
+class MalwareBazaar(unittest.TestCase):
+    @patch("honeyanalysis.urllib.request.urlopen")
+    def test_hash_lookup_returns_exact_match_and_never_uploads_file(self, urlopen):
+        payload = {"query_status": "ok", "data": [{
+            "sha256_hash": "a" * 64, "signature": "Mirai", "file_name": "net.x86",
+            "file_type": "elf", "file_arch": "32-bit", "first_seen": "2026-01-01",
+            "tags": ["mirai", "linux"]
+        }]}
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+        urlopen.return_value = response
+        result = ha.malwarebazaar_lookup("a" * 64, "test-api-key")
+        self.assertEqual(result["status"], "found")
+        self.assertEqual(result["signature"], "Mirai")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.get_header("Auth-key"), "test-api-key")
+        self.assertIn(b"hash=" + b"a" * 64, request.data)
+        self.assertNotIn(b"file", request.data.lower())
+
+    @patch("honeyanalysis.urllib.request.urlopen")
+    def test_hash_not_found_is_not_a_clean_verdict(self, urlopen):
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"query_status":"hash_not_found"}'
+        urlopen.return_value = response
+        result = ha.malwarebazaar_lookup("b" * 64, "test-api-key")
+        self.assertEqual(result["status"], "not_found")
+        self.assertIn("does not mean", result["note"])
+
+    def test_lookup_requires_valid_sha256_and_key(self):
+        self.assertEqual(ha.malwarebazaar_lookup("bad", "key")["status"], "error")
+        self.assertEqual(ha.malwarebazaar_lookup("a" * 64, "")["status"], "not_configured")
+
 
 
 if __name__ == "__main__":
