@@ -181,13 +181,11 @@ async function showVulnSetup() {
   box.innerHTML = `<div class="t-card"><h4><span><i class="fa-solid fa-gear"></i> Vulnerability checks</span></h4>
     <div class="chan-fields" style="padding:0">
       <label class="full chk-line"><input type="checkbox" id="vuOn" ${c.enabled !== false ? "checked" : ""}> Check scanned software against the NVD database</label>
-      <label class="full">NVD API key (optional, free at nvd.nist.gov/developers/request-an-api-key)
-        <input id="vuKey" type="password" value="${esc(c.nvd_key || "")}" autocomplete="off" placeholder="makes the first check about 8× faster"></label>
     </div>
     <p class="hint" style="font-size:12px">LanPulse sends NVD only product names (like "openbsd openssh"), never your IPs or device names.</p>
     <div class="modal-foot" style="position:static;padding:10px 0 0"><button class="btn primary" id="vuSave"><i class="fa-solid fa-floppy-disk"></i>Save</button></div></div>`;
   $("vuSave").onclick = async () => {
-    if (await api("/api/settings", "POST", {vulns: {enabled: $("vuOn").checked, nvd_key: $("vuKey").value.trim()}})) {
+    if (await api("/api/settings", "POST", {vulns: {enabled: $("vuOn").checked}})) {
       toast("Saved"); box.classList.add("hidden"); api("/api/vulns/refresh", "POST"); setTimeout(loadVulns, 1500);
     }
   };
