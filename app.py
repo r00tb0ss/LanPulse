@@ -2487,6 +2487,34 @@ def build_app(nm: LanPulse) -> FastAPI:
             log.warning("AbuseIPDB key test failed: %s", exc)
             return JSONResponse({"error": "Could not reach AbuseIPDB: " + str(exc)[:180]}, 502)
 
+    @app.post("/api/vulns/nvd/test")
+    async def vulns_nvd_key_test():
+        if nm.args.demo:
+            return JSONResponse({"error": "External API tests are disabled in demo mode."}, 400)
+        key_cfg = nm.settings.get("keys", {}) if isinstance(nm.settings, dict) else {}
+        key = str((key_cfg.get("nvd") if isinstance(key_cfg, dict) else "") or
+                  nm.settings.get("vulns", {}).get("nvd_key", "")).strip()
+        if not key:
+            return JSONResponse({"error": "Add your NVD API key in Settings > API Keys."}, 400)
+        url = "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-44228&resultsPerPage=1"
+        req = urllib.request.Request(url, headers={"apiKey": key, "Accept": "application/json",
+                                                    "User-Agent": "LanPulse"})
+        try:
+            def check_key():
+                with urllib.request.urlopen(req, timeout=12) as response:
+                    payload = json.loads(response.read(256_000).decode("utf-8"))
+                    return response.status, payload
+            status, payload = await asyncio.to_thread(check_key)
+            if status == 200 and isinstance(payload, dict) and "vulnerabilities" in payload:
+                return {"ok": True, "message": "NVD accepted the API key."}
+            return JSONResponse({"error": "NVD returned an unexpected response."}, 502)
+        except urllib.error.HTTPError as exc:
+            message = "NVD API key was rejected." if exc.code in (401, 403) else f"NVD returned HTTP {exc.code}."
+            return JSONResponse({"error": message}, 400)
+        except Exception as exc:
+            log.warning("NVD API key test failed: %s", exc)
+            return JSONResponse({"error": "Could not reach NVD: " + str(exc)[:180]}, 502)
+
     @app.post("/api/honeypot/malwarebazaar/test")
     async def honeypot_malwarebazaar_test():
         if nm.args.demo:
