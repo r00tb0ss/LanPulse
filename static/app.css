@@ -2261,3 +2261,13 @@ body[data-theme="light"] .rt-score.medium,body[data-theme="sand"] .rt-score.medi
 body[data-theme="light"] .rt-score.low,body[data-theme="sand"] .rt-score.low{background:#e2e8f0;color:#475569;border-color:#cbd5e1}
 body[data-theme="light"] .res.blocked,body[data-theme="sand"] .res.blocked{color:#0369a1}
 body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[data-theme="sand"] .res.allowed,body[data-theme="sand"] .res.logged{color:#be123c}
+
+/* Central API key settings: compact cards that collapse cleanly on phones. */
+.keys-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.key-card{min-width:0;margin:0}
+.key-card .chan-head{align-items:flex-start}
+.key-card .chan-head .test-res{white-space:nowrap}
+.key-card .chan-fields a{font-size:12px;color:var(--blue);text-decoration:none}
+.key-card .chan-fields a:hover{text-decoration:underline}
+.key-card input[type=password]{width:100%;min-width:0}
+@media(max-width:680px){.keys-grid{grid-template-columns:1fr}.key-card .chan-head{flex-wrap:wrap}}
