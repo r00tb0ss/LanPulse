@@ -583,7 +583,7 @@ function renderSettings() {
     body.innerHTML = `<p class="hint">Choose what sends an alert. Pick where alerts go in the next tab.</p>
       ${RULES.map(([k, title, txt]) => `<div class="rule"><label class="switch"><input type="checkbox" id="r_${k}" ${settings.rules[k] ? "checked" : ""}><span></span></label>
         <div class="txt"><b>${title}</b><small>${txt}</small></div></div>`).join("")}
-      <div class="rule"><div class="txt"><b>Repeat the same alert</b><small>How long to wait before the same alert (same device, same message) is sent again. Longer means fewer repeats. Critical alerts follow this too, so keep it at an hour or less if you want to hear about ongoing problems.</small></div>
+      <div class="rule rule-sel"><div class="txt"><b>Repeat the same alert</b><small>How long to wait before the same alert (same device, same message) is sent again. Longer means fewer repeats. Critical alerts follow this too, so keep it at an hour or less if you want to hear about ongoing problems.</small></div>
         <select id="n_repeat" aria-label="Repeat the same alert">${[[10, "After 10 minutes"], [60, "After 1 hour"], [360, "After 6 hours"], [1440, "After 24 hours"]].map(([n, t]) => `<option value="${n}" ${Number((settings.notify || {}).repeat_minutes || 10) === n ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <div class="rule"><div class="txt"><b>Trust every device on the map now</b><small>${untrusted} device${untrusted === 1 ? " isn't" : "s aren't"} trusted yet. Do this once after checking the list, so only newcomers alert.</small></div>
         <button class="btn" id="bTrustAll" ${untrusted ? "" : "disabled"}><i class="fa-solid fa-user-check"></i>Trust all</button></div>
