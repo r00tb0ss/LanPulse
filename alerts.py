@@ -159,8 +159,12 @@ def with_defaults(s: dict | None) -> dict:
     }
     for name, value in legacy.items():
         if name == "abusech":
-            value = "".join(ch for ch in str(value or "").strip() if 33 <= ord(ch) <= 126)[:100]
-        if not keys.get(name) and value:
+            value = "".join(ch for ch in str(keys.get(name) or value or "").strip() if 33 <= ord(ch) <= 126)[:100]
+        else:
+            value = keys.get(name) or value
+        if value and not keys.get(name):
+            keys[name] = value
+        elif name == "abusech":
             keys[name] = value
         if keys.get(name):
             target = {"abuseipdb": ("threats", "abuseipdb_key"), "abusech": ("dns", "abuse_key"),
