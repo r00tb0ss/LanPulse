@@ -485,6 +485,9 @@ def apply_update(current: dict, incoming: dict) -> dict:
             if isinstance(part, dict) and field in part and part[field] != MASK:
                 new["keys"][name] = new[section][field]
     _drop_moved_secrets(current, new, incoming)
+    # Keep the vault aligned when a provider/host change deliberately invalidates a credential.
+    for name, (section, field) in key_targets.items():
+        new["keys"][name] = new[section].get(field, "")
     return new
 
 
