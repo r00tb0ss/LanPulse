@@ -635,6 +635,8 @@ function renderSettings() {
     });
   } else if (setTab === "threats") {
     renderThreatSettings(body);
+  } else if (setTab === "keys") {
+    renderApiKeysSettings(body);
   } else if (setTab === "unifi") {
     renderUnifiSettings(body);
   } else if (setTab === "scanner") {
