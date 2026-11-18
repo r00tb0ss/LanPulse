@@ -936,8 +936,7 @@ function renderThreatSettings(body) {
       <label class="full chk-line"><input type="checkbox" id="t_any" ${t.syslog_any ? "checked" : ""}> Accept router logs from any address (not recommended: any device could send fake attacks)</label>
       <label>Burst alert after<input id="t_burst" type="number" min="3" value="${esc(t.burst_threshold)}"></label>
       <label class="full">AbuseIPDB API key (optional, free at abuseipdb.com)<input id="t_abuse" type="password" value="${esc(t.abuseipdb_key)}" autocomplete="off" placeholder="Leave unchanged to keep the saved key"></label>
-      <label class="full">MalwareBazaar API key (optional, free at bazaar.abuse.ch)<input id="t_mbkey" type="password" value="${esc(t.malwarebazaar_key || "")}" autocomplete="off" placeholder="Used for captured-file SHA-256 lookups; leave unchanged to keep saved key"></label>
-      <div class="full btns"><button class="btn" id="bMbTest"><i class="fa-solid fa-vial"></i>Test MalwareBazaar key</button><span class="test-res" id="mbRes"></span></div>
+      <div class="full btns"><button class="btn" id="bMbTest"><i class="fa-solid fa-vial"></i>Test shared abuse.ch key with MalwareBazaar</button><span class="test-res" id="mbRes"></span></div>
       <label class="full chk-line"><input type="checkbox" id="t_autointel" ${t.auto_intel !== false ? "checked" : ""}> Auto-enrich your top attackers (geo, reputation, ThreatFox, Tor) in the background</label>
       <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <a class="btn sm" href="/api/export/iocs.txt" download><i class="fa-solid fa-file-arrow-down"></i>Export attacker IPs</a>
@@ -945,7 +944,7 @@ function renderThreatSettings(body) {
       </div>
       <div class="full muted" style="font-size:12px">A burst alert fires when one IP makes that many attempts within 5 minutes.
         The Tor exit check is free and needs no key. <b>ThreatFox</b> needs a free abuse.ch Auth-Key — add it under
-        <b>Settings &gt; DNS</b>. MalwareBazaar uses the separate API key field above.</div>
+        <b>Settings &gt; DNS</b>. The same abuse.ch Auth-Key is shared by ThreatFox and MalwareBazaar; no second key is needed.</div>
     </div></div>
     <div class="chan"><div class="chan-head"><i class="fa-solid fa-filter ci"></i><div class="txt"><b>Ignore harmless traffic (recommended)</b>
       <small>Routers log leftover replies after your own connections close (from Google, Microsoft, CDNs…) and routine network messages.
@@ -990,11 +989,11 @@ function renderThreatSettings(body) {
   $("bAddFw").onclick = () => { collectThreatSettings(); settings.threats.forwards.push({port: "", proto: "tcp", lan_ip: devs[0]?.ip || ""}); renderSettings(); };
   $("bCopyKey").onclick = () => copyText($("t_key"));
   if ($("bMbTest")) $("bMbTest").onclick = async () => {
-    const res = $("mbRes"); res.className = "test-res"; res.textContent = "Testing key…";
+    const res = $("mbRes"); res.className = "test-res"; res.textContent = "Testing shared abuse.ch key…";
     if (!(await saveSettings(true))) { res.className = "test-res bad"; res.textContent = "Save the settings first."; return; }
     const r = await api("/api/honeypot/malwarebazaar/test", "POST", {}, true);
     res.className = `test-res ${r && r.ok ? "ok" : "bad"}`;
-    res.textContent = r && r.ok ? "MalwareBazaar API key accepted. Hash lookups are enabled." : (r?.error || "Could not verify the key.");
+    res.textContent = r && r.ok ? "Shared abuse.ch key accepted by MalwareBazaar. Hash lookups are enabled." : (r?.error || "Could not verify the key.");
   };
   $("bRelearnGw")?.addEventListener("click", async (e) => {
     e.currentTarget.disabled = true;
@@ -1022,7 +1021,6 @@ function collectThreatSettings() {
   t.syslog_port = $("t_port").value;
   t.burst_threshold = $("t_burst").value;
   t.abuseipdb_key = $("t_abuse").value;
-  if ($("t_mbkey")) t.malwarebazaar_key = $("t_mbkey").value;
   if ($("t_autointel")) t.auto_intel = $("t_autointel").checked;
   if ($("t_noise")) t.ignore_noise = $("t_noise").checked;
   if ($("t_from")) t.syslog_from = $("t_from").value.split(/[\s,]+/).filter(Boolean);
