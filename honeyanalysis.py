@@ -490,7 +490,7 @@ def malwarebazaar_lookup(sha256: str, api_key: str, timeout: int = 8) -> dict:
         "Auth-Key": key, "User-Agent": "LanPulse malware intelligence",
         "Content-Type": "application/x-www-form-urlencoded"})
     try:
-        with urllib.request.urlopen(req, timeout=max(2, min(int(timeout), 15)) as response:
+        with urllib.request.urlopen(req, timeout=max(2, min(int(timeout), 15))) as response:
             payload = json.loads(response.read(512_000).decode("utf-8", "replace"))
     except urllib.error.HTTPError as exc:
         message = "API key rejected." if exc.code in (401, 403) else f"MalwareBazaar returned HTTP {exc.code}."
