@@ -398,11 +398,11 @@ The Honeypot tab is split into sections:
 - **Sensors**: add, check and revoke sensors.
 - **Score filters and sorting**: narrow captured sessions and malware samples by score band (0–19 Low, 20–39 Guarded, 40–59 Elevated, 60–79 High, 80–100 Critical), then sort by newest, highest score or lowest score. This helps triage large collections; a score is an assessment, not proof of compromise.
 
-Captured files are only ever inspected as bytes. They are never run. YARA Forge Core is installed with LanPulse, checked during installation, and refreshed weekly by a systemd timer. The managed package is SHA-256 verified and compiled before activation; failed updates preserve the last working rule set. Your own `.yar` and `.yara` files can be placed in `/opt/lanpulse/data/yara-rules/` (outside the `managed` subfolder) and are preserved during managed updates. The Honeypot captured-file view shows YARA engine status, managed/custom rule counts, package version and update errors. A YARA match is a lead for investigation, not a verdict. In **Settings > Threats**, you can optionally add a separate
-**MalwareBazaar API key**. When you open a captured sample, LanPulse can query MalwareBazaar using its SHA-256 only
-(the captured file is never uploaded), cache the result for 24 hours, and show exact-hash reputation separately from
-local YARA matches and observed honeypot behavior. A database miss is not a clean bill of health. The key is masked in
-the settings API and stored with the rest of the private settings.
+Captured files are only ever inspected as bytes. They are never run. YARA Forge Core is installed with LanPulse, checked during installation, and refreshed weekly by a systemd timer. The managed package is SHA-256 verified and compiled before activation; failed updates preserve the last working rule set. Your own `.yar` and `.yara` files can be placed in `/opt/lanpulse/data/yara-rules/` (outside the `managed` subfolder) and are preserved during managed updates. The Honeypot captured-file view shows YARA engine status, managed/custom rule counts, package version and update errors. A YARA match is a lead for investigation, not a verdict. In **Settings > DNS**, the existing **abuse.ch Auth-Key** is shared by ThreatFox and optional MalwareBazaar
+SHA-256 lookups; no second key is needed. When you open a captured sample, LanPulse queries MalwareBazaar using
+the SHA-256 only (the captured file is never uploaded), caches the result for 24 hours, and shows exact-hash
+reputation separately from local YARA matches and observed honeypot behavior. A database miss is not a clean bill
+of health. The shared key remains masked in the settings API.
 
 ![Honeypot](docs/images/honeypot.png)
 
