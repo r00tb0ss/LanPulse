@@ -482,7 +482,10 @@ def malwarebazaar_lookup(sha256: str, api_key: str, timeout: int = 8) -> dict:
     sha256 = str(sha256 or "").lower()
     if not HEX64.fullmatch(sha256):
         return {"status": "error", "message": "Invalid SHA-256 hash."}
-    key = re.sub(r"[\r\n\x00-\x1f\x7f]", "", str(api_key or "")).strip()[:100]
+    raw_key = str(api_key or "").strip()
+    if any(ord(ch) < 33 or ord(ch) > 126 for ch in raw_key):
+        return {"status": "error", "message": "The abuse.ch Auth-Key must contain printable ASCII characters only. Re-copy it from auth.abuse.ch."}
+    key = raw_key[:100]
     if not key:
         return {"status": "not_configured"}
     body = urllib.parse.urlencode({"query": "get_info", "hash": sha256}).encode("ascii")
