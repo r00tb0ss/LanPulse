@@ -182,7 +182,7 @@ class Samples(unittest.TestCase):
         self.assertIn("Mirai-style IoT botnet", a["families"])
         self.assertTrue(any("MIPS" in n for n in a["notes"]))
 
-    def test_high_entropy_note(self):
+    def test_elf_strings_extract_network_iocs_and_mirai_hint(self):\n        sample = elf(3, 32, True, False) + b"\\x00http://160.119.66.206/bins/net.x86\\x00TSource Engine Query\\x00getinfo xxx\\x00"\n        result = ha.analyze_sample(sample)\n        self.assertEqual(result["arch"], "x86")\n        self.assertEqual(result["iocs"]["urls"][0]["value"], "http://160.119.66.206/bins/net.x86")\n        self.assertIn("160.119.66.206", [x["value"] for x in result["iocs"]["ips"]])\n        self.assertIn("Mirai-style IoT botnet", result["families"])\n\n    def test_high_entropy_note(self):
         import random
         rnd = random.Random(1)
         a = ha.analyze_sample(b"\x7fELF\x01\x01\x01" + bytes(rnd.randrange(256) for _ in range(20000)))
