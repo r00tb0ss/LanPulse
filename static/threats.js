@@ -935,7 +935,9 @@ function renderThreatSettings(body) {
         <input id="t_from" value="${esc((t.syslog_from || []).join(", "))}" placeholder="e.g. 192.168.0.50 for a honeypot"></label>
       <label class="full chk-line"><input type="checkbox" id="t_any" ${t.syslog_any ? "checked" : ""}> Accept router logs from any address (not recommended: any device could send fake attacks)</label>
       <label>Burst alert after<input id="t_burst" type="number" min="3" value="${esc(t.burst_threshold)}"></label>
-      <label class="full">AbuseIPDB API key (optional, free at abuseipdb.com)<input id="t_abuse" type="password" value="${esc(t.abuseipdb_key)}" autocomplete="off"></label>
+      <label class="full">AbuseIPDB API key (optional, free at abuseipdb.com)<input id="t_abuse" type="password" value="${esc(t.abuseipdb_key)}" autocomplete="off" placeholder="Leave unchanged to keep the saved key"></label>
+      <label class="full">MalwareBazaar API key (optional, free at bazaar.abuse.ch)<input id="t_mbkey" type="password" value="${esc(t.malwarebazaar_key || "")}" autocomplete="off" placeholder="Used for captured-file SHA-256 lookups; leave unchanged to keep saved key"></label>
+      <div class="full btns"><button class="btn" id="bMbTest"><i class="fa-solid fa-vial"></i>Test MalwareBazaar key</button><span class="test-res" id="mbRes"></span></div>
       <label class="full chk-line"><input type="checkbox" id="t_autointel" ${t.auto_intel !== false ? "checked" : ""}> Auto-enrich your top attackers (geo, reputation, ThreatFox, Tor) in the background</label>
       <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <a class="btn sm" href="/api/export/iocs.txt" download><i class="fa-solid fa-file-arrow-down"></i>Export attacker IPs</a>
@@ -987,6 +989,13 @@ function renderThreatSettings(body) {
   rebind();
   $("bAddFw").onclick = () => { collectThreatSettings(); settings.threats.forwards.push({port: "", proto: "tcp", lan_ip: devs[0]?.ip || ""}); renderSettings(); };
   $("bCopyKey").onclick = () => copyText($("t_key"));
+  if ($("bMbTest")) $("bMbTest").onclick = async () => {
+    const res = $("mbRes"); res.className = "test-res"; res.textContent = "Testing key…";
+    if (!(await saveSettings(true))) { res.className = "test-res bad"; res.textContent = "Save the settings first."; return; }
+    const r = await api("/api/honeypot/malwarebazaar/test", "POST", {}, true);
+    res.className = `test-res ${r && r.ok ? "ok" : "bad"}`;
+    res.textContent = r && r.ok ? "MalwareBazaar API key accepted. Hash lookups are enabled." : (r?.error || "Could not verify the key.");
+  };
   $("bRelearnGw")?.addEventListener("click", async (e) => {
     e.currentTarget.disabled = true;
     const r = await api("/api/settings", "POST", {local: {reset_gateway: true}});
@@ -1013,6 +1022,7 @@ function collectThreatSettings() {
   t.syslog_port = $("t_port").value;
   t.burst_threshold = $("t_burst").value;
   t.abuseipdb_key = $("t_abuse").value;
+  if ($("t_mbkey")) t.malwarebazaar_key = $("t_mbkey").value;
   if ($("t_autointel")) t.auto_intel = $("t_autointel").checked;
   if ($("t_noise")) t.ignore_noise = $("t_noise").checked;
   if ($("t_from")) t.syslog_from = $("t_from").value.split(/[\s,]+/).filter(Boolean);
