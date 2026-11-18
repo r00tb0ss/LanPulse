@@ -512,7 +512,7 @@ def malwarebazaar_lookup(sha256: str, api_key: str, timeout: int = 8) -> dict:
                 "file_type": str(item.get("file_type") or "")[:80], "file_arch": str(item.get("file_arch") or "")[:80],
                 "first_seen": str(item.get("first_seen") or "")[:40], "last_seen": str(item.get("last_seen") or "")[:40],
                 "reporter": str(item.get("reporter") or "")[:80], "tags": [str(x)[:80] for x in tags[:30]],
-                "permalink": f"https://bazaar.abuse.ch/sample/{sha}/",
+                "permalink": f"https://bazaar.abuse.ch/sample/{sha256}/",
                 "note": "Exact SHA-256 match in MalwareBazaar; external reputation, not observed runtime behavior."}
     if qstatus in ("hash_not_found", "no_results"):
         return {"status": "not_found", "source": "MalwareBazaar", "queried_at": now, "sha256": sha256,
@@ -1440,7 +1440,8 @@ class HoneyAnalysis:
         if stored:
             a.update(self._closer_look(sha, a.get("kind"), scan_yara=scan_yara))
         # Optional external reputation: submit the SHA-256 only, never the sample bytes.
-        dns_cfg = self.nm.settings.get("dns", {}) if isinstance(getattr(self.nm, "settings", {}), dict) else {}
+        settings = getattr(self.nm, "settings", {})
+        dns_cfg = settings.get("dns", {}) if isinstance(settings, dict) else {}
         # MalwareBazaar and ThreatFox share the abuse.ch Auth-Key configured in Settings > DNS.
         mb_key = str(dns_cfg.get("abuse_key") or "").strip() if isinstance(dns_cfg, dict) else ""
         cached_mb = a.get("malwarebazaar") if isinstance(a.get("malwarebazaar"), dict) else {}
