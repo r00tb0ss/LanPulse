@@ -482,7 +482,7 @@ def malwarebazaar_lookup(sha256: str, api_key: str, timeout: int = 8) -> dict:
     sha256 = str(sha256 or "").lower()
     if not HEX64.fullmatch(sha256):
         return {"status": "error", "message": "Invalid SHA-256 hash."}
-    key = re.sub(r"[\\r\\n\\x00-\\x1f\\x7f]", "", str(api_key or "")).strip()[:100]
+    key = re.sub(r"[\r\n\x00-\x1f\x7f]", "", str(api_key or "")).strip()[:100]
     if not key:
         return {"status": "not_configured"}
     body = urllib.parse.urlencode({"query": "get_info", "hash": sha256}).encode("ascii")
@@ -1450,7 +1450,8 @@ class HoneyAnalysis:
         except (TypeError, ValueError):
             cached_at = 0
         mb_cache_ttl = 300 if cached_mb.get("status") == "error" else MALWAREBAZAAR_CACHE_TTL
-        if mb_key and (time.time() - cached_at >= mb_cache_ttl or cached_mb.get("status") not in ("found", "not_found", "error")):
+        # Read-only report views (scan_yara False) only show the cached answer; they never call out or write.
+        if mb_key and scan_yara and (time.time() - cached_at >= mb_cache_ttl or cached_mb.get("status") not in ("found", "not_found", "error")):
             cached_mb = malwarebazaar_lookup(sha, mb_key)
             a["malwarebazaar"] = cached_mb
             with self.lock:
@@ -1478,6 +1479,8 @@ class HoneyAnalysis:
             cached = previous.get("yara") if isinstance(previous.get("yara"), dict) else {}
             if cached:
                 analysis["yara"] = cached
+            if isinstance(previous.get("malwarebazaar"), dict):
+                analysis["malwarebazaar"] = previous["malwarebazaar"]
             if kind == "elf":
                 out["elf"] = staticlook.elf_details(data)
             elif kind in ("script", "text", "web"):
@@ -1499,7 +1502,7 @@ class HoneyAnalysis:
             with self.lock:
                 self.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps(analysis), sha))
                 self.db.commit()
-            out.update({k: v for k, v in analysis.items() if k != "yara"})
+            out.update({k: v for k, v in analysis.items() if k not in ("yara", "malwarebazaar")})
         except Exception:
             log.debug("closer look at a sample failed", exc_info=True)
         return out
