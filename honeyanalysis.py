@@ -1419,6 +1419,11 @@ class HoneyAnalysis:
                         "yara_scanned_at": y.get("scanned_at")})
         return {"samples": out, "total": total}
 
+    @staticmethod
+    def malwarebazaar_test(api_key: str) -> dict:
+        """Validate a configured API key with a hash-only lookup of a known public sample."""
+        return malwarebazaar_lookup(MALWAREBAZAAR_TEST_HASH, api_key, timeout=8)
+
     def sample(self, sha: str, scan_yara: bool = True) -> dict | None:
         sha = str(sha).lower()
         if not HEX64.match(sha):
