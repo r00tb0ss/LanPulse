@@ -2283,3 +2283,9 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 .rule.rule-sel{flex-wrap:wrap}
 .rule.rule-sel .txt{flex:1 1 240px;min-width:0}
 .rule.rule-sel select{flex:0 0 200px;width:200px;max-width:100%}
+
+/* The legend never runs underneath the source-status bar: where the two would meet, the status bar rides above it. */
+@media (min-width:561px) and (max-width:1180px){
+  #threatView .map-legend{max-width:calc(100% - 32px);white-space:nowrap}
+  #threatView .map-src{bottom:64px;right:16px}
+}
