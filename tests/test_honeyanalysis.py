@@ -734,6 +734,7 @@ class MalwareBazaar(unittest.TestCase):
         request = urlopen.call_args.args[0]
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(request.get_header("Auth-key"), "test-api-key")
+        self.assertEqual(ha.malwarebazaar_lookup("a" * 64, "test-api-key")["status"], "found")
         self.assertIn(b"hash=" + b"a" * 64, request.data)
         self.assertNotIn(b"file", request.data.lower())
 
