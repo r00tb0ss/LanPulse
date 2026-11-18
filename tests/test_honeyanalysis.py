@@ -421,6 +421,21 @@ class Store(unittest.TestCase):
         self.assertEqual(len(self.alerts), 1)                                    # alert only for a new file
         self.assertEqual(self.h.samples()["total"], 1)
 
+    def test_opening_legacy_elf_sample_refreshes_static_iocs_and_family_hints(self):
+        payload = elf(3, 32, True, False) + b"\\x00http://160.119.66.206/bins/net.x86\\x00TSource Engine Query\\x00getinfo xxx\\x00"
+        ok, sha = self.h.add_sample(payload, {"ip": "198.51.100.7"}, quiet=True)
+        self.assertTrue(ok)
+        # Simulate an older database row whose saved static analysis predates these findings.
+        self.h.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps({"sha256": sha, "yara": {"matches": [], "scan_status": "complete", "rules_fingerprint": self.h.yara.status().get("fingerprint", "")}}), sha))
+        self.h.db.commit()
+        result = self.h.sample(sha)
+        self.assertEqual(result["arch"], "x86")
+        self.assertEqual(result["iocs"]["urls"][0]["value"], "http://160.119.66.206/bins/net.x86")
+        self.assertIn("160.119.66.206", [x["value"] for x in result["iocs"]["ips"]])
+        self.assertIn("Mirai-style IoT botnet", result["families"])
+        saved = json.loads(self.h.db.execute("SELECT analysis FROM samples WHERE sha256=?", (sha,)).fetchone()[0])
+        self.assertIn("Mirai-style IoT botnet", saved["families"])
+
     def test_sample_limits_and_bad_hashes(self):
         self.assertFalse(self.h.add_sample(b"", {})[0])
         self.assertFalse(self.h.add_sample(b"x" * (ha.MAX_SAMPLE + 1), {})[0])
