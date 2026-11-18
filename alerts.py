@@ -146,7 +146,7 @@ def with_defaults(s: dict | None) -> dict:
     # Compatibility: migrate the temporary MalwareBazaar-only field to the shared abuse.ch key.
     legacy_mb_key = out.get("threats", {}).pop("malwarebazaar_key", "")
     if legacy_mb_key and not out.get("dns", {}).get("abuse_key"):
-        out["dns"]["abuse_key"] = re.sub(r"[\\r\\n\\x00-\\x1f\\x7f]", "", str(legacy_mb_key)).strip()[:100]
+        out["dns"]["abuse_key"] = re.sub(r"[\r\n\x00-\x1f\x7f]", "", str(legacy_mb_key)).strip()[:100]
     return out
 
 
@@ -349,7 +349,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
         if "password" in dn and dn["password"] != MASK:
             cur["password"] = str(dn["password"])[:200]
         if "abuse_key" in dn and dn["abuse_key"] != MASK:
-            cur["abuse_key"] = re.sub(r"[\\r\\n\\x00-\\x1f\\x7f]", "", str(dn["abuse_key"])).strip()[:100]
+            cur["abuse_key"] = re.sub(r"[\r\n\x00-\x1f\x7f]", "", str(dn["abuse_key"])).strip()[:100]
     vu = incoming.get("vulns")
     if isinstance(vu, dict):
         cur = new["vulns"]
