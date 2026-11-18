@@ -481,7 +481,7 @@ def analyze_sample(data: bytes) -> dict:
     if b"UPX!" in data[:4096] or b"UPX!" in data[-4096:]:
         notes.append("Packed with UPX (a common packer for small malware).")
     if ident["kind"] == "elf" and ident.get("static"):
-        notes.append("Statically linked: it carries its own libraries, typical of malware built to run on any router or camera.")
+        notes.append("Statically linked: many library dependencies are bundled into the executable. This can improve portability across compatible Linux systems; static linking alone does not establish maliciousness or identify the target device.")
     if ident["kind"] == "elf" and len(data) < 200_000 and ident.get("arch") in ("MIPS", "ARM", "SuperH", "PowerPC", "m68k", "SPARC"):
         notes.append(f"Built for {ident['arch']}: aimed at routers and IoT devices rather than PCs.")
     for lab, rx in _FAMILY:
