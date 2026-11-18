@@ -762,6 +762,18 @@ class MalwareBazaar(unittest.TestCase):
         self.assertEqual(result["status"], "not_found")
         self.assertIn("does not mean", result["note"])
 
+    @patch("honeyanalysis.urllib.request.urlopen")
+    def test_rejection_reports_http_status_body_and_key_length(self, urlopen):
+        import io, urllib.error
+        urlopen.side_effect = urllib.error.HTTPError(
+            ha.MALWAREBAZAAR_API, 401, "Unauthorized", {}, io.BytesIO(b"<b>Unknown Auth-Key</b>"))
+        r = ha.malwarebazaar_lookup("d" * 64, "k" * 40)
+        self.assertEqual(r["status"], "error")
+        self.assertIn("HTTP 401", r["message"])
+        self.assertIn("40 characters", r["message"])
+        self.assertIn("Unknown Auth-Key", r["message"])
+        self.assertNotIn("kkkk", r["message"])
+
     def test_lookup_requires_valid_sha256_and_key(self):
         self.assertEqual(ha.malwarebazaar_lookup("bad", "key")["status"], "error")
         self.assertEqual(ha.malwarebazaar_lookup("a" * 64, "")["status"], "not_configured")
