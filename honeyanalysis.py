@@ -482,7 +482,7 @@ def malwarebazaar_lookup(sha256: str, api_key: str, timeout: int = 8) -> dict:
     sha256 = str(sha256 or "").lower()
     if not HEX64.fullmatch(sha256):
         return {"status": "error", "message": "Invalid SHA-256 hash."}
-    key = re.sub(r"[^A-Za-z0-9]", "", str(api_key or ""))[:100]
+    key = re.sub(r"[\\r\\n\\x00-\\x1f\\x7f]", "", str(api_key or "")).strip()[:100]
     if not key:
         return {"status": "not_configured"}
     body = urllib.parse.urlencode({"query": "get_info", "hash": sha256}).encode("ascii")
