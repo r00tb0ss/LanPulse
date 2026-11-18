@@ -479,7 +479,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
                 elif name == "nvd":
                     raw = re.sub(r"[^A-Za-z0-9-]", "", raw)
                 elif name == "ai":
-                    raw = re.sub(r"[^\\x21-\\x7e]", "", raw)
+                    raw = re.sub(r"[^\x21-\x7e]", "", raw)
                 new["keys"][name] = raw[:limits[name]]
                 new[section][field] = new["keys"][name]
     else:
