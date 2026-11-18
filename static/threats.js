@@ -1033,7 +1033,7 @@ function renderUnifiSettings(body) {
       <div class="full btns"><button class="btn" id="bUniTest"><i class="fa-solid fa-plug"></i>Save &amp; test</button><span class="test-res" id="uniRes"></span></div>
     </div></div>
     <div class="t-setup"><h3><i class="fa-solid fa-list-check"></i>One-time setup in UniFi</h3><ol>
-      <li><b>API key:</b> in UniFi go to Settings &gt; Control Plane &gt; Integrations (or Network &gt; Integrations), create an API key and paste it above.</li>
+       <li><b>API key:</b> in UniFi go to Settings &gt; Control Plane &gt; Integrations (or Network &gt; Integrations), create an API key, then save it under LanPulse Settings &gt; API Keys.</li>
       <li><b>Block an IP</b> once from an attacker's panel. That creates the <b>${esc(u.group || "LanPulse Blocklist")}</b> IP group on the UDM.</li>
       <li><b>Create one block policy</b> in Settings &gt; Policy Engine: Source zone External with the IP group <b>${esc(u.group || "LanPulse Blocklist")}</b>,
         Destination zone <b>Internal</b> (that is where port-forwarded traffic, like the honeypot's, arrives), Action Block, Protocol All.
