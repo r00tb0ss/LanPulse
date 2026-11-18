@@ -59,6 +59,7 @@
       <label>Provider<select id="aiProv">${Object.entries(PROV).map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(v[0])}</option>`).join("")}</select></label>
       <label>Server address<input id="aiBase" placeholder=""></label>
       <label>Model<input id="aiModel" placeholder=""></label>
+       <div class="muted" style="font-size:12px">Cloud provider API keys are managed in Settings &gt; API Keys. Local Ollama does not need a key.</div>
       <div class="ai-warn" id="aiWarn"></div>
       <div class="btns"><button class="btn" id="aiTest" type="button">Test</button>
         <button class="btn primary" id="aiSave" type="button">Save &amp; enable</button>
