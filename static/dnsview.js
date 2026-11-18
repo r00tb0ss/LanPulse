@@ -126,8 +126,6 @@ async function showDnsSetup(force) {
       <label class="full">Password<input id="dnsPw" type="password" value="${esc(c.password || "")}" autocomplete="off"
         placeholder="web interface password, or an app password"></label>
       <label class="full chk-line"><input type="checkbox" id="dnsMalOn" ${c.malware !== false ? "checked" : ""}> Check lookups against the abuse.ch URLhaus malware list</label>
-      <label class="full">abuse.ch Auth-Key (optional, free at auth.abuse.ch)<input id="dnsAbuseKey" type="password" value="${esc(c.abuse_key || "")}" autocomplete="off"
-        placeholder="not needed: LanPulse falls back to a mirror of the same list"></label>
       <label class="full chk-line"><input type="checkbox" id="dnsTls" ${c.verify_tls ? "checked" : ""}> Verify the resolver's HTTPS certificate</label>
     </div>
     <p class="hint" style="font-size:12px" id="dnsTipAg">AdGuard Home: use the web interface address and the login you use to open it. LanPulse only reads the query log.</p>
@@ -140,7 +138,7 @@ async function showDnsSetup(force) {
   const syncProv = () => { const ag = $("dnsProv").value === "adguard"; $("dnsUserRow").classList.toggle("hidden", !ag);
     $("dnsTipAg").classList.toggle("hidden", !ag); $("dnsTipPh").classList.toggle("hidden", ag); };
   $("dnsProv").onchange = syncProv; syncProv();
-  const form = (enabled) => ({provider: $("dnsProv").value, username: $("dnsUser").value.trim(), url: $("dnsUrl").value.trim(), password: $("dnsPw").value, malware: $("dnsMalOn").checked, abuse_key: $("dnsAbuseKey").value.trim(),
+  const form = (enabled) => ({provider: $("dnsProv").value, username: $("dnsUser").value.trim(), url: $("dnsUrl").value.trim(), password: $("dnsPw").value, malware: $("dnsMalOn").checked,
     verify_tls: $("dnsTls").checked, enabled});
   $("dnsTest").onclick = async () => {
     $("dnsRes").className = "test-res"; $("dnsRes").textContent = "Testing…";
