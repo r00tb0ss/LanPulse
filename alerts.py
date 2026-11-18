@@ -44,7 +44,7 @@ DEFAULT_SETTINGS = {
         "irc": {"enabled": False, "host": "", "port": 6697, "tls": True, "tls_verify": False,
                 "nick": "lanpulse", "channel": "#alerts", "key": ""},
     },
-    "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "",
+    "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "", "malwarebazaar_key": "",
                 "ingest_key": "", "forwards": [], "ignore_noise": True,
                 "syslog_from": [], "syslog_any": False, "auto_intel": True},
     "local": {"enabled": True, "sweep_threshold": 40, "scan_threshold": 15, "lateral_threshold": 5, "ignore": [],
@@ -153,8 +153,9 @@ def masked(s: dict) -> dict:
         for f in SECRET_FIELDS:
             if ch.get(f):
                 ch[f] = MASK
-    if out["threats"].get("abuseipdb_key"):
-        out["threats"]["abuseipdb_key"] = MASK
+    for f in ("abuseipdb_key", "malwarebazaar_key"):
+        if out["threats"].get(f):
+            out["threats"][f] = MASK
     if out.get("dns", {}).get("password"):
         out["dns"]["password"] = MASK
     if out.get("dns", {}).get("abuse_key"):
@@ -251,7 +252,9 @@ def apply_update(current: dict, incoming: dict) -> dict:
                 except (TypeError, ValueError):
                     pass
         if "abuseipdb_key" in t and t["abuseipdb_key"] != MASK:
-            cur["abuseipdb_key"] = str(t["abuseipdb_key"]).strip()
+            cur["abuseipdb_key"] = str(t["abuseipdb_key"]).strip()[:200]
+        if "malwarebazaar_key" in t and t["malwarebazaar_key"] != MASK:
+            cur["malwarebazaar_key"] = re.sub(r"[^A-Za-z0-9]", "", str(t["malwarebazaar_key"]))[:100]
         if "auto_intel" in t:
             cur["auto_intel"] = bool(t["auto_intel"])
         if isinstance(t.get("forwards"), list):
