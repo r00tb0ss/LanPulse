@@ -1447,7 +1447,8 @@ class HoneyAnalysis:
             cached_at = float(cached_mb.get("queried_at") or 0)
         except (TypeError, ValueError):
             cached_at = 0
-        if mb_key and (time.time() - cached_at >= MALWAREBAZAAR_CACHE_TTL or cached_mb.get("status") not in ("found", "not_found")):
+        mb_cache_ttl = 300 if cached_mb.get("status") == "error" else MALWAREBAZAAR_CACHE_TTL
+        if mb_key and (time.time() - cached_at >= mb_cache_ttl or cached_mb.get("status") not in ("found", "not_found", "error")):
             cached_mb = malwarebazaar_lookup(sha, mb_key)
             a["malwarebazaar"] = cached_mb
             with self.lock:
