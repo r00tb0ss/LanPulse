@@ -430,6 +430,21 @@ class Store(unittest.TestCase):
         self.assertEqual(len(self.alerts), 1)                                    # alert only for a new file
         self.assertEqual(self.h.samples()["total"], 1)
 
+    def test_malwarebazaar_cache_survives_opening_and_reports_stay_read_only(self):
+        self.h.nm.settings = {"dns": {"abuse_key": "aB3dEf9GhIjKlMnOpQrStUvWxYz0123456789AbC"}}
+        ok, sha = self.h.add_sample(b"#!/bin/sh\necho hi\n", {"ip": "198.51.100.7"}, quiet=True)
+        self.assertTrue(ok)
+        found = {"status": "found", "signature": "Mirai", "queried_at": time.time()}
+        with patch.object(ha, "malwarebazaar_lookup", return_value=found) as look:
+            self.h.sample(sha, scan_yara=False)           # read-only view: no outbound call
+            self.assertEqual(look.call_count, 0)
+            self.assertEqual(self.h.sample(sha)["malwarebazaar"]["status"], "found")
+            self.assertEqual(look.call_count, 1)
+            self.h.sample(sha)                            # cache must survive the re-analysis
+            self.h.sample(sha, scan_yara=False)
+            self.assertEqual(look.call_count, 1)
+            self.assertEqual(self.h.sample(sha, scan_yara=False)["malwarebazaar"]["signature"], "Mirai")
+
     def test_opening_legacy_elf_sample_refreshes_static_iocs_and_family_hints(self):
         payload = elf(3, 32, True, False) + b"\x00http://160.119.66.206/bins/net.x86\x00TSource Engine Query\x00getinfo xxx\x00"
         ok, sha = self.h.add_sample(payload, {"ip": "198.51.100.7"}, quiet=True)
@@ -751,6 +766,15 @@ class MalwareBazaar(unittest.TestCase):
         self.assertEqual(ha.malwarebazaar_lookup("bad", "key")["status"], "error")
         self.assertEqual(ha.malwarebazaar_lookup("a" * 64, "")["status"], "not_configured")
 
+
+    @patch("honeyanalysis.urllib.request.urlopen")
+    def test_realistic_mixed_case_key_is_sent_unchanged(self, urlopen):
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"query_status":"hash_not_found"}'
+        urlopen.return_value = response
+        key = "aB3dEf9GhIjKlMnOpQrStUvWxYz0123456789AbC"
+        ha.malwarebazaar_lookup("c" * 64, key)
+        self.assertEqual(urlopen.call_args.args[0].get_header("Auth-key"), key)
 
 
 if __name__ == "__main__":
