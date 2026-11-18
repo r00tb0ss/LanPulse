@@ -73,12 +73,12 @@ class ThreatIntelSettings(unittest.TestCase):
         self.assertEqual(updated["dns"]["abuse_key"], "abc-123_Xy.z+!/=")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_realistic_mixed_case_key_is_not_altered(self):
         key = "aB3dEf9GhIjKlMnOpQrStUvWxYz0123456789AbC"
         updated = alerts.apply_update(alerts.with_defaults({}), {"dns": {"abuse_key": key}})
         self.assertEqual(updated["dns"]["abuse_key"], key)
         updated = alerts.apply_update(updated, {"dns": {"abuse_key": " " + key + "\n"}})
         self.assertEqual(updated["dns"]["abuse_key"], key)
+
+if __name__ == "__main__":
+    unittest.main()
