@@ -945,7 +945,7 @@ function renderThreatSettings(body) {
       </div>
       <div class="full muted" style="font-size:12px">A burst alert fires when one IP makes that many attempts within 5 minutes.
         The Tor exit check is free and needs no key. <b>ThreatFox</b> needs a free abuse.ch Auth-Key — add it under
-        <b>Settings &gt; DNS</b> (the same key the malware list uses).</div>
+        <b>Settings &gt; DNS</b>. MalwareBazaar uses the separate API key field above.</div>
     </div></div>
     <div class="chan"><div class="chan-head"><i class="fa-solid fa-filter ci"></i><div class="txt"><b>Ignore harmless traffic (recommended)</b>
       <small>Routers log leftover replies after your own connections close (from Google, Microsoft, CDNs…) and routine network messages.
