@@ -158,6 +158,8 @@ def with_defaults(s: dict | None) -> dict:
         "unifi": out.get("unifi", {}).get("api_key", ""),
     }
     for name, value in legacy.items():
+        if name == "abusech":
+            value = "".join(ch for ch in str(value or "").strip() if 33 <= ord(ch) <= 126)[:100]
         if not keys.get(name) and value:
             keys[name] = value
         if keys.get(name):
@@ -469,7 +471,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
                 raw = str(key_input[name] or "").strip()
                 limits = {"abuseipdb": 200, "abusech": 100, "nvd": 64, "ai": 300, "unifi": 200}
                 if name == "abusech":
-                    raw = re.sub(r"[\\r\\n\\x00-\\x1f\\x7f]", "", raw)
+                    raw = "".join(ch for ch in raw if 33 <= ord(ch) <= 126)
                 elif name == "nvd":
                     raw = re.sub(r"[^A-Za-z0-9-]", "", raw)
                 elif name == "ai":
