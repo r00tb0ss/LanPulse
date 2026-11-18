@@ -66,7 +66,7 @@ from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
 
-VERSION = "1.39.11"
+VERSION = "1.39.12"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -906,12 +906,19 @@ class LanPulse:
         if len(self.alert_sent) > 2000:          # alerts about one-off addresses would otherwise pile up forever
             self.alert_sent = {k: t for k, t in self.alert_sent.items() if now - t < 86400}
 
+    def repeat_gap(self, floor: int) -> float:
+        """Seconds before the same alert may be sent again: the setting from Settings, never shorter than the alert's own."""
+        try:
+            return max(float(floor), 60.0 * int(self.settings.get("notify", {}).get("repeat_minutes", 10)))
+        except (TypeError, ValueError):
+            return float(floor)
+
     def notify(self, rule: str, d: dict, title: str, msg: str, priority: int = 3):
         if not self.settings["rules"].get(rule):
             return
         key = (rule, d["id"], title)
         now = time.time()
-        if now - self.alert_sent.get(key, 0) < 600:       # same alert at most every 10 minutes
+        if now - self.alert_sent.get(key, 0) < self.repeat_gap(600):       # same alert at most this often
             return
         self.alert_sent[key] = now
         self._trim_alerts(now)
@@ -929,7 +936,7 @@ class LanPulse:
             return
         k = (rule, key, title)
         now = time.time()
-        if now - self.alert_sent.get(k, 0) < gap:
+        if now - self.alert_sent.get(k, 0) < self.repeat_gap(gap):
             return
         self.alert_sent[k] = now
         self._trim_alerts(now)
