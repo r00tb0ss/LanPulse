@@ -1025,7 +1025,7 @@ function renderUnifiSettings(body) {
     <div class="chan"><div class="chan-fields" style="padding:12px">
       <label>Gateway address<input id="u_host" value="${esc(u.host)}" placeholder="${esc(meta.gateway || "192.168.0.1")} (blank = your router)"></label>
       <label>Site<input id="u_site" value="${esc(u.site || "default")}"></label>
-      <div class="full muted" style="font-size:12px">Or use a local-only admin account instead of an API key:</div>
+      <div class="full muted" style="font-size:12px">Alternatively, connect with a local-only admin account using the username and password below. Manage API keys in Settings &gt; API Keys.</div>
       <label>Username<input id="u_user" value="${esc(u.username)}" autocomplete="off"></label>
       <label>Password<input id="u_pass" type="password" value="${esc(u.password)}" autocomplete="new-password"></label>
       <label class="full">IP group name<input id="u_group" value="${esc(u.group || "LanPulse Blocklist")}"></label>
