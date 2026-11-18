@@ -31,6 +31,8 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -2449,14 +2451,51 @@ def build_app(nm: LanPulse) -> FastAPI:
         log.info("YARA %s requested from the dashboard", action)
         return {"ok": True}
 
+    @app.post("/api/threats/abuseipdb/test")
+    async def threats_abuseipdb_test():
+        if nm.args.demo:
+            return JSONResponse({"error": "External reputation tests are disabled in demo mode."}, 400)
+        key_cfg = nm.settings.get("keys", {}) if isinstance(nm.settings, dict) else {}
+        key = str((key_cfg.get("abuseipdb") if isinstance(key_cfg, dict) else "") or
+                  nm.settings.get("threats", {}).get("abuseipdb_key", "")).strip()
+        if not key:
+            return JSONResponse({"error": "Add your AbuseIPDB API key in Settings > API Keys."}, 400)
+        # Use a well-known public resolver address for a read-only validation request; no LAN/client IP is sent.
+        url = "https://api.abuseipdb.com/api/v2/check?ipAddress=1.1.1.1&maxAgeInDays=1"
+        req = urllib.request.Request(url, headers={"Key": key, "Accept": "application/json",
+                                                    "User-Agent": "LanPulse"})
+        try:
+            def check_key():
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    payload = json.loads(response.read(256_000).decode("utf-8"))
+                    return response.status, payload
+            status, payload = await asyncio.to_thread(check_key)
+            if status == 200 and isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+                return {"ok": True, "message": "AbuseIPDB accepted the API key."}
+            return JSONResponse({"error": "AbuseIPDB returned an unexpected response."}, 502)
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                payload = json.loads(exc.read(64_000).decode("utf-8", "replace"))
+                detail = str(payload.get("errors", [{}])[0].get("detail", "")) if isinstance(payload, dict) else ""
+            except Exception:
+                pass
+            message = detail or ("API key was rejected (HTTP 401/403)." if exc.code in (401, 403)
+                                 else f"AbuseIPDB returned HTTP {exc.code}.")
+            return JSONResponse({"error": message}, 400)
+        except Exception as exc:
+            log.warning("AbuseIPDB key test failed: %s", exc)
+            return JSONResponse({"error": "Could not reach AbuseIPDB: " + str(exc)[:180]}, 502)
+
     @app.post("/api/honeypot/malwarebazaar/test")
     async def honeypot_malwarebazaar_test():
         if nm.args.demo:
             return JSONResponse({"error": "External reputation tests are disabled in demo mode."}, 400)
         cfg = nm.settings.get("dns", {})
-        key = str(cfg.get("abuse_key") or "") if isinstance(cfg, dict) else ""
+        key_cfg = nm.settings.get("keys", {}) if isinstance(nm.settings, dict) else {}
+        key = str((key_cfg.get("abusech") if isinstance(key_cfg, dict) else "") or (cfg.get("abuse_key") if isinstance(cfg, dict) else ""))
         if not key:
-            return JSONResponse({"error": "Add your abuse.ch Auth-Key in Settings > DNS first. The same key enables ThreatFox and MalwareBazaar."}, 400)
+            return JSONResponse({"error": "Add your abuse.ch Auth-Key in Settings > API Keys. The same key enables ThreatFox and MalwareBazaar."}, 400)
         result = await asyncio.to_thread(nm.honeyan.malwarebazaar_test, key)
         if result.get("status") == "error":
             return JSONResponse({"error": result.get("message", "MalwareBazaar test failed.")}, 400)
