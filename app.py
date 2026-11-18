@@ -2449,6 +2449,19 @@ def build_app(nm: LanPulse) -> FastAPI:
         log.info("YARA %s requested from the dashboard", action)
         return {"ok": True}
 
+    @app.post("/api/honeypot/malwarebazaar/test")
+    async def honeypot_malwarebazaar_test():
+        if nm.args.demo:
+            return JSONResponse({"error": "External reputation tests are disabled in demo mode."}, 400)
+        cfg = nm.settings.get("threats", {})
+        key = str(cfg.get("malwarebazaar_key") or "") if isinstance(cfg, dict) else ""
+        if not key:
+            return JSONResponse({"error": "Add a MalwareBazaar API key in Settings > Threats first."}, 400)
+        result = await asyncio.to_thread(nm.honeyan.malwarebazaar_test, key)
+        if result.get("status") == "error":
+            return JSONResponse({"error": result.get("message", "MalwareBazaar test failed.")}, 400)
+        return {"ok": True, "status": result.get("status"), "message": "MalwareBazaar API key accepted."}
+
     @app.get("/api/honeypot/sample")
     async def honeypot_sample(sha: str):
         r = await asyncio.to_thread(nm.honeyan.sample, sha)
