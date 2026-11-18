@@ -303,7 +303,7 @@ can tell devices apart. Lookups are kept as per-minute totals for 7 days.
 The **Vulnerabilities** tab matches the software versions found by the port scan against the NVD database, ranks flaws
 on CISA's Known Exploited Vulnerabilities list first, and lists LanPulse's own findings (risky open services, end-of-life
 Windows) beside them. Only product names (like "openbsd openssh") are sent to NVD. Without an NVD API key, the first
-check takes about 7 seconds per product; a free key (Settings on that tab) makes it about 8 times faster. Results are
+check takes about 7 seconds per product; a free key (Settings > API Keys) makes it about 8 times faster. Results are
 cached for a week. Matching is by version number, so Linux packages that were patched without a version change can show
 up as "may be patched". An alert goes out when a device gains an actively exploited flaw.
 
@@ -398,11 +398,11 @@ The Honeypot tab is split into sections:
 - **Sensors**: add, check and revoke sensors.
 - **Score filters and sorting**: narrow captured sessions and malware samples by score band (0–19 Low, 20–39 Guarded, 40–59 Elevated, 60–79 High, 80–100 Critical), then sort by newest, highest score or lowest score. This helps triage large collections; a score is an assessment, not proof of compromise.
 
-Captured files are only ever inspected as bytes. They are never run. YARA Forge Core is installed with LanPulse, checked during installation, and refreshed weekly by a systemd timer. The managed package is SHA-256 verified and compiled before activation; failed updates preserve the last working rule set. Your own `.yar` and `.yara` files can be placed in `/opt/lanpulse/data/yara-rules/` (outside the `managed` subfolder) and are preserved during managed updates. The Honeypot captured-file view shows YARA engine status, managed/custom rule counts, package version and update errors. A YARA match is a lead for investigation, not a verdict. In **Settings > DNS**, the existing **abuse.ch Auth-Key** is shared by ThreatFox and optional MalwareBazaar
+Captured files are only ever inspected as bytes. They are never run. YARA Forge Core is installed with LanPulse, checked during installation, and refreshed weekly by a systemd timer. The managed package is SHA-256 verified and compiled before activation; failed updates preserve the last working rule set. Your own `.yar` and `.yara` files can be placed in `/opt/lanpulse/data/yara-rules/` (outside the `managed` subfolder) and are preserved during managed updates. The Honeypot captured-file view shows YARA engine status, managed/custom rule counts, package version and update errors. A YARA match is a lead for investigation, not a verdict. In **Settings > API Keys**, the existing **abuse.ch Auth-Key** is shared by ThreatFox and optional MalwareBazaar
 SHA-256 lookups; no second key is needed. When you open a captured sample, LanPulse queries MalwareBazaar using
 the SHA-256 only (the captured file is never uploaded), caches the result for 24 hours, and shows exact-hash
 reputation separately from local YARA matches and observed honeypot behavior. A database miss is not a clean bill
-of health. The shared key remains masked in the settings API.
+of health. The shared key remains masked in settings. All provider credentials now live in one place: **Settings > API Keys**. This includes the separate **AbuseIPDB** reputation key, the shared **abuse.ch** key, the optional NVD key, cloud AI provider keys and the UniFi API key. Existing saved credentials are migrated automatically; there is no need to enter them again. AbuseIPDB and abuse.ch are different services and require different keys.
 
 ![Honeypot](docs/images/honeypot.png)
 
