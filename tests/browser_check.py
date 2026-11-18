@@ -165,7 +165,7 @@ def check_colours_and_ips(page, problems):
       legend: (document.querySelector('.map-legend') || {}).textContent || ''})""")
     if got["scanner"].lower() != "#facc15" or got["attack"].lower() != "#f43f5e":
         problems.append(f"[map colours] scanners should be yellow and attackers red, got {got['scanner']} / {got['attack']}")
-    for word in ("Attacker", "Suspicious", "Data", "Your network"):
+    for word in ("Attacker", "Suspicious", "data", "Your network"):
         if word not in got["legend"]:
             problems.append(f"[map colours] the legend does not name '{word}'")
     page.set_viewport_size({"width": 390, "height": 800})
