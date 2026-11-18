@@ -182,7 +182,7 @@ async function showVulnSetup() {
     <div class="chan-fields" style="padding:0">
       <label class="full chk-line"><input type="checkbox" id="vuOn" ${c.enabled !== false ? "checked" : ""}> Check scanned software against the NVD database</label>
     </div>
-    <p class="hint" style="font-size:12px">LanPulse sends NVD only product names (like "openbsd openssh"), never your IPs or device names.</p>
+     <p class="hint" style="font-size:12px">LanPulse sends NVD only product names (like "openbsd openssh"), never your IPs or device names. Optional NVD API keys are managed in <b>Settings &gt; API Keys</b>.</p>
     <div class="modal-foot" style="position:static;padding:10px 0 0"><button class="btn primary" id="vuSave"><i class="fa-solid fa-floppy-disk"></i>Save</button></div></div>`;
   $("vuSave").onclick = async () => {
     if (await api("/api/settings", "POST", {vulns: {enabled: $("vuOn").checked}})) {
