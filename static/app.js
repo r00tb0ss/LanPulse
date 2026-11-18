@@ -763,7 +763,10 @@ function renderApiKeysSettings(body) {
           ${k[id] ? `<label class="full chk-line"><input type="checkbox" id="clear_${id}"> Remove saved key</label>` : ""}
           <div class="full"><a href="${href}" target="_blank" rel="noopener noreferrer">${link} <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>
           ${id === "abuseipdb" ? `<div class="full btns"><button class="btn sm" id="test_abuseipdb"><i class="fa-solid fa-vial"></i>Test key</button><span class="test-res" id="res_abuseipdb"></span></div>` : ""}
-          ${id === "abusech" ? `<div class="full btns"><button class="btn sm" id="test_abusech"><i class="fa-solid fa-vial"></i>Test key (ThreatFox + MalwareBazaar)</button><span class="test-res" id="res_abusech"></span></div>` : ""}
+          ${id === "abusech" ? `<div class="full btns"><button class="btn sm" id="test_abusech"><i class="fa-solid fa-vial"></i>Test key (MalwareBazaar)</button><span class="test-res" id="res_abusech"></span></div>` : ""}
+          ${id === "nvd" ? `<div class="full btns"><button class="btn sm" id="test_nvd"><i class="fa-solid fa-vial"></i>Test key</button><span class="test-res" id="res_nvd"></span></div>` : ""}
+          ${id === "ai" && aiProvider !== "ollama" ? `<div class="full muted" style="font-size:12px">Validate this key with Test in the AI Analyst setup.</div>` : ""}
+          ${id === "unifi" ? `<div class="full muted" style="font-size:12px">Validate this key with Save &amp; test in Settings &gt; UniFi.</div>` : ""}
         </div>
       </section>`).join("")}
     </div>
@@ -799,6 +802,13 @@ function renderApiKeysSettings(body) {
     const r = await api("/api/threats/abuseipdb/test", "POST", {}, true);
     out.className = `test-res ${r?.ok ? "ok" : "bad"}`;
     out.textContent = r?.message || r?.error || "No response from AbuseIPDB.";
+  };
+  $("test_nvd").onclick = async () => {
+    const out = $("res_nvd"); out.className = "test-res"; out.textContent = "Testing…";
+    if (!(await saveBeforeTest("nvd"))) { out.textContent = "Save failed."; return; }
+    const r = await api("/api/vulns/nvd/test", "POST", {}, true);
+    out.className = `test-res ${r?.ok ? "ok" : "bad"}`;
+    out.textContent = r?.message || r?.error || "No response from NVD.";
   };
   $("test_abusech").onclick = async () => {
     const out = $("res_abusech"); out.className = "test-res"; out.textContent = "Testing…";
