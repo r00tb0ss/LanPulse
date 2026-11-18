@@ -18,7 +18,8 @@ const leakIps = new Set();      // on the blocklist, yet still reaching a device
 let unifiReady = false;
 let localSummary = null;
 const isScanner = (x) => !!(x && x.tag);
-const SCANNER_COLOR = "#7c8aa5";
+const SCANNER_COLOR = "#facc15";   // yellow: suspicious, a known internet scanner or probe
+const ATTACK_COLOR = "#f43f5e";    // red: an attacker
 const feedKeys = new Set();
 let feedEvents = []; // newest-first in-memory feed window; individual events remain available inside grouped rows
 
@@ -293,8 +294,8 @@ function updateWorld() {
       {id: "attackers", data: s.attackers.filter((a) => attacksOn && a.lat != null && !(hideScanners && isScanner(a))).map((a) => ({
         name: a.ip, ip: a.ip, iso: a.iso, count: a.count, tag: a.tag, place: placeOf(a), services: a.services.join(", "),
         value: [a.lon, a.lat, a.count], size: 5 + Math.min(16, Math.sqrt(a.count) * 1.4),
-        itemStyle: {color: isScanner(a) ? SCANNER_COLOR : reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8", shadowBlur: isScanner(a) || (attacksOn && typeof showTraffic === "function" && showTraffic()) ? 0 : 10,
-          shadowColor: reachedIps.has(a.ip) ? "#f43f5e" : "#38bdf8"}}))},
+        itemStyle: {color: isScanner(a) ? SCANNER_COLOR : ATTACK_COLOR, shadowBlur: isScanner(a) || (attacksOn && typeof showTraffic === "function" && showTraffic()) ? 0 : 10,
+          shadowColor: isScanner(a) ? SCANNER_COLOR : ATTACK_COLOR}}))},
       {id: "home", data: home ? [{value: home, place: [s.home.city, s.home.country].filter(Boolean).join(", ") + (s.public_ip ? ` · ${s.public_ip}` : "")}] : []},
     ],
   });
@@ -368,8 +369,8 @@ function pushArc(ev) {
   if (!tChart || !home || ev.lat == null || (hideScanners && isScanner(ev))) return;
   if (typeof showAttacks === "function" && !showAttacks()) return;
   arcs.push({at: Date.now(), coords: [[ev.lon, ev.lat], home],
-    lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : isReached(ev) ? "#f43f5e" : "#ef4444",
-      width: 1.8, opacity: 0.8}});   // easy to follow, alone or beside the traffic arcs
+    lineStyle: {color: isScanner(ev) ? SCANNER_COLOR : ATTACK_COLOR,
+      width: isReached(ev) ? 2.4 : 1.8, opacity: 0.85}});   // easy to follow, alone or beside the traffic arcs
   if (arcs.length > 40) arcs = arcs.slice(-40);
   drawArcs();
 }

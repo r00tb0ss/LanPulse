@@ -153,6 +153,30 @@ def check_arcs(page, problems):
         problems.append(f"[map arcs] an arc to a far southern place swings {worst:.0f}px below the bottom of the map")
 
 
+def check_colours_and_ips(page, problems):
+    """Map colours: attackers red, known scanners yellow, device data blue, all named in the legend. IPs never wrap."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(BASE, wait_until="domcontentloaded")
+    page.wait_for_selector("#vNet", timeout=20000)
+    page.evaluate("() => document.getElementById('vThreat').click()")
+    page.wait_for_timeout(1500)
+    got = page.evaluate("""() => ({scanner: typeof SCANNER_COLOR === 'undefined' ? '' : SCANNER_COLOR,
+      attack: typeof ATTACK_COLOR === 'undefined' ? '' : ATTACK_COLOR,
+      legend: (document.querySelector('.map-legend') || {}).textContent || ''})""")
+    if got["scanner"].lower() != "#facc15" or got["attack"].lower() != "#f43f5e":
+        problems.append(f"[map colours] scanners should be yellow and attackers red, got {got['scanner']} / {got['attack']}")
+    for word in ("Attacker", "Suspicious", "Data", "Your network"):
+        if word not in got["legend"]:
+            problems.append(f"[map colours] the legend does not name '{word}'")
+    page.set_viewport_size({"width": 390, "height": 800})
+    page.evaluate("() => { const b = document.getElementById('vPot') || document.getElementById('vHoney'); if (b) b.click(); }")
+    page.wait_for_timeout(1500)
+    wrapped = page.evaluate("""() => [...document.querySelectorAll('#potView .pot-ip')].filter((el) => el.offsetParent
+      && el.offsetHeight > 1.8 * parseFloat(getComputedStyle(el).lineHeight || 18)).length""")
+    if wrapped:
+        problems.append(f"[honeypot phone] {wrapped} IP address(es) are split across lines")
+
+
 def main() -> int:
     from playwright.sync_api import sync_playwright
     problems = []
@@ -274,6 +298,7 @@ def main() -> int:
                         problems.append(f"[phone {vid}] wider than the screen: {', '.join(over['wide'])}")
                     page.screenshot(path=os.path.join(ROOT, f"browser-phone-{vid}.png"))
                 check_arcs(page, problems)
+                check_colours_and_ips(page, problems)
                 check_contrast(page, problems)
                 browser.close()
         finally:

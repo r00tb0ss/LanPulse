@@ -474,7 +474,8 @@ body.map-full .toast{z-index:60}
   cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap}
 .layer-pick button.on{background:var(--panel2);color:var(--text);box-shadow:inset 0 0 0 1px var(--border2)}
 .layer-pick button.on i{color:#2dd4bf}
-.lg.traffic{background:#2dd4bf;box-shadow:0 0 6px #2dd4bf}
+.lg.traffic{background:#38bdf8;box-shadow:0 0 6px #38bdf8}
+.lg.attacker{background:#f43f5e;box-shadow:0 0 6px #f43f5e}.lg.suspect{background:#facc15;box-shadow:0 0 6px #facc15}
 .traffic-only{display:none!important}
 body.traffic-on .traffic-only{display:flex!important}
 body.traffic-on #tTrafficCard.traffic-only{display:flex!important}
@@ -2271,3 +2272,9 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 .key-card .chan-fields a:hover{text-decoration:underline}
 .key-card input[type=password]{width:100%;min-width:0}
 @media(max-width:680px){.keys-grid{grid-template-columns:1fr}.key-card .chan-head{flex-wrap:wrap}}
+
+/* Honeypot lists: an IP address is never broken across lines. A row wraps its other details instead. */
+#potView .pot-hit{flex-wrap:wrap;row-gap:4px}
+#potView .pot-hit .pot-ip,#potView .pot-att .pot-ip,#potView .pot-ip{white-space:nowrap;overflow-wrap:normal;word-break:keep-all;flex:0 0 auto}
+#potView .pot-hit .pot-svc{white-space:nowrap}
+#potView .pot-hit .pot-when{white-space:nowrap}
