@@ -44,7 +44,7 @@ DEFAULT_SETTINGS = {
         "irc": {"enabled": False, "host": "", "port": 6697, "tls": True, "tls_verify": False,
                 "nick": "lanpulse", "channel": "#alerts", "key": ""},
     },
-    "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "", "malwarebazaar_key": "",
+    "threats": {"enabled": True, "syslog_port": 514, "burst_threshold": 25, "abuseipdb_key": "",
                 "ingest_key": "", "forwards": [], "ignore_noise": True,
                 "syslog_from": [], "syslog_any": False, "auto_intel": True},
     "local": {"enabled": True, "sweep_threshold": 40, "scan_threshold": 15, "lateral_threshold": 5, "ignore": [],
@@ -143,6 +143,10 @@ def with_defaults(s: dict | None) -> dict:
                     out[k][k2] = v2
         else:
             out[k] = v
+    # Compatibility: migrate the temporary MalwareBazaar-only field to the shared abuse.ch key.
+    legacy_mb_key = out.get("threats", {}).pop("malwarebazaar_key", "")
+    if legacy_mb_key and not out.get("dns", {}).get("abuse_key"):
+        out["dns"]["abuse_key"] = re.sub(r"[^A-Za-z0-9]", "", str(legacy_mb_key))[:100]
     return out
 
 
@@ -153,7 +157,7 @@ def masked(s: dict) -> dict:
         for f in SECRET_FIELDS:
             if ch.get(f):
                 ch[f] = MASK
-    for f in ("abuseipdb_key", "malwarebazaar_key"):
+    for f in ("abuseipdb_key",):
         if out["threats"].get(f):
             out["threats"][f] = MASK
     if out.get("dns", {}).get("password"):
@@ -253,8 +257,6 @@ def apply_update(current: dict, incoming: dict) -> dict:
                     pass
         if "abuseipdb_key" in t and t["abuseipdb_key"] != MASK:
             cur["abuseipdb_key"] = str(t["abuseipdb_key"]).strip()[:200]
-        if "malwarebazaar_key" in t and t["malwarebazaar_key"] != MASK:
-            cur["malwarebazaar_key"] = re.sub(r"[^A-Za-z0-9]", "", str(t["malwarebazaar_key"]))[:100]
         if "auto_intel" in t:
             cur["auto_intel"] = bool(t["auto_intel"])
         if isinstance(t.get("forwards"), list):
