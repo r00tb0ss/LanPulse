@@ -430,7 +430,7 @@ class Store(unittest.TestCase):
         self.assertEqual(self.h.samples()["total"], 1)
 
     def test_opening_legacy_elf_sample_refreshes_static_iocs_and_family_hints(self):
-        payload = elf(3, 32, True, False) + b"\\x00http://160.119.66.206/bins/net.x86\\x00TSource Engine Query\\x00getinfo xxx\\x00"
+        payload = elf(3, 32, True, False) + b"\x00http://160.119.66.206/bins/net.x86\x00TSource Engine Query\x00getinfo xxx\x00"
         ok, sha = self.h.add_sample(payload, {"ip": "198.51.100.7"}, quiet=True)
         self.assertTrue(ok)
         # Simulate an older database row whose saved static analysis predates these findings.
