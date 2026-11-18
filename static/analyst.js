@@ -59,7 +59,6 @@
       <label>Provider<select id="aiProv">${Object.entries(PROV).map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(v[0])}</option>`).join("")}</select></label>
       <label>Server address<input id="aiBase" placeholder=""></label>
       <label>Model<input id="aiModel" placeholder=""></label>
-      <label id="aiKeyRow">API key<input id="aiKey" type="password" autocomplete="off" placeholder="stored on this box, never shown again"></label>
       <div class="ai-warn" id="aiWarn"></div>
       <div class="btns"><button class="btn" id="aiTest" type="button">Test</button>
         <button class="btn primary" id="aiSave" type="button">Save &amp; enable</button>
@@ -68,7 +67,6 @@
     const sync = () => {
       const p = $("aiProv").value, d = PROV[p];
       $("aiBase").placeholder = d[1]; $("aiModel").placeholder = d[2];
-      $("aiKeyRow").style.display = p === "ollama" ? "none" : "";
       $("aiWarn").innerHTML = p === "anthropic"
         ? `<i class="fa-solid fa-triangle-exclamation"></i> A summary of your network (device names, IPs, open ports, vulnerabilities) is sent to this provider with each question.`
         : p === "openai" ? `<i class="fa-solid fa-circle-info"></i> Point this at a local server to keep data on your network; a hosted service receives a summary of your network with each question.`
@@ -76,14 +74,13 @@
     };
     $("aiProv").onchange = () => { $("aiBase").value = ""; $("aiModel").value = ""; sync(); };
     sync();
-    const form = () => ({provider: $("aiProv").value, base_url: $("aiBase").value.trim(), model: $("aiModel").value.trim(), api_key: $("aiKey").value});
+    const form = () => ({provider: $("aiProv").value, base_url: $("aiBase").value.trim(), model: $("aiModel").value.trim()});
     $("aiTest").onclick = async () => {
       $("aiMsg").textContent = "Testing…";
       const r = await api("/api/ai/test", "POST", form(), true);
       $("aiMsg").textContent = r ? r.message : "Test failed."; $("aiMsg").style.color = r && r.ok ? "var(--green)" : "var(--red)";
     };
     $("aiSave").onclick = async () => {
-      const f = form(); if (!f.api_key) delete f.api_key;
       if (await api("/api/settings", "POST", {ai: {...f, enabled: true}})) { toast("Analyst enabled"); box.classList.add("hidden"); $("aiLog").innerHTML = ""; refresh(); }
     };
     $("aiOff").onclick = async () => {
