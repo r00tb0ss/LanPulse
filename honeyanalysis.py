@@ -1440,8 +1440,9 @@ class HoneyAnalysis:
         if stored:
             a.update(self._closer_look(sha, a.get("kind"), scan_yara=scan_yara))
         # Optional external reputation: submit the SHA-256 only, never the sample bytes.
-        threat_cfg = self.nm.settings.get("threats", {}) if isinstance(getattr(self.nm, "settings", {}), dict) else {}
-        mb_key = str(threat_cfg.get("malwarebazaar_key") or "").strip() if isinstance(threat_cfg, dict) else ""
+        dns_cfg = self.nm.settings.get("dns", {}) if isinstance(getattr(self.nm, "settings", {}), dict) else {}
+        # MalwareBazaar and ThreatFox share the abuse.ch Auth-Key configured in Settings > DNS.
+        mb_key = str(dns_cfg.get("abuse_key") or "").strip() if isinstance(dns_cfg, dict) else ""
         cached_mb = a.get("malwarebazaar") if isinstance(a.get("malwarebazaar"), dict) else {}
         try:
             cached_at = float(cached_mb.get("queried_at") or 0)
