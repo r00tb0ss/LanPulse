@@ -118,6 +118,7 @@ async function showDnsSetup(force) {
   box.innerHTML = `<div class="t-card"><h4><span><i class="fa-solid fa-plug"></i> Connect a DNS source</span></h4>
     <p class="hint">LanPulse reads your DNS resolver's query log to show what each device looks up, and warns you when one looks up a known
       malware domain. Supported sources: <b>Pi-hole</b> (v6 and v5) and <b>AdGuard Home</b>.</p>
+    <p class="hint" style="font-size:12px">The optional abuse.ch Auth-Key for ThreatFox and MalwareBazaar is managed centrally in <b>Settings &gt; API Keys</b>. URLhaus list updates can use LanPulse's public mirror without a key.</p>
     <div class="chan-fields" style="padding:0">
       <label class="full">DNS source<select id="dnsProv"><option value="pihole" ${c.provider !== "adguard" ? "selected" : ""}>Pi-hole</option>
         <option value="adguard" ${c.provider === "adguard" ? "selected" : ""}>AdGuard Home</option></select></label>
