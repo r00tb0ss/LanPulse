@@ -3,6 +3,7 @@
 """Checks for the honeypot session and malware analysis. Run: python -m unittest discover -s tests -v"""
 import os
 import json
+import random
 import subprocess
 import pathlib
 import shutil
