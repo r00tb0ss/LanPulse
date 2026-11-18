@@ -1393,30 +1393,37 @@ class HoneyAnalysis:
         out: dict = {}
         try:
             data = (self.dir / sha).read_bytes()[:MAX_SAMPLE]
+            # Re-run the bounded static parser when an older captured sample is opened. This upgrades
+            # records created before newer IOC/family rules without executing or changing the file.
+            with self.lock:
+                row = self.db.execute("SELECT analysis FROM samples WHERE sha256=?", (sha,)).fetchone()
+            previous = json.loads(row[0] or "{}") if row else {}
+            analysis = analyze_sample(data)
+            cached = previous.get("yara") if isinstance(previous.get("yara"), dict) else {}
+            if cached:
+                analysis["yara"] = cached
             if kind == "elf":
                 out["elf"] = staticlook.elf_details(data)
             elif kind in ("script", "text", "web"):
                 out["decoded"] = decoded_view(data[:400_000].decode("latin-1", "replace"))
             status = self.yara.status()
             fingerprint = status.get("fingerprint", "")
-            with self.lock:
-                row = self.db.execute("SELECT analysis FROM samples WHERE sha256=?", (sha,)).fetchone()
-            analysis = json.loads(row[0] or "{}") if row else {}
-            cached = analysis.get("yara") if isinstance(analysis.get("yara"), dict) else {}
             if cached.get("rules_fingerprint") == fingerprint and cached.get("scan_status") in ("complete", "partial", "no_rules", "unavailable"):
                 out["yara"] = cached
             elif scan_yara:
                 y = self._scan_yara(data)
                 analysis["yara"] = y
-                with self.lock:
-                    self.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps(analysis), sha))
-                    self.db.commit()
                 out["yara"] = y
             else:
                 # Reports are read-only: show the stored result, clearly marked stale/pending,
                 # instead of silently triggering a scan and writing to the sample database.
                 out["yara"] = {**cached, "scan_status": cached.get("scan_status", "pending"),
                                "report_note": "Cached result only; fresh YARA analysis was not started."}
+            # Persist refreshed static findings and the current YARA result together.
+            with self.lock:
+                self.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps(analysis), sha))
+                self.db.commit()
+            out.update({k: v for k, v in analysis.items() if k != "yara"})
         except Exception:
             log.debug("closer look at a sample failed", exc_info=True)
         return out
