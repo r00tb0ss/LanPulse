@@ -2278,3 +2278,8 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 #potView .pot-hit .pot-ip,#potView .pot-att .pot-ip,#potView .pot-ip{white-space:nowrap;overflow-wrap:normal;word-break:keep-all;flex:0 0 auto}
 #potView .pot-hit .pot-svc{white-space:nowrap}
 #potView .pot-hit .pot-when{white-space:nowrap}
+
+/* A rule with a drop-down: the text keeps a readable width and the drop-down drops underneath when space is short. */
+.rule.rule-sel{flex-wrap:wrap}
+.rule.rule-sel .txt{flex:1 1 240px;min-width:0}
+.rule.rule-sel select{flex:0 0 200px;width:200px;max-width:100%}
