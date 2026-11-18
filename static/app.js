@@ -743,6 +743,72 @@ function renderBackupSettings(body) {
   refresh();
 }
 
+function renderApiKeysSettings(body) {
+  const k = settings.keys || {};
+  const aiProvider = settings.ai?.provider || "ollama";
+  const rows = [
+    ["abuseipdb", "AbuseIPDB", "Attacker IP reputation, abuse confidence scores and reports.", "https://www.abuseipdb.com/", "AbuseIPDB account → API"],
+    ["abusech", "abuse.ch Auth-Key", "Shared by ThreatFox attacker IOC lookups and MalwareBazaar sample lookups.", "https://auth.abuse.ch/", "abuse.ch account → Auth-Key"],
+    ["nvd", "NVD / CVE API", "Faster National Vulnerability Database lookups. Optional; public access still works.", "https://nvd.nist.gov/developers/request-an-api-key", "NVD API key request"],
+    ["ai", "AI provider key", aiProvider === "ollama" ? "Not required for local Ollama. Used only with a cloud AI provider." : "Used by the selected " + aiProvider + " AI provider.", aiProvider === "anthropic" ? "https://console.anthropic.com/settings/keys" : "https://platform.openai.com/api-keys", "Provider API key page"],
+    ["unifi", "UniFi API key", "Authenticates the UniFi controller integration. Username/password remains in UniFi settings as an alternative.", "https://unifi.ui.com/", "UniFi console"]
+  ];
+  body.innerHTML = `<p class="hint">Manage third-party API credentials in one place. Existing saved keys have been carried over automatically; they are never displayed again. Leave a field blank to keep its current key.</p>
+    <div class="keys-grid">${rows.map(([id, title, desc, href, link]) => `
+      <section class="chan key-card">
+        <div class="chan-head"><div class="txt"><b>${title}</b><small>${desc}</small></div>
+          <span class="test-res ${k[id] ? "ok" : ""}">${k[id] ? "Configured" : (id === "ai" && aiProvider === "ollama" ? "Not needed" : "Not set")}</span></div>
+        <div class="chan-fields" style="padding:12px">
+          <label class="full"> ${title} <input type="password" id="key_${id}" autocomplete="new-password" placeholder="${k[id] ? "Saved — leave blank to keep" : "Paste API key"}"></label>
+          ${k[id] ? `<label class="full chk-line"><input type="checkbox" id="clear_${id}"> Remove saved key</label>` : ""}
+          <div class="full"><a href="${href}" target="_blank" rel="noopener noreferrer">${link} <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>
+          ${id === "abuseipdb" ? `<div class="full btns"><button class="btn sm" id="test_abuseipdb"><i class="fa-solid fa-vial"></i>Test key</button><span class="test-res" id="res_abuseipdb"></span></div>` : ""}
+          ${id === "abusech" ? `<div class="full btns"><button class="btn sm" id="test_abusech"><i class="fa-solid fa-vial"></i>Test key (ThreatFox + MalwareBazaar)</button><span class="test-res" id="res_abusech"></span></div>` : ""}
+        </div>
+      </section>`).join("")}
+    </div>
+    <div class="modal-foot"><button class="btn primary" id="saveApiKeys"><i class="fa-solid fa-floppy-disk"></i>Save API keys</button><span class="test-res" id="keysSaveRes"></span></div>`;
+  const collect = () => {
+    const payload = {};
+    for (const [id] of rows) {
+      const value = $(`key_${id}`)?.value || "";
+      const clear = $(`clear_${id}`)?.checked;
+      if (value.trim()) payload[id] = value.trim();
+      else if (clear) payload[id] = "";
+    }
+    return payload;
+  };
+  $("saveApiKeys").onclick = async () => {
+    const values = collect();
+    if (!Object.keys(values).length) { $("keysSaveRes").textContent = "No changes to save."; return; }
+    const r = await api("/api/settings", "POST", {keys: values});
+    if (r) { settings = r; toast("API keys saved securely"); renderApiKeysSettings(body); }
+  };
+  const saveBeforeTest = async (id) => {
+    const values = collect();
+    if (Object.keys(values).length) {
+      const r = await api("/api/settings", "POST", {keys: values});
+      if (!r) return false;
+      settings = r;
+    }
+    return true;
+  };
+  $("test_abuseipdb").onclick = async () => {
+    const out = $("res_abuseipdb"); out.className = "test-res"; out.textContent = "Testing…";
+    if (!(await saveBeforeTest("abuseipdb"))) { out.textContent = "Save failed."; return; }
+    const r = await api("/api/threats/abuseipdb/test", "POST", {}, true);
+    out.className = `test-res ${r?.ok ? "ok" : "bad"}`;
+    out.textContent = r?.message || r?.error || "No response from AbuseIPDB.";
+  };
+  $("test_abusech").onclick = async () => {
+    const out = $("res_abusech"); out.className = "test-res"; out.textContent = "Testing…";
+    if (!(await saveBeforeTest("abusech"))) { out.textContent = "Save failed."; return; }
+    const r = await api("/api/honeypot/malwarebazaar/test", "POST", {}, true);
+    out.className = `test-res ${r?.ok ? "ok" : "bad"}`;
+    out.textContent = r?.message || r?.error || "Could not verify the abuse.ch key.";
+  };
+}
+
 function collectSettings() {
   if (setTab === "threats") collectThreatSettings();
   if (setTab === "unifi") collectUnifiSettings();
