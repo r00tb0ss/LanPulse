@@ -65,6 +65,7 @@ DEFAULT_SETTINGS = {
     "openvas": {"enabled": False, "auto": False, "username": "admin", "password": ""},
     "wizard": {"done": False},
     "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
+    "keys": {"abuseipdb": "", "abusech": "", "nvd": "", "ai": "", "unifi": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
                "deep": True, "workers": 2, "port": 8080, "https": False, "host": "0.0.0.0", "allow_hosts": []},
@@ -147,12 +148,31 @@ def with_defaults(s: dict | None) -> dict:
     legacy_mb_key = out.get("threats", {}).pop("malwarebazaar_key", "")
     if legacy_mb_key and not out.get("dns", {}).get("abuse_key"):
         out["dns"]["abuse_key"] = re.sub(r"[\r\n\x00-\x1f\x7f]", "", str(legacy_mb_key)).strip()[:100]
+    # Central API-key vault: migrate existing credentials without asking the user to re-enter them.
+    keys = out.setdefault("keys", {})
+    legacy = {
+        "abuseipdb": out.get("threats", {}).get("abuseipdb_key", ""),
+        "abusech": out.get("dns", {}).get("abuse_key", ""),
+        "nvd": out.get("vulns", {}).get("nvd_key", ""),
+        "ai": out.get("ai", {}).get("api_key", ""),
+        "unifi": out.get("unifi", {}).get("api_key", ""),
+    }
+    for name, value in legacy.items():
+        if not keys.get(name) and value:
+            keys[name] = value
+        if keys.get(name):
+            target = {"abuseipdb": ("threats", "abuseipdb_key"), "abusech": ("dns", "abuse_key"),
+                      "nvd": ("vulns", "nvd_key"), "ai": ("ai", "api_key"), "unifi": ("unifi", "api_key")}[name]
+            out[target[0]][target[1]] = keys[name]
     return out
 
 
 def masked(s: dict) -> dict:
     out = copy.deepcopy(s)
     out.pop("layout", None)
+    for name in ("abuseipdb", "abusech", "nvd", "ai", "unifi"):
+        if out.get("keys", {}).get(name):
+            out["keys"][name] = MASK
     for ch in out["channels"].values():
         for f in SECRET_FIELDS:
             if ch.get(f):
@@ -438,6 +458,32 @@ def apply_update(current: dict, incoming: dict) -> dict:
     sv = incoming.get("services")
     if isinstance(sv, dict) and isinstance(sv.get("checks"), list):
         new["services"]["checks"] = [c for c in (clean_check(x) for x in sv["checks"][:50]) if c]
+    # API credentials are edited only in Settings > Keys. Keep legacy storage fields synchronized
+    # so existing service code and older settings backups remain compatible.
+    key_input = incoming.get("keys")
+    key_targets = {"abuseipdb": ("threats", "abuseipdb_key"), "abusech": ("dns", "abuse_key"),
+                   "nvd": ("vulns", "nvd_key"), "ai": ("ai", "api_key"), "unifi": ("unifi", "api_key")}
+    if isinstance(key_input, dict):
+        for name, (section, field) in key_targets.items():
+            if name in key_input and key_input[name] != MASK:
+                raw = str(key_input[name] or "").strip()
+                limits = {"abuseipdb": 200, "abusech": 100, "nvd": 64, "ai": 300, "unifi": 200}
+                if name == "abusech":
+                    raw = re.sub(r"[\\r\\n\\x00-\\x1f\\x7f]", "", raw)
+                elif name == "nvd":
+                    raw = re.sub(r"[^A-Za-z0-9-]", "", raw)
+                elif name == "ai":
+                    raw = re.sub(r"[^\\x21-\\x7e]", "", raw)
+                new["keys"][name] = raw[:limits[name]]
+                new[section][field] = new["keys"][name]
+    else:
+        # Accept legacy clients and synchronize their edits into the central key store.
+        legacy_inputs = (("threats", "abuseipdb_key", "abuseipdb"), ("dns", "abuse_key", "abusech"),
+                         ("vulns", "nvd_key", "nvd"), ("ai", "api_key", "ai"), ("unifi", "api_key", "unifi"))
+        for section, field, name in legacy_inputs:
+            part = incoming.get(section)
+            if isinstance(part, dict) and field in part and part[field] != MASK:
+                new["keys"][name] = new[section][field]
     _drop_moved_secrets(current, new, incoming)
     return new
 
