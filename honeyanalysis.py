@@ -471,6 +471,56 @@ def analyze_script(data: bytes) -> dict:
             "iocs": find_iocs(text)}
 
 
+
+MALWAREBAZAAR_API = "https://mb-api.abuse.ch/api/v1/"
+MALWAREBAZAAR_CACHE_TTL = 24 * 3600
+MALWAREBAZAAR_TEST_HASH = "5d9e4bdee8c8fcb0b534f6336ecace4696d8ed3038de42a969c6e037e41d1de5"
+
+
+def malwarebazaar_lookup(sha256: str, api_key: str, timeout: int = 8) -> dict:
+    """Hash-only MalwareBazaar lookup. The captured file and its contents are never uploaded."""
+    sha256 = str(sha256 or "").lower()
+    if not HEX64.fullmatch(sha256):
+        return {"status": "error", "message": "Invalid SHA-256 hash."}
+    key = re.sub(r"[^A-Za-z0-9]", "", str(api_key or ""))[:100]
+    if not key:
+        return {"status": "not_configured"}
+    body = urllib.parse.urlencode({"query": "get_info", "hash": sha256}).encode("ascii")
+    req = urllib.request.Request(MALWAREBAZAAR_API, data=body, method="POST", headers={
+        "Auth-Key": key, "User-Agent": "LanPulse malware intelligence",
+        "Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=max(2, min(int(timeout), 15)) as response:
+            payload = json.loads(response.read(512_000).decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        message = "API key rejected." if exc.code in (401, 403) else f"MalwareBazaar returned HTTP {exc.code}."
+        return {"status": "error", "message": message, "http_status": exc.code}
+    except (OSError, urllib.error.URLError, ValueError, TypeError) as exc:
+        return {"status": "error", "message": f"MalwareBazaar lookup failed: {str(getattr(exc, 'reason', exc))[:140]}."}
+    if not isinstance(payload, dict):
+        return {"status": "error", "message": "Unexpected MalwareBazaar response."}
+    qstatus = str(payload.get("query_status") or "")
+    now = time.time()
+    rows = payload.get("data")
+    if qstatus == "ok" and isinstance(rows, list) and rows:
+        item = rows[0]
+        if not isinstance(item, dict) or str(item.get("sha256_hash") or "").lower() != sha256:
+            return {"status": "error", "message": "Response hash did not match the requested SHA-256."}
+        tags = item.get("tags") if isinstance(item.get("tags"), list) else []
+        return {"status": "found", "source": "MalwareBazaar", "queried_at": now, "sha256": sha256,
+                "signature": str(item.get("signature") or "")[:120], "file_name": str(item.get("file_name") or "")[:160],
+                "file_type": str(item.get("file_type") or "")[:80], "file_arch": str(item.get("file_arch") or "")[:80],
+                "first_seen": str(item.get("first_seen") or "")[:40], "last_seen": str(item.get("last_seen") or "")[:40],
+                "reporter": str(item.get("reporter") or "")[:80], "tags": [str(x)[:80] for x in tags[:30]],
+                "permalink": f"https://bazaar.abuse.ch/sample/{sha}/",
+                "note": "Exact SHA-256 match in MalwareBazaar; external reputation, not observed runtime behavior."}
+    if qstatus in ("hash_not_found", "no_results"):
+        return {"status": "not_found", "source": "MalwareBazaar", "queried_at": now, "sha256": sha256,
+                "note": "No exact hash entry returned. This does not mean the file is safe."}
+    return {"status": "error", "source": "MalwareBazaar", "queried_at": now,
+            "message": f"MalwareBazaar query status: {qstatus or 'unknown'}."}
+
+
 def analyze_sample(data: bytes) -> dict:
     """Static look at one captured file. Never runs it."""
     h = hashes(data)
@@ -1384,6 +1434,21 @@ class HoneyAnalysis:
         a = json.loads(an or "{}")
         if stored:
             a.update(self._closer_look(sha, a.get("kind"), scan_yara=scan_yara))
+        # Optional external reputation: submit the SHA-256 only, never the sample bytes.
+        threat_cfg = self.nm.settings.get("threats", {}) if isinstance(getattr(self.nm, "settings", {}), dict) else {}
+        mb_key = str(threat_cfg.get("malwarebazaar_key") or "").strip() if isinstance(threat_cfg, dict) else ""
+        cached_mb = a.get("malwarebazaar") if isinstance(a.get("malwarebazaar"), dict) else {}
+        try:
+            cached_at = float(cached_mb.get("queried_at") or 0)
+        except (TypeError, ValueError):
+            cached_at = 0
+        if mb_key and (time.time() - cached_at >= MALWAREBAZAAR_CACHE_TTL or cached_mb.get("status") not in ("found", "not_found")):
+            cached_mb = malwarebazaar_lookup(sha, mb_key)
+            a["malwarebazaar"] = cached_mb
+            with self.lock:
+                self.db.execute("UPDATE samples SET analysis=? WHERE sha256=?", (json.dumps(a), sha))
+                self.db.commit()
+        a["malwarebazaar"] = cached_mb or {"status": "not_configured"}
         urls = json.loads(urls or "[]")
         return {**a, "first_seen": first, "last_seen": last, "seen": seen, "ips": json.loads(ips or "[]"),
                 "urls": [{"value": u, "defanged": defang(u)} for u in urls], "names": json.loads(names or "[]"),
