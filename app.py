@@ -2453,10 +2453,10 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def honeypot_malwarebazaar_test():
         if nm.args.demo:
             return JSONResponse({"error": "External reputation tests are disabled in demo mode."}, 400)
-        cfg = nm.settings.get("threats", {})
-        key = str(cfg.get("malwarebazaar_key") or "") if isinstance(cfg, dict) else ""
+        cfg = nm.settings.get("dns", {})
+        key = str(cfg.get("abuse_key") or "") if isinstance(cfg, dict) else ""
         if not key:
-            return JSONResponse({"error": "Add a MalwareBazaar API key in Settings > Threats first."}, 400)
+            return JSONResponse({"error": "Add your abuse.ch Auth-Key in Settings > DNS first. The same key enables ThreatFox and MalwareBazaar."}, 400)
         result = await asyncio.to_thread(nm.honeyan.malwarebazaar_test, key)
         if result.get("status") == "error":
             return JSONResponse({"error": result.get("message", "MalwareBazaar test failed.")}, 400)
