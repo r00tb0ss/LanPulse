@@ -41,8 +41,8 @@ class RuntimeTelemetryTests(unittest.TestCase):
         first = self.store.ingest("isolated-lab-01", [event])
         second = self.store.ingest("isolated-lab-01", [event])
         self.assertEqual(first, {"accepted": 1, "duplicates": 0})
-        self.assertEqual(second, {"accepted": 1, "duplicates": 0})
-        self.assertEqual(len(self.store.events_for_sample(self.sha)), 2)
+        self.assertEqual(second, {"accepted": 0, "duplicates": 1})
+        self.assertEqual(len(self.store.events_for_sample(self.sha)), 1)
 
     def test_rejects_bad_hash_and_unknown_event(self):
         with self.assertRaises(ValueError):
