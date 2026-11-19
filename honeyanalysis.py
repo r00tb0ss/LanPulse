@@ -1250,8 +1250,13 @@ class HoneyAnalysis:
             commands = json.loads(commands_json or "[]")
             files = json.loads(files_json or "[]")
             tags = sorted(set(json.loads(tags_json or "[]")) - {"logged-in"})
-            if len(tags) >= 3 and set(tags) - GENERIC_TAGS:
-                add("Behavior pattern", ", ".join(tags), ip, started, sid, confidence="low", sensor=sensor)
+            # Build a stable signature from classified command behavior, not sample hashes or
+            # incidental command wording. Require several non-generic behaviors before linking.
+            behavior_tags = sorted({tag for command in commands
+                                    for tag in classify_command(str(command))} - GENERIC_TAGS)
+            if len(behavior_tags) >= 3:
+                add("Behavior pattern", ", ".join(behavior_tags), ip, started, sid,
+                    confidence="moderate", sensor=sensor)
             iocs = find_iocs("\n".join(commands))
             for indicator in iocs.get("ips", []):
                 add("Public IP", indicator["value"], ip, started, sid, confidence="low", sensor=sensor)
