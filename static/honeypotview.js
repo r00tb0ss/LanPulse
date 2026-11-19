@@ -9,7 +9,7 @@ let potHours = 168;
 let potAttackType = "all";
 let potSelectedService = "";
 let potSection = (() => {
-  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors", "yara"];
+  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "c2", "artifacts", "sensors", "yara"];
   try {
     const saved = localStorage.getItem("lp_pot_section");
     if (valid.includes(saved)) return saved;
@@ -36,11 +36,13 @@ function setPotSection(section, persist = true) {
   $("potActivityPane")?.classList.toggle("hidden", potSection !== "activity");
   $("potInvestigationPane")?.classList.toggle("hidden", !investigation);
   $("potYaraPane")?.classList.toggle("hidden", potSection !== "yara");
+  $("potC2Pane")?.classList.toggle("hidden", potSection !== "c2");
   $("potMalware")?.classList.toggle("hidden", potSection === "artifacts");
   $("potHashIntel")?.classList.toggle("hidden", potSection !== "artifacts");
   $("potMalDetail")?.classList.add("hidden");
   if (persist) { try { localStorage.setItem("lp_pot_section", potSection); } catch (_) {} }
   if (potSection === "yara" && typeof loadYaraView === "function") loadYaraView();
+  if (potSection === "c2") loadC2Intel();
   if (investigation) {
     const title = $("potMalTitle");
     if (title && potSection !== "artifacts") title.textContent = ({sessions:"Attack sessions",profiles:"Attacker profiles",campaigns:"Campaign correlations",sensors:"Honeypot sensors"})[potSection] || "Investigation";
@@ -52,6 +54,61 @@ function setPotSection(section, persist = true) {
       } else if (typeof renderHashIntel === "function") renderHashIntel();
     }
   }
+}
+
+
+async function loadC2Intel() {
+  const box = $("potC2Content");
+  if (!box) return;
+  box.innerHTML = '<div class="muted">Loading extracted indicators…</div>';
+  const r = await api("/api/honeypot/c2?hours=" + potHours + "&limit=300", "GET");
+  if (!r) { box.innerHTML = '<div class="muted">Could not load C2 intelligence.</div>'; return; }
+  const rows = r.candidates || [];
+  box.innerHTML = `
+    <div class="t-kpis four">
+      <div class="kpi"><span class="k-lbl">Indicator candidates</span><span class="k-num">${r.total_candidates || 0}</span><span class="k-sub">commands + captured files</span></div>
+      <div class="kpi"><span class="k-lbl">Source IPs</span><span class="k-num">${new Set(rows.flatMap(x => x.source_ips || [])).size}</span><span class="k-sub">observed honeypot sources</span></div>
+      <div class="kpi"><span class="k-lbl">Linked samples</span><span class="k-num">${new Set(rows.flatMap(x => x.samples || [])).size}</span><span class="k-sub">static file evidence</span></div>
+      <div class="kpi"><span class="k-lbl">Confirmed phone-home</span><span class="k-num">0</span><span class="k-sub">no runtime network telemetry</span></div>
+    </div>
+    <div class="t-card">
+      <h4><span>Extracted indicators</span><span class="muted">${rows.length} shown · ${r.hours}h window</span></h4>
+      ${rows.length ? `<div class="pot-c2-list">${rows.map(x => `
+        <article class="pot-c2-row">
+          <div class="pot-c2-main">
+            <span class="tagchip">${esc(x.kind)}</span><span class="tagchip">candidate</span>
+            <span class="mono pot-c2-value">${esc(x.value)}</span>
+          </div>
+          <div class="pot-c2-meta">
+            <span>${x.evidence_count} evidence item${x.evidence_count === 1 ? "" : "s"}</span>
+            <span>${(x.source_ips || []).length} source IPs</span>
+            <span>${(x.sessions || []).length} sessions</span>
+            <span>${(x.samples || []).length} samples</span>
+          </div>
+          <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
+          ${(x.evidence || []).map(e => `
+            <div class="pot-c2-evidence">
+              <span class="muted">${esc(e.source)} · ${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
+              ${e.context ? `<div class="mono">${esc(e.context)}</div>` : ""}
+              <div class="pot-c2-links">
+                ${e.session_id ? `<button type="button" class="linkbtn" data-c2-session="${esc(e.session_id)}">Open session</button>` : ""}
+                ${e.sample_sha256 ? `<button type="button" class="linkbtn" data-c2-sample="${esc(e.sample_sha256)}">Open sample</button>` : ""}
+              </div>
+            </div>`).join("")}
+        </article>`).join("")}</div>` : '<div class="muted">No candidate indicators were found in the selected period.</div>'}
+    </div>
+    <div class="t-card"><h4>What this means</h4>
+      <p class="muted">${esc(r.confirmation_note || "")}</p>
+      <p class="muted">${esc(r.attribution_note || "")}</p>
+    </div>`;
+  box.querySelectorAll("[data-c2-session]").forEach(el => el.addEventListener("click", () => {
+    setPotSection("sessions");
+    if (typeof showSession === "function") showSession(el.dataset.c2Session);
+  }));
+  box.querySelectorAll("[data-c2-sample]").forEach(el => el.addEventListener("click", () => {
+    setPotSection("artifacts");
+    if (typeof showSample === "function") showSample(el.dataset.c2Sample);
+  }));
 }
 
 async function loadHoneypot() {
@@ -401,6 +458,8 @@ async function showPotSetup(force) {
   }
   const intelCards = $("potIntelCards");
   if (intelCards) intelCards.addEventListener("click", (e) => { const card = e.target.closest("[data-pot-jump]"); if (card) sectionJump(card.dataset.potJump); });
+  const c2Refresh = $("potC2Refresh");
+  if (c2Refresh) c2Refresh.onclick = loadC2Intel;
   const cfg = $("potCfgBtn");
   if (cfg) cfg.onclick = () => showPotSetup();
   const svc = $("potServices");
