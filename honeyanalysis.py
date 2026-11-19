@@ -1254,7 +1254,7 @@ class HoneyAnalysis:
             # incidental command wording. Require several non-generic behaviors before linking.
             behavior_tags = sorted({tag for command in commands
                                     for tag in classify_command(str(command))} - GENERIC_TAGS)
-            if len(behavior_tags) >= 3:
+            if len(behavior_tags) >= 2:
                 add("Behavior pattern", ", ".join(behavior_tags), ip, started, sid,
                     confidence="moderate", sensor=sensor)
             iocs = find_iocs("\n".join(commands))
