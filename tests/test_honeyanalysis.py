@@ -173,7 +173,7 @@ class Commands(unittest.TestCase):
         self.assertIn("credential-access", self.tags("cat /etc/shadow"))
         self.assertIn("credential-access", self.tags("cat /root/.ssh/id_ed25519"))
         self.assertIn("container-escape", self.tags("nsenter --target 1 --mount"))
-        self.assertIn("container-escape", self.tags("ls -l /var/run/docker.sock"))
+        self.assertIn("container-escape", self.tags("docker -H unix:///var/run/docker.sock run --privileged alpine"))
         self.assertIn("persistence-systemd", self.tags("systemctl enable updater.service"))
         self.assertNotIn("persistence-startup", self.tags("systemctl enable updater.service"))
 
