@@ -984,7 +984,7 @@ class ThreatMonitor:
                 info["errors"]["greynoise"] = str(e)
         def look_threatfox():
             # abuse.ch ThreatFox: is this IP a known malware command-and-control / botnet address?
-            # ThreatFox now requires a free abuse.ch Auth-Key (the same one the malware list uses, Settings > DNS).
+            # ThreatFox now requires a free abuse.ch Auth-Key (the same one the malware list uses, Settings > API Keys).
             tf_key = (self.nm.settings.get("dns", {}).get("abuse_key") or self.cfg.get("abuse_key") or "").strip()
             if not tf_key:
                 info["threatfox"] = {"found": False, "need_key": True}
