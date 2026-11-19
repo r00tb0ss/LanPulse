@@ -2289,3 +2289,16 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
   #threatView .map-legend{max-width:calc(100% - 32px);white-space:nowrap}
   #threatView .map-src{bottom:64px;right:16px}
 }
+
+
+/* Honeypot C2 Intelligence: compact evidence cards that collapse cleanly on phones. */
+.pot-c2-list{display:grid;gap:10px}
+.pot-c2-row{min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card2,transparent)}
+.pot-c2-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.pot-c2-value{overflow-wrap:anywhere;word-break:break-word;font-weight:600}
+.pot-c2-meta{display:flex;gap:8px 16px;flex-wrap:wrap;margin:8px 0;color:var(--muted);font-size:12px}
+.pot-c2-assessment{font-size:12px;margin:4px 0 8px}
+.pot-c2-evidence{min-width:0;margin-top:8px;padding:9px 10px;border-left:2px solid var(--line);background:var(--panel,transparent);border-radius:0 7px 7px 0;font-size:12px}
+.pot-c2-evidence .mono{display:block;margin-top:5px;overflow-wrap:anywhere;white-space:pre-wrap}
+.pot-c2-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:5px}
+@media(max-width:640px){.pot-c2-row{padding:10px}.pot-c2-meta{gap:6px 12px}.pot-c2-main .mono{width:100%}}
