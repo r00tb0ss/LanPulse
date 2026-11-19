@@ -334,7 +334,7 @@ def analyze_attack_intelligence(commands: list[str], logins: list[dict] | None =
     stages = {
         "reconnaissance": bool(tags & {"recon", "recon-network"}),
         "delivery": bool(tags & {"download", "pipe-to-shell"}),
-        "execution": bool(tags & {"make-executable", "run-dropped-file", "reverse-shell"}),
+        "execution": bool(tags & {"run-dropped-file", "reverse-shell"}),
         "persistence": bool(tags & {"persistence-cron", "persistence-startup", "ssh-key-plant", "account-change"}),
         "evasion": bool(tags & {"disable-defenses", "cover-tracks", "deletes-files"}),
     }
@@ -1390,7 +1390,8 @@ class HoneyAnalysis:
             stage = ("Command and control" if re.search(r"\b(?:JOIN\s+#[\w.-]+|PRIVMSG)\b", command, re.I) else
                      "Persistence" if any(t.startswith("persistence") or t == "ssh-key-plant" for t in tags_for_command) else
                      "Defense evasion" if any(t in tags_for_command for t in ("disable-defenses", "cover-tracks", "deletes-files")) else
-                     "Execution" if any(t in tags_for_command for t in ("run-dropped-file", "reverse-shell", "make-executable")) else
+                     "Execution" if any(t in tags_for_command for t in ("run-dropped-file", "reverse-shell")) else
+                     "File permission change" if "make-executable" in tags_for_command else
                      "Delivery" if any(t in tags_for_command for t in ("download", "pipe-to-shell")) else
                      "Reconnaissance" if any(t.startswith("recon") or t == "ssh-scan" for t in tags_for_command) else
                      "Activity")
