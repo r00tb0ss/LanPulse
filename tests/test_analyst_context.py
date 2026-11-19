@@ -75,6 +75,30 @@ class AnalystContext(unittest.TestCase):
         self.assertIn("opening crontab does not prove a cron entry was saved", analyst.SYSTEM_PROMPT)
         self.assertIn("Do not infer brute force from one successful login", analyst.SYSTEM_PROMPT)
 
+    def test_attack_id_validator_keeps_only_deterministic_candidates(self):
+        context = (
+            "command observed: uname -a\n"
+            "DETERMINISTIC ATT&CK CANDIDATES: T1082 (recon); T1222.002 (make-executable)"
+        )
+        answer = "Observed T1082 and T1222.002; possible persistence T1059.004. CVE-2024-1234 is unrelated."
+        cleaned = analyst.validate_attack_ids(answer, context)
+        self.assertIn("T1082", cleaned)
+        self.assertIn("T1222.002", cleaned)
+        self.assertNotIn("T1059.004", cleaned)
+        self.assertIn("[unsupported ATT&CK ID removed]", cleaned)
+        self.assertIn("CVE-2024-1234", cleaned)
+        self.assertIn("LanPulse validation", cleaned)
+
+    def test_attack_id_validator_removes_all_ids_when_no_candidates_exist(self):
+        cleaned = analyst.validate_attack_ids("This resembles T1059.004 and T1082.", "No ATT&CK candidates.")
+        self.assertNotIn("T1059.004", cleaned)
+        self.assertNotIn("T1082", cleaned)
+        self.assertEqual(cleaned.count("[unsupported ATT&CK ID removed]"), 2)
+
+    def test_attack_id_validator_does_not_change_answers_without_attack_ids(self):
+        answer = "A file was transferred. Execution was not confirmed."
+        self.assertEqual(analyst.validate_attack_ids(answer, ""), answer)
+
     def test_question_is_passed_through(self):
         self.assertIn("num_ctx", open(analyst.__file__).read())
         self.assertGreater(analyst.NUM_CTX, 8000)
