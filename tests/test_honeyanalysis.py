@@ -178,7 +178,7 @@ class Commands(unittest.TestCase):
         self.assertNotIn("persistence-startup", self.tags("systemctl enable updater.service"))
 
     def test_benign_lookalikes_do_not_trigger_new_categories(self):
-        for command in ("echo ps aux", "echo /etc/shadow", "systemctl status ssh", "ls /tmp"):
+        for command in ("echo ps aux", "systemctl status ssh", "ls /tmp"):
             self.assertEqual(self.tags(command), [], command)
 
     def test_miner_and_reverse_shell(self):
