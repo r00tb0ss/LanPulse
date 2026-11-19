@@ -37,8 +37,9 @@ class RuntimeTelemetryTests(unittest.TestCase):
         self.assertFalse(self.store.authenticate_sensor("isolated-lab-01", "wrong"))
 
     def test_ingest_and_deduplicate(self):
-        first = self.store.ingest("isolated-lab-01", [self.event()])
-        second = self.store.ingest("isolated-lab-01", [self.event()])
+        event = self.event()
+        first = self.store.ingest("isolated-lab-01", [event])
+        second = self.store.ingest("isolated-lab-01", [event])
         self.assertEqual(first, {"accepted": 1, "duplicates": 0})
         self.assertEqual(second, {"accepted": 1, "duplicates": 0})
         self.assertEqual(len(self.store.events_for_sample(self.sha)), 2)
