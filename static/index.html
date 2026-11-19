@@ -280,6 +280,7 @@
     <button type="button" role="tab" data-pot-section="sessions" aria-selected="false" aria-controls="potInvestigationPane">Sessions</button>
     <button type="button" role="tab" data-pot-section="profiles" aria-selected="false" aria-controls="potInvestigationPane">Attackers</button>
     <button type="button" role="tab" data-pot-section="campaigns" aria-selected="false" aria-controls="potInvestigationPane">Campaigns</button>
+    <button type="button" role="tab" data-pot-section="c2" aria-selected="false" aria-controls="potC2Pane">C2 Intelligence</button>
     <button type="button" role="tab" data-pot-section="artifacts" aria-selected="false" aria-controls="potInvestigationPane">Artifacts</button>
     <button type="button" role="tab" data-pot-section="sensors" aria-selected="false" aria-controls="potInvestigationPane">Sensors</button>
     <button type="button" role="tab" data-pot-section="yara" aria-selected="false" aria-controls="potYaraPane">YARA</button>
@@ -324,6 +325,14 @@
       <div id="potHashBody"></div>
     </div>
     <div class="t-card hidden" id="potMalDetail"></div>
+  </div>
+  <div class="pot-section-pane hidden" id="potC2Pane" role="tabpanel" aria-label="C2 intelligence">
+    <div class="v-head"><div><h3><i class="fa-solid fa-satellite-dish"></i> C2 Intelligence</h3>
+      <span class="muted">indicators extracted from attacker commands and captured files</span></div>
+      <div class="v-tools"><button class="btn sm ghost" id="potC2Refresh"><i class="fa-solid fa-rotate"></i>Refresh</button></div></div>
+    <div class="v-note">Candidate indicators are not confirmed command-and-control traffic. Commands are recorded input, not proof of execution; captured files are inspected statically and never run.</div>
+    <div id="potC2Content"><div class="muted">Select C2 Intelligence to load indicators…</div></div>
+    <p class="v-foot">Confirmed phone-home activity requires direct DNS or outbound network telemetry from an isolated analysis environment. Infrastructure clues do not identify a human author or operator.</p>
   </div>
   <div class="pot-section-pane hidden" id="potYaraPane" role="tabpanel" aria-label="YARA scanner">
     <div class="v-head"><div><h3><i class="fa-solid fa-dna"></i>YARA Scanner</h3><span class="muted">rule engine health and detections from captured honeypot files</span></div>
