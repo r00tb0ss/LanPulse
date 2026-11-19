@@ -1428,6 +1428,120 @@ class HoneyAnalysis:
                 "files": files, "tags": json.loads(tags or "[]"), "score": score, "tag_info": TAG_INFO,
                 **{k: v for k, v in self.hp._geo(ip).items() if k in ("iso", "country", "city", "org", "asn")}}
 
+
+    def c2_intelligence(self, hours: int = 2160, limit: int = 300) -> dict:
+        """Aggregate C2-like indicators from recorded commands and static sample analysis.
+
+        These are leads only: Cowrie command text is what a visitor submitted, not proof it ran,
+        and strings embedded in a captured file do not prove a network connection occurred.
+        This database currently has no runtime outbound-connection telemetry, so it never
+        promotes an indicator to a confirmed phone-home event.
+        """
+        hours = max(1, min(int(hours), 2160))
+        limit = max(1, min(int(limit), 500))
+        since = time.time() - hours * 3600
+        with self.lock:
+            sessions = self.db.execute(
+                "SELECT id, ip, start, commands FROM sessions WHERE start >= ? ORDER BY start DESC LIMIT 20000",
+                (since,)).fetchall()
+            samples = self.db.execute(
+                "SELECT sha256, first_seen, last_seen, analysis FROM samples "
+                "WHERE last_seen >= ? ORDER BY last_seen DESC LIMIT 2000", (since,)).fetchall()
+
+        grouped = {}
+
+        def add(kind, value, source, timestamp, context="", session_id="", source_ip="", sample_sha=""):
+            value = str(value or "").strip()
+            if not value or len(value) > 512 or _common_infra(value):
+                return
+            key = (kind, value.lower() if kind in ("domain", "irc_server") else value)
+            row = grouped.setdefault(key, {
+                "kind": kind, "value": value, "first_seen": timestamp, "last_seen": timestamp,
+                "evidence_count": 0, "sources": set(), "source_ips": set(),
+                "sessions": set(), "samples": set(), "evidence": []
+            })
+            if timestamp:
+                row["first_seen"] = min(row["first_seen"] or timestamp, timestamp)
+                row["last_seen"] = max(row["last_seen"] or timestamp, timestamp)
+            row["evidence_count"] += 1
+            row["sources"].add(source)
+            if source_ip:
+                row["source_ips"].add(source_ip)
+            if session_id:
+                row["sessions"].add(session_id)
+            if sample_sha:
+                row["samples"].add(sample_sha)
+            if len(row["evidence"]) < 6:
+                row["evidence"].append({
+                    "source": source, "timestamp": timestamp, "context": str(context or "")[:240],
+                    "session_id": session_id, "source_ip": source_ip, "sample_sha256": sample_sha
+                })
+
+        def consume_iocs(iocs, source, timestamp, context="", session_id="", source_ip="", sample_sha=""):
+            if not isinstance(iocs, dict):
+                return
+            for kind, field in (("url", "urls"), ("ip", "ips"), ("domain", "domains"),
+                                ("irc_server", "irc_servers")):
+                for item in iocs.get(field, []) or []:
+                    value = item.get("value") if isinstance(item, dict) else item
+                    if not value:
+                        continue
+                    add(kind, value, source, timestamp, context, session_id, source_ip, sample_sha)
+                    if kind == "url":
+                        try:
+                            host = urllib.parse.urlsplit(str(value)).hostname or ""
+                            if host:
+                                try:
+                                    addr = ipaddress.ip_address(host)
+                                    if _public_ip(host):
+                                        add("ip", host, source + " URL host", timestamp, context,
+                                            session_id, source_ip, sample_sha)
+                                except ValueError:
+                                    if not _common_infra(host) and "." in host:
+                                        add("domain", host.lower(), source + " URL host", timestamp, context,
+                                            session_id, source_ip, sample_sha)
+
+        for sid, ip, started, raw_commands in sessions:
+            try:
+                commands = json.loads(raw_commands or "[]")
+            except (TypeError, ValueError):
+                commands = []
+            if not isinstance(commands, list):
+                continue
+            for command in commands[:MAX_CMDS]:
+                text = str(command or "")[:MAX_CMD_LEN]
+                if not text:
+                    continue
+                consume_iocs(find_iocs(text), "session command", started, text, sid, ip)
+
+        for sha, first, last, raw_analysis in samples:
+            try:
+                analysis = json.loads(raw_analysis or "{}")
+            except (TypeError, ValueError):
+                analysis = {}
+            if not isinstance(analysis, dict):
+                continue
+            consume_iocs(analysis.get("iocs"), "captured-file static analysis", last or first,
+                         "Indicator extracted from captured file; file was not executed.",
+                         sample_sha=sha)
+
+        candidates = []
+        for row in grouped.values():
+            candidates.append({
+                **row,
+                "sources": sorted(row["sources"]), "source_ips": sorted(row["source_ips"]),
+                "sessions": sorted(row["sessions"]), "samples": sorted(row["samples"]),
+                "evidence": row["evidence"], "confidence": "candidate",
+                "assessment": "Indicator found in recorded command text or static file content; no phone-home connection is confirmed."
+            })
+        candidates.sort(key=lambda x: (-x["evidence_count"], -float(x["last_seen"] or 0), x["kind"], x["value"]))
+        return {
+            "hours": hours, "candidates": candidates[:limit], "total_candidates": len(candidates),
+            "confirmed_connections": [], "confirmed_count": 0,
+            "confirmation_note": "No runtime outbound-connection events are currently stored by this honeypot integration. A candidate becomes confirmed only when DNS or network telemetry directly records the sample's outbound activity.",
+            "attribution_note": "Indicators, malware-family matches, hosting networks and source IPs do not identify the malware author or operator."
+        }
+
     def samples(self, limit: int = 100) -> dict:
         with self.lock:
             rows = self.db.execute("SELECT sha256, size, kind, type, first_seen, last_seen, seen, analysis FROM samples "
