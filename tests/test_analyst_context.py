@@ -45,6 +45,36 @@ class AnalystContext(unittest.TestCase):
         c = analyst.build_context(fake_nm(hp_ok=False), "give me a summary")
         self.assertIn("Services monitor", c)
 
+
+    def test_honeypot_context_includes_commands_and_rule_backed_attack_candidates_without_passwords(self):
+        nm = fake_nm()
+        nm.honeyan.sessions = lambda hours, limit: {
+            "total": 1,
+            "sessions": [{"id": "session-1", "ip": "198.51.100.44", "proto": "ssh", "port": 22,
+                          "logins": 1, "logged_in": True, "commands": 2, "files": 0,
+                          "tags": ["recon"], "score": 10}]
+        }
+        nm.honeyan.session = lambda sid: {
+            "id": sid, "ip": "198.51.100.44", "proto": "ssh", "port": 22, "duration": 12,
+            "logins": [{"u": "root", "p": "never-include-this-password", "ok": True}],
+            "commands": [{"cmd": "uname -a", "tags": ["recon"]},
+                         {"cmd": "chmod +x /tmp/payload", "tags": ["make-executable"]}],
+            "files": [],
+            "tag_info": {"recon": {"attack": "T1082"},
+                         "make-executable": {"attack": "T1222.002"}}
+        }
+        context = analyst.topic_context(nm, "investigate my honeypot session")
+        self.assertIn("command observed: uname -a", context)
+        self.assertIn("DETERMINISTIC ATT&CK CANDIDATES: T1082 (recon)", context)
+        self.assertIn("T1222.002 (make-executable)", context)
+        self.assertIn("decoy accepted a login", context)
+        self.assertNotIn("never-include-this-password", context)
+
+    def test_prompt_requires_evidence_backed_attack_ids_and_distinguishes_decoy_events(self):
+        self.assertIn("Never invent, guess, or add an ID", analyst.SYSTEM_PROMPT)
+        self.assertIn("opening crontab does not prove a cron entry was saved", analyst.SYSTEM_PROMPT)
+        self.assertIn("Do not infer brute force from one successful login", analyst.SYSTEM_PROMPT)
+
     def test_question_is_passed_through(self):
         self.assertIn("num_ctx", open(analyst.__file__).read())
         self.assertGreater(analyst.NUM_CTX, 8000)
