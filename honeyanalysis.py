@@ -361,15 +361,12 @@ def analyze_attack_intelligence(commands: list[str], logins: list[dict] | None =
         score += 10
         evidence.append(f"{len(files)} captured file(s) transferred")
     if ai_probe:
-        score += 35
-        evidence.append("commands contain explicit LLM or prompt-injection terminology")
+        # Text mentioning LLMs, prompt injection, or AI tooling is an indicator only.
+        # It must not increase the automation score or attribute AI use to an actor.
+        evidence.append("AI-related prompt or tooling text observed; this does not establish AI use")
     score = min(100, score)
 
-    if ai_probe and stage_count >= 2:
-        classification = "potentially AI-assisted"
-        confidence = "low"
-        evidence.append("AI-related text and multi-stage activity coincide; attribution remains uncertain")
-    elif score >= 45:
+    if score >= 45:
         classification = "automated"
         confidence = "moderate" if repeated or len(logins) >= 8 else "low"
     elif not evidence and len(cmds) <= 5:
@@ -1457,7 +1454,7 @@ class HoneyAnalysis:
         # Optional external reputation: submit the SHA-256 only, never the sample bytes.
         settings = getattr(self.nm, "settings", {})
         dns_cfg = settings.get("dns", {}) if isinstance(settings, dict) else {}
-        # MalwareBazaar and ThreatFox share the abuse.ch Auth-Key configured in Settings > DNS.
+        # MalwareBazaar and ThreatFox share the abuse.ch Auth-Key configured in Settings > API Keys.
         mb_key = str(dns_cfg.get("abuse_key") or "").strip() if isinstance(dns_cfg, dict) else ""
         cached_mb = a.get("malwarebazaar") if isinstance(a.get("malwarebazaar"), dict) else {}
         try:
