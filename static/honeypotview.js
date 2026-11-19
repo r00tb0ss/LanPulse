@@ -22,7 +22,7 @@ let potSection = (() => {
 })();
 
 function setPotSection(section, persist = true) {
-  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "artifacts", "sensors", "yara"];
+  const valid = ["overview", "activity", "sessions", "profiles", "campaigns", "c2", "artifacts", "sensors", "yara"];
   potSection = valid.includes(section) ? section : "overview";
   const investigation = ["sessions", "profiles", "campaigns", "artifacts", "sensors"].includes(potSection);
   const tabs = $("potSectionTabs");
@@ -118,6 +118,7 @@ async function loadHoneypot() {
   renderHoneypot();
   if (potSelectedService) loadPotServiceDetail(potSelectedService, false);
   if (typeof loadMalware === "function") loadMalware();      // captured attacks and malware card (static/malwareview.js)
+  if (potSection === "c2") loadC2Intel();
 }
 
 const devByIp = (ip) => [...devices.values()].find((d) => d.ip === ip);
