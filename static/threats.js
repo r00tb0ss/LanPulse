@@ -862,7 +862,7 @@ function renderIpPanel(d) {
         : it.greynoise.noise ? "Seen scanning the internet" : "Not seen scanning the internet"}</dd>` : ""}
       ${it.threatfox ? `<dt>ThreatFox</dt><dd>${it.threatfox.found
         ? `<span style="color:#fca5a5">Known malicious IOC</span>${it.threatfox.malware && it.threatfox.malware.length ? ` · ${esc(it.threatfox.malware.join(", "))}` : ""}<span class="muted"> (abuse.ch)</span>`
-        : it.threatfox.need_key ? '<span class="muted">Add a free abuse.ch Auth-Key in Settings &gt; DNS to enable</span>'
+        : it.threatfox.need_key ? '<span class="muted">Add a free abuse.ch Auth-Key in Settings &gt; API Keys to enable</span>'
         : '<span style="color:#86efac">Not listed</span> <span class="muted">(abuse.ch)</span>'}</dd>` : ""}
       ${it.tor === true ? '<dt>Tor</dt><dd><span style="color:#fca5a5">Tor exit node</span> <span class="muted">— traffic is anonymised</span></dd>'
         : it.tor === false ? '<dt>Tor</dt><dd class="muted">Not a Tor exit node</dd>' : ""}
