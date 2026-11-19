@@ -2381,6 +2381,11 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def honeypot_campaigns(hours: int = 2160):
         return await asyncio.to_thread(pot_cached, nm.honeyan.campaigns, max(1, min(hours, 2160)))
 
+    @app.get("/api/honeypot/c2")
+    async def honeypot_c2(hours: int = 2160, limit: int = 300):
+        return await asyncio.to_thread(nm.honeyan.c2_intelligence,
+                                       max(1, min(hours, 2160)), max(1, min(limit, 500)))
+
     @app.get("/api/honeypot/sessions")
     async def honeypot_sessions(hours: int = 168, limit: int = 100):
         return await asyncio.to_thread(nm.honeyan.sessions, max(1, min(hours, 2160)), max(1, min(limit, 2000)))
