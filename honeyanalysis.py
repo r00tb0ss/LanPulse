@@ -1488,18 +1488,18 @@ class HoneyAnalysis:
                         continue
                     add(kind, value, source, timestamp, context, session_id, source_ip, sample_sha)
                     if kind == "url":
-                        try:
-                            host = urllib.parse.urlsplit(str(value)).hostname or ""
-                            if host:
-                                try:
-                                    addr = ipaddress.ip_address(host)
-                                    if _public_ip(host):
-                                        add("ip", host, source + " URL host", timestamp, context,
-                                            session_id, source_ip, sample_sha)
-                                except ValueError:
-                                    if not _common_infra(host) and "." in host:
-                                        add("domain", host.lower(), source + " URL host", timestamp, context,
-                                            session_id, source_ip, sample_sha)
+                        host = urllib.parse.urlsplit(str(value)).hostname or ""
+                        if host:
+                            try:
+                                ipaddress.ip_address(host)
+                            except ValueError:
+                                if not _common_infra(host) and "." in host:
+                                    add("domain", host.lower(), source + " URL host", timestamp, context,
+                                        session_id, source_ip, sample_sha)
+                            else:
+                                if _public_ip(host):
+                                    add("ip", host, source + " URL host", timestamp, context,
+                                        session_id, source_ip, sample_sha)
 
         for sid, ip, started, raw_commands in sessions:
             try:
