@@ -145,7 +145,8 @@ def read_token_file(path: str) -> str:
         raise ValueError("Token path must be a regular file.")
     if os.name == "posix" and stat.S_IMODE(info.st_mode) & 0o077:
         raise ValueError("Token file permissions are too open; run chmod 600 on the file.")
-    token = open(path, "r", encoding="utf-8").read().strip()
+    with open(path, "r", encoding="utf-8") as handle:
+        token = handle.read().strip()
     if not token or len(token) > 200 or any(ord(ch) < 33 or ord(ch) > 126 for ch in token):
         raise ValueError("Token file is empty or contains an invalid token.")
     return token
@@ -153,11 +154,13 @@ def read_token_file(path: str) -> str:
 
 class RuntimeSensor:
     def __init__(self, server_url, sensor_id, token, sample_sha256, run_id,
-                 interface=None, ca_cert=None, batch_size=50, flush_interval=5, timeout=8):
-        self.server_url = validate_server_url(server_url, allow_http=server_url.startswith("http://"))
+                 interface=None, ca_cert=None, batch_size=50, flush_interval=5, timeout=8, allow_http=False):
+        self.server_url = validate_server_url(server_url, allow_http=allow_http)
         if not SENSOR_ID.fullmatch(str(sensor_id or "")):
             raise ValueError("Sensor ID may contain only letters, numbers, dots, underscores, and hyphens.")
         self.sensor_id = sensor_id
+        if not isinstance(token, str) or not token or len(token) > 200 or any(ord(ch) < 33 or ord(ch) > 126 for ch in token):
+            raise ValueError("A valid sensor token is required.")
         self.token = token
         self.sample_sha256 = str(sample_sha256 or "").lower()
         if not HEX64.fullmatch(self.sample_sha256):
@@ -337,12 +340,13 @@ def main(argv=None):
             raise ValueError("HTTP requires --allow-http.")
         sensor = RuntimeSensor(args.server_url, args.sensor_id, token, args.sample_sha256,
                                args.run_id, args.interface, args.ca_cert, args.batch_size,
-                               args.flush_interval, args.timeout)
+                               args.flush_interval, args.timeout, args.allow_http)
         try:
             sensor.capture()
         except KeyboardInterrupt:
             logging.info("Stopping capture; flushing buffered telemetry.")
-            sensor.flush()
+            while sensor.events and sensor.flush():
+                pass
             if sensor.events:
                 logging.warning("%d events remain queued and were not sent.", len(sensor.events))
     except (OSError, ValueError, RuntimeError) as exc:
