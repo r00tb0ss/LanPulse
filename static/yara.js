@@ -28,8 +28,12 @@ function formatYaraPackageDate(value) {
   return Number.isNaN(date.getTime()) ? "Not reported" : date.toLocaleString();
 }
 
-function yaraStatusLabel(status, count) {
-  if (count > 0) return "match";
+function yaraStatusLabel(row) {
+  const status = row.yara_status || "pending";
+  const currentFingerprint = (yaraStatus || {}).fingerprint || "";
+  const savedFingerprint = row.yara_rules_fingerprint || "";
+  if (status !== "pending" && currentFingerprint && savedFingerprint !== currentFingerprint) return "stale";
+  if (Number(row.yara_match_count || 0) > 0) return "match";
   return ({complete:"no-match",partial:"partial",no_rules:"no-rules",unavailable:"unavailable",pending:"pending"})[status] || "pending";
 }
 
@@ -65,7 +69,7 @@ function renderYaraView(total = yaraSamples.length) {
       <select id="yaraFilter" aria-label="Filter YARA scan status">
         <option value="all">All scan results</option><option value="match">Matches</option>
         <option value="no-match">Scanned · no match</option><option value="partial">Partial scans</option>
-        <option value="pending">Pending scans</option><option value="unavailable">Unavailable</option><option value="no-rules">No rules loaded</option>
+        <option value="pending">Pending scans</option><option value="stale">Older rule set</option><option value="unavailable">Unavailable</option><option value="no-rules">No rules loaded</option>
       </select>
       <select id="yaraScoreFilter" aria-label="Filter honeypot score">
         <option value="0">All scores</option><option value="25">Score 25+</option>
@@ -86,18 +90,19 @@ function renderYaraRows() {
   const statusFilter = $("yaraFilter")?.value || "all";
   const minScore = Number($("yaraScoreFilter")?.value || 0);
   const filtered = yaraSamples.filter(row => {
-    const status = yaraStatusLabel(row.yara_status, Number(row.yara_match_count || 0));
+    const status = yaraStatusLabel(row);
     const haystack = [row.sha256,row.kind,row.type,...(row.families || []),...(row.tags || [])].join(" ").toLowerCase();
     return (!query || haystack.includes(query)) && (statusFilter === "all" || status === statusFilter) &&
       Number(row.score || 0) >= minScore;
   });
   host.innerHTML = filtered.length ? `<div class="pot-hash-list">${filtered.map(row => {
-    const count = Number(row.yara_match_count || 0), status = yaraStatusLabel(row.yara_status, count);
+    const count = Number(row.yara_match_count || 0), status = yaraStatusLabel(row);
     const badge = count ? `<span class="tagchip bad">${count} YARA match${count === 1 ? "" : "es"}</span>` :
       status === "no-match" ? '<span class="tagchip">Scanned · no match</span>' :
       status === "partial" ? '<span class="tagchip warn">Partial scan</span>' :
       status === "no-rules" ? '<span class="tagchip">No rules loaded</span>' :
-      status === "unavailable" ? '<span class="tagchip warn">Engine unavailable</span>' : '<span class="tagchip">Scan pending</span>';
+      status === "unavailable" ? '<span class="tagchip warn">Engine unavailable</span>' :
+      status === "stale" ? `<span class="tagchip warn">Older rule set${count ? " · " + count + " prior matches" : ""}</span>` : '<span class="tagchip">Scan pending</span>';
     const cached = yaraDetailCache.get(row.sha256);
     const title = cached ? ((cached.names || []).join(", ") || row.sha256) : row.sha256;
     return `<details class="pot-hash-row yara-result-row" data-yara-sha="${esc(row.sha256)}">
