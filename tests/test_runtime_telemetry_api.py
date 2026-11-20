@@ -25,7 +25,7 @@ class FakeAuth:
 
 async def asgi_request(app, method, path, payload=None, headers=None, session=True):
     body = b"" if payload is None else json.dumps(payload).encode("utf-8")
-    raw_headers = [(b"host", b"testserver")]
+    raw_headers = [(b"host", b"127.0.0.1")]
     if payload is not None:
         raw_headers.append((b"content-type", b"application/json"))
         raw_headers.append((b"content-length", str(len(body)).encode("ascii")))
@@ -43,7 +43,7 @@ async def asgi_request(app, method, path, payload=None, headers=None, session=Tr
         "query_string": b"",
         "headers": raw_headers,
         "client": ("127.0.0.1", 12345),
-        "server": ("testserver", 80),
+        "server": ("127.0.0.1", 80),
     }
     messages = []
     sent_request = False
@@ -90,10 +90,10 @@ class RuntimeTelemetryAPISecurity(unittest.IsolatedAsyncioTestCase):
     async def request(self, method, path, payload=None, session=True, headers=None):
         return await asgi_request(self.app, method, path, payload, headers, session)
 
-    def event(self):
+    def event(self, sample_sha=None):
         import time
         return {
-            "sample_sha256": self.sample_sha,
+            "sample_sha256": sample_sha or self.sample_sha,
             "run_id": "isolated-run-001",
             "timestamp": time.time(),
             "type": "connect",
@@ -159,7 +159,7 @@ class RuntimeTelemetryAPISecurity(unittest.IsolatedAsyncioTestCase):
         status, created = await self.request("POST", "/api/runtime/sensors", {"id": "lab-api-02"})
         self.assertEqual(status, 200, created)
         status, result = await self.request(
-            "POST", "/api/runtime/ingest", {"events": [self.event()]},
+            "POST", "/api/runtime/ingest", {"events": [self.event("d" * 64)]},
             session=False,
             headers=[(b"x-lanpulse-sensor", b"lab-api-02"),
                      (b"x-lanpulse-token", created["token"].encode("ascii"))])
