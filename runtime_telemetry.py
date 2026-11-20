@@ -24,6 +24,9 @@ EVENT_TYPES = {"dns_query", "connect", "tls_sni", "http_host"}
 MAX_BATCH = 100
 MAX_TEXT = 253
 MAX_AGE_SECONDS = 7 * 86400
+RETENTION_SECONDS = 90 * 86400
+MAX_EVENTS = 1_000_000
+PRUNE_EVERY_BATCHES = 100
 
 
 def _text(value, limit=MAX_TEXT):
@@ -53,6 +56,7 @@ class RuntimeTelemetry:
         os.chmod(self.path, 0o600)
         self.db.execute("PRAGMA foreign_keys=ON")
         self.requests = {}
+        self.ingest_batches = 0
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript("""
@@ -73,8 +77,25 @@ class RuntimeTelemetry:
                 ON runtime_events(sample_sha256, observed_at DESC);
             CREATE INDEX IF NOT EXISTS runtime_events_run
                 ON runtime_events(run_id, observed_at DESC);
+            CREATE INDEX IF NOT EXISTS runtime_events_time
+                ON runtime_events(observed_at DESC);
         """)
         self.db.commit()
+        self.prune()
+
+    def prune(self, now=None):
+        """Enforce a 90-day retention window and a hard event-row ceiling."""
+        now = time.time() if now is None else float(now)
+        with self.lock:
+            self.db.execute("DELETE FROM runtime_events WHERE observed_at < ?",
+                            (now - RETENTION_SECONDS,))
+            count = self.db.execute("SELECT COUNT(*) FROM runtime_events").fetchone()[0]
+            if count > MAX_EVENTS:
+                self.db.execute(
+                    "DELETE FROM runtime_events WHERE id IN ("
+                    "SELECT id FROM runtime_events ORDER BY observed_at ASC, id ASC LIMIT ?)",
+                    (count - MAX_EVENTS,))
+            self.db.commit()
 
     def register_sensor(self, sensor_id):
         """Create a sensor credential. Return the secret once; callers must display it securely."""
@@ -204,6 +225,12 @@ class RuntimeTelemetry:
                       event["port"], event["protocol"]))
                 inserted += cur.rowcount
             self.db.commit()
+            self.ingest_batches += 1
+            should_prune = self.ingest_batches >= PRUNE_EVERY_BATCHES
+            if should_prune:
+                self.ingest_batches = 0
+        if should_prune:
+            self.prune(now)
         return {"accepted": inserted, "duplicates": len(cleaned) - inserted}
 
     def events_for_sample(self, sample_sha256, limit=200):
