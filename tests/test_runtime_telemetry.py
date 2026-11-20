@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from runtime_telemetry import RuntimeTelemetry
@@ -95,6 +96,25 @@ class RuntimeTelemetryTests(unittest.TestCase):
         self.assertEqual(rows[0]["sample_sha256"], self.sha)
         self.assertEqual(rows[0]["type"], "dns_query")
         self.assertEqual(rows[0]["hostname"], "c2.example.net")
+
+    def test_prune_enforces_retention_and_hard_row_cap(self):
+        now = time.time()
+        rows = [
+            ("old", "isolated-lab-01", self.sha, "old-run", now - 100 * 86400, "connect"),
+            ("one", "isolated-lab-01", self.sha, "run-1", now - 10, "connect"),
+            ("two", "isolated-lab-01", self.sha, "run-2", now - 9, "connect"),
+            ("three", "isolated-lab-01", self.sha, "run-3", now - 8, "connect"),
+            ("four", "isolated-lab-01", self.sha, "run-4", now - 7, "connect"),
+        ]
+        self.store.db.executemany(
+            "INSERT INTO runtime_events(event_key,sensor_id,sample_sha256,run_id,observed_at,event_type) "
+            "VALUES(?,?,?,?,?,?)", rows)
+        self.store.db.commit()
+        with patch("runtime_telemetry.MAX_EVENTS", 3):
+            self.store.prune(now)
+        kept = self.store.db.execute(
+            "SELECT event_key FROM runtime_events ORDER BY observed_at DESC").fetchall()
+        self.assertEqual([row[0] for row in kept], ["four", "three", "two"])
 
 
 if __name__ == "__main__":
