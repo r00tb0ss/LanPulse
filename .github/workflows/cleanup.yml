@@ -1,0 +1,66 @@
+name: Clean up branches and releases
+# Manual only: Actions tab > "Clean up branches and releases" > Run workflow. Nothing here runs on its own.
+# It never touches main, a branch that has an open pull request, tags, drafts, or the newest releases you ask to keep.
+# Deleted releases can be recreated from their tags; a deleted branch can be restored from its closed pull request.
+on:
+  workflow_dispatch:
+    inputs:
+      keep_releases:
+        description: "How many of the newest published releases to keep"
+        default: "5"
+        required: true
+      delete_branches:
+        description: "Delete branches that have no open pull request"
+        type: boolean
+        default: true
+      delete_releases:
+        description: "Delete releases older than the ones kept (their tags stay)"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Only list what would be deleted (untick to really delete)"
+        type: boolean
+        default: true
+permissions:
+  contents: write
+  pull-requests: read
+concurrency: cleanup
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      KEEP: ${{ inputs.keep_releases }}
+      DRY: ${{ inputs.dry_run }}
+    steps:
+      - name: Check the inputs
+        run: |
+          case "$KEEP" in ''|*[!0-9]*) echo "keep_releases must be a whole number"; exit 1;; esac
+          [ "$KEEP" -ge 1 ] || { echo "keep at least 1 release"; exit 1; }
+          echo "Keeping the newest $KEEP published releases. Dry run: $DRY"
+      - name: Delete old branches
+        if: ${{ inputs.delete_branches }}
+        run: |
+          default=$(gh api "repos/$REPO" --jq .default_branch)
+          open=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" --jq '.[].head.ref')
+          gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | while read -r b; do
+            [ "$b" = "$default" ] && continue
+            if echo "$open" | grep -qxF -- "$b"; then echo "keep   $b (open pull request)"; continue; fi
+            if [ "$DRY" = "true" ]; then echo "would delete branch $b"; else
+              gh api -X DELETE "repos/$REPO/git/refs/heads/$b" >/dev/null && echo "deleted branch $b"
+            fi
+          done
+      - name: Delete old releases
+        if: ${{ inputs.delete_releases }}
+        run: |
+          gh api --paginate "repos/$REPO/releases?per_page=100" \
+            --jq '[.[]|select(.draft==false)]|sort_by(.published_at)|reverse|.['"$KEEP"':]|.[]|"\(.id) \(.tag_name)"' |
+          while read -r id tag; do
+            if [ "$DRY" = "true" ]; then echo "would delete release $tag"; else
+              gh api -X DELETE "repos/$REPO/releases/$id" >/dev/null && echo "deleted release $tag (tag kept)"
+            fi
+          done
+      - name: Show what is left
+        run: |
+          echo "Newest releases now:"; gh api "repos/$REPO/releases?per_page=8" --jq '.[]|"  \(.tag_name) draft=\(.draft)"'
