@@ -2491,9 +2491,13 @@ def build_app(nm: LanPulse) -> FastAPI:
         return await asyncio.to_thread(pot_cached, nm.honeyan.campaigns, max(1, min(hours, 2160)))
 
     @app.get("/api/honeypot/c2")
-    async def honeypot_c2(hours: int = 2160, limit: int = 300):
-        return await asyncio.to_thread(nm.honeyan.c2_intelligence,
-                                       max(1, min(hours, 2160)), max(1, min(limit, 500)))
+    async def honeypot_c2(hours: int = 2160, limit: int = 300, refresh: bool = False):
+        args = (max(1, min(hours, 2160)), max(1, min(limit, 500)))
+        if refresh:
+            return await asyncio.to_thread(nm.honeyan.c2_intelligence, *args)
+        # C2 aggregation scans the selected session/sample window; reuse the bounded
+        # result briefly so opening the tab repeatedly does not repeat that work.
+        return await asyncio.to_thread(pot_cached, nm.honeyan.c2_intelligence, *args)
 
     @app.get("/api/honeypot/sessions")
     async def honeypot_sessions(hours: int = 168, limit: int = 100):
