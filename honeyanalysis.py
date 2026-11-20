@@ -1529,19 +1529,24 @@ class HoneyAnalysis:
                          sample_sha=sha)
 
         runtime_observations = []
-        runtime_store = getattr(self.nm, "runtime_telemetry", None)
-        runtime_access = bool(getattr(getattr(self.nm, "auth", None), "enabled", False))
+        nm = getattr(self, "nm", None)  # unit tests and offline analysis may construct this helper without the app
+        runtime_store = getattr(nm, "runtime_telemetry", None)
+        runtime_access = bool(getattr(getattr(nm, "auth", None), "enabled", False))
         if runtime_store is not None and runtime_access:
             try:
                 runtime_observations = runtime_store.events_since(since, limit=1000)
             except Exception:
                 log.warning("runtime telemetry lookup failed", exc_info=True)
                 runtime_observations = []
-        confirmation_note = (
-            "Runtime observations are hidden until a LanPulse dashboard login is configured."
-            if runtime_store is not None and not runtime_access else
-            "Runtime observations record network activity during a sample run. They do not by themselves prove command-and-control; correlate destinations, timing, protocol, and sample behavior before classifying an endpoint as C2."
-        )
+        if runtime_store is None:
+            confirmation_note = "Runtime telemetry is not initialized in this analysis context; extracted indicators remain candidates."
+        elif not runtime_access:
+            confirmation_note = "Runtime observations are hidden until a LanPulse dashboard login is configured."
+        else:
+            confirmation_note = (
+                "Runtime observations record network activity during a sample run. They do not by themselves prove command-and-control; "
+                "correlate destinations, timing, protocol, and sample behavior before classifying an endpoint as C2."
+            )
 
         candidates = []
         for row in grouped.values():
