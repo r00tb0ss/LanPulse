@@ -65,6 +65,10 @@ if [[ "$SRC" != "$DEST" ]]; then
     rm -rf "$DEST/tools/pi-honeypot"
     cp -r "$SRC/tools/pi-honeypot" "$DEST/tools/"
   fi
+  if [[ -f "$SRC/tools/runtime_sensor.py" ]]; then
+    mkdir -p "$DEST/tools"
+    install -m 755 "$SRC/tools/runtime_sensor.py" "$DEST/tools/"
+  fi
 fi
 
 echo "==> Downloading map and icon libraries (so the dashboard works without internet)"
