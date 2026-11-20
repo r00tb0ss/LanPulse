@@ -385,6 +385,28 @@ what attackers try to drop. They are small, read-only-by-design programs (no out
 store size caps, hard time limits per connection) that write the same session records as Cowrie, so everything shows up
 in the same Sessions and Artifacts sections. Ports are 1024 or higher; forward the real port (21, 80) to them on your router.
 
+### C2 intelligence and isolated runtime telemetry
+
+**C2 Intelligence** separates extracted indicator candidates from network activity observed during a sample run. URLs, domains, IPs and commands found in attacker text or captured files are leads only: recorded commands are not proof that they executed, and static strings do not prove a connection occurred. Runtime observations are shown separately and confirm that a sample-run VM attempted the recorded DNS query or network connection; they do not, by themselves, prove that a destination is command-and-control. Indicators and hosting data cannot identify a malware author or operator.
+
+To collect runtime observations, open **Honeypot > C2 Intelligence** and register a dedicated runtime sensor. The credential is shown once; LanPulse stores only its hash. Copy `tools/runtime_sensor.py` to a **disposable, isolated malware-analysis VM** with Python, Scapy and packet-capture privileges. The agent passively records outbound DNS names, TCP/UDP connection attempts, TLS SNI and HTTP Host headers. It does not execute samples, save packet captures, or collect request bodies or credentials.
+
+Before a run, make sure the sample's SHA-256 already appears under **Honeypot > Artifacts**. Store the one-time token in a file readable only by the analysis account (`chmod 600`), then start the agent with a unique run ID:
+
+```bash
+sudo install -m 600 /dev/null /etc/lanpulse/runtime-token
+# Put the one-time token in /etc/lanpulse/runtime-token without adding it to shell history.
+sudo python3 runtime_sensor.py \
+  --server-url https://LANPULSE-IP:8080 \
+  --sensor-id isolated-lab-01 \
+  --token-file /etc/lanpulse/runtime-token \
+  --sample-sha256 CAPTURED-SAMPLE-SHA256 \
+  --run-id lab-run-001 \
+  --ca-cert /path/to/lanpulse-cert.pem
+```
+
+Use the LanPulse HTTPS certificate with `--ca-cert` when the server uses a self-signed certificate. HTTP is disabled by default; `--allow-http` exists only for a trusted, isolated management network. Keep malware VMs off your household LAN, do not bridge them to trusted devices, and restrict their egress to a controlled analysis gateway or sinkhole. Allow only the telemetry path from the sensor to LanPulse. Revoke a sensor immediately if its token is exposed.
+
 ### Investigating honeypot activity
 
 The Honeypot tab is split into sections:
