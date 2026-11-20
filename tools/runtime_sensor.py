@@ -197,7 +197,7 @@ class RuntimeSensor:
         self.events.append(event)
 
     def handle_packet(self, packet):
-        """Convert a captured outbound packet into metadata-only events."""
+        """Convert outbound traffic and inbound DNS answers into metadata-only events."""
         try:
             if packet.haslayer("IP"):
                 net = packet["IP"]
@@ -206,21 +206,38 @@ class RuntimeSensor:
             else:
                 return
             source, destination = str(net.src), str(net.dst)
-            if source not in self.local_addresses:
+            outbound = source in self.local_addresses
+            inbound = destination in self.local_addresses
+            if not outbound and not inbound:
                 return
             stamp = float(getattr(packet, "time", time.time()))
 
             if packet.haslayer("DNS") and packet.haslayer("DNSQR"):
                 dns = packet["DNS"]
-                if int(dns.qr or 0) == 0:
-                    name = normalize_hostname(packet["DNSQR"].qname)
-                    if name:
-                        proto = "tcp" if packet.haslayer("TCP") else "udp" if packet.haslayer("UDP") else ""
-                        port = int(packet["TCP"].dport if packet.haslayer("TCP") else packet["UDP"].dport) if proto else None
-                        self._event("dns_query", stamp, hostname=name, destination_ip=destination,
-                                    port=port, protocol=proto)
+                query_name = normalize_hostname(packet["DNSQR"].qname)
+                proto = "tcp" if packet.haslayer("TCP") else "udp" if packet.haslayer("UDP") else ""
+                if int(dns.qr or 0) == 0 and outbound and query_name:
+                    port = int(packet["TCP"].dport if packet.haslayer("TCP") else packet["UDP"].dport) if proto else None
+                    self._event("dns_query", stamp, hostname=query_name, destination_ip=destination,
+                                port=port, protocol=proto)
+                elif int(dns.qr or 0) == 1 and inbound and query_name:
+                    # DNS replies travel toward the sandbox, so handle them separately
+                    # from outbound packets. Record only validated A/AAAA answer addresses.
+                    answer = dns.an
+                    for _ in range(min(int(dns.ancount or 0), 64)):
+                        if answer is None or not hasattr(answer, "type"):
+                            break
+                        if int(answer.type or 0) in (1, 28):
+                            try:
+                                resolved_ip = str(ipaddress.ip_address(str(answer.rdata)))
+                            except ValueError:
+                                resolved_ip = ""
+                            if resolved_ip:
+                                self._event("dns_answer", stamp, hostname=query_name,
+                                            destination_ip=resolved_ip, port=53, protocol=proto)
+                        answer = getattr(answer, "payload", None)
 
-            if packet.haslayer("TCP"):
+            if outbound and packet.haslayer("TCP"):
                 tcp = packet["TCP"]
                 port = int(tcp.dport)
                 flags = int(tcp.flags)
@@ -236,7 +253,7 @@ class RuntimeSensor:
                     if host:
                         self._event("http_host", stamp, hostname=host, destination_ip=destination,
                                     port=port, protocol="tcp")
-            elif packet.haslayer("UDP"):
+            elif outbound and packet.haslayer("UDP"):
                 udp = packet["UDP"]
                 port = int(udp.dport)
                 if port != 53:

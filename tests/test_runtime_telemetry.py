@@ -61,6 +61,16 @@ class RuntimeTelemetryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.validate_event(self.event(type="dns_query", destination_ip=""))
 
+    def test_dns_answer_requires_hostname_and_resolved_ip(self):
+        with self.assertRaises(ValueError):
+            self.store.validate_event(self.event(type="dns_answer", hostname="c2.example.net"))
+        with self.assertRaises(ValueError):
+            self.store.validate_event(self.event(type="dns_answer", destination_ip=""))
+        event = self.store.validate_event(self.event(
+            type="dns_answer", hostname="C2.Example.NET.", destination_ip="203.0.113.77"))
+        self.assertEqual(event["hostname"], "c2.example.net")
+        self.assertEqual(event["destination_ip"], "203.0.113.77")
+
     def test_batch_limit_and_sensor_revocation(self):
         with self.assertRaises(ValueError):
             self.store.ingest("isolated-lab-01", [self.event()] * 101)

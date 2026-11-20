@@ -1434,8 +1434,8 @@ class HoneyAnalysis:
 
         These are leads only: Cowrie command text is what a visitor submitted, not proof it ran,
         and strings embedded in a captured file do not prove a network connection occurred.
-        This database currently has no runtime outbound-connection telemetry, so it never
-        promotes an indicator to a confirmed phone-home event.
+        Runtime telemetry is returned separately as sample-linked network observations; it
+        records activity, but does not automatically classify a destination as C2.
         """
         hours = max(1, min(int(hours), 2160))
         limit = max(1, min(int(limit), 500))

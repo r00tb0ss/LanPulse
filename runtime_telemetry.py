@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-EVENT_TYPES = {"dns_query", "connect", "tls_sni", "http_host"}
+EVENT_TYPES = {"dns_query", "dns_answer", "connect", "tls_sni", "http_host"}
 MAX_BATCH = 100
 MAX_TEXT = 253
 MAX_AGE_SECONDS = 7 * 86400
@@ -191,7 +191,9 @@ class RuntimeTelemetry:
         if proto not in ("", "tcp", "udp", "icmp", "other"):
             raise ValueError("Unsupported network protocol.")
         if kind == "dns_query" and not host:
-            raise ValueError("DNS events require a hostname.")
+            raise ValueError("DNS query events require a hostname.")
+        if kind == "dns_answer" and not (host and dest):
+            raise ValueError("DNS answer events require a hostname and resolved IP address.")
         if kind == "connect" and not (dest or host):
             raise ValueError("Connection events require a destination IP or hostname.")
         if kind in ("tls_sni", "http_host") and not host:

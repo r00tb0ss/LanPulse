@@ -178,7 +178,7 @@ async function loadC2Intel() {
       ${observed.length ? `<div class="pot-c2-list">${observed.map(e => `
         <article class="pot-c2-row">
           <div class="pot-c2-main">
-            <span class="tagchip">runtime observed</span><span class="tagchip">${esc(e.type)}</span>
+            <span class="tagchip">runtime observed</span><span class="tagchip">${esc(({dns_query: "DNS query", dns_answer: "DNS answer", connect: "Connection attempt", tls_sni: "TLS SNI", http_host: "HTTP Host"})[e.type] || e.type)}</span>
             <span class="mono pot-c2-value">${esc(e.hostname || e.destination_ip || "destination unavailable")}</span>
           </div>
           <div class="pot-c2-meta">

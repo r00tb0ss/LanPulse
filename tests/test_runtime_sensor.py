@@ -101,6 +101,49 @@ class SensorConfiguration(unittest.TestCase):
         self.assertEqual(sensor.events[0]["sample_sha256"], "a" * 64)
         self.assertEqual(sensor.events[0]["run_id"], "run-1")
 
+    def test_dns_answer_correlates_query_name_with_resolved_ip(self):
+        from scapy.all import DNS, DNSQR, DNSRR, IP, UDP
+
+        sensor = rs.RuntimeSensor("https://lanpulse.example", "lab-01", "token",
+                                  "a" * 64, "run-1")
+        sensor.local_addresses.add("192.0.2.50")
+        query = (IP(src="192.0.2.50", dst="192.0.2.1") /
+                 UDP(sport=53000, dport=53) /
+                 DNS(id=7, qr=0, qd=DNSQR(qname="C2.Example.NET.")))
+        response = (IP(src="192.0.2.1", dst="192.0.2.50") /
+                    UDP(sport=53, dport=53000) /
+                    DNS(id=7, qr=1, qd=DNSQR(qname="C2.Example.NET."),
+                        an=DNSRR(rrname="C2.Example.NET.", type="A", rdata="203.0.113.77"),
+                        ancount=1))
+        sensor.handle_packet(query)
+        sensor.handle_packet(response)
+        rows = list(sensor.events)
+        self.assertEqual([row["type"] for row in rows], ["dns_query", "dns_answer"])
+        self.assertEqual(rows[1]["hostname"], "c2.example.net")
+        self.assertEqual(rows[1]["destination_ip"], "203.0.113.77")
+        self.assertEqual(rows[1]["port"], 53)
+
+    def test_dns_answer_records_ipv4_and_ipv6_and_ignores_unrelated_packets(self):
+        from scapy.all import DNS, DNSQR, DNSRR, IP, UDP
+
+        sensor = rs.RuntimeSensor("https://lanpulse.example", "lab-01", "token",
+                                  "a" * 64, "run-1")
+        sensor.local_addresses.add("192.0.2.50")
+        response = (IP(src="192.0.2.1", dst="192.0.2.50") /
+                    UDP(sport=53, dport=53000) /
+                    DNS(id=8, qr=1, qd=DNSQR(qname="dual.example.net"),
+                        an=DNSRR(rrname="dual.example.net", type="A", rdata="203.0.113.88") /
+                           DNSRR(rrname="dual.example.net", type="AAAA", rdata="2001:db8::88"),
+                        ancount=2))
+        unrelated = IP(src="198.51.100.4", dst="192.0.2.50") / UDP(sport=9999, dport=9999)
+        sensor.handle_packet(unrelated)
+        sensor.handle_packet(response)
+        rows = list(sensor.events)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["destination_ip"] for row in rows},
+                         {"203.0.113.88", "2001:db8::88"})
+        self.assertTrue(all(row["type"] == "dns_answer" for row in rows))
+
 
 if __name__ == "__main__":
     unittest.main()
