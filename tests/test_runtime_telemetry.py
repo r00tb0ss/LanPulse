@@ -63,9 +63,11 @@ class RuntimeTelemetryTests(unittest.TestCase):
 
     def test_dns_answer_requires_hostname_and_resolved_ip(self):
         with self.assertRaises(ValueError):
-            self.store.validate_event(self.event(type="dns_answer", hostname="c2.example.net"))
+            self.store.validate_event(self.event(
+                type="dns_answer", hostname="c2.example.net", destination_ip=""))
         with self.assertRaises(ValueError):
-            self.store.validate_event(self.event(type="dns_answer", destination_ip=""))
+            self.store.validate_event(self.event(
+                type="dns_answer", hostname="", destination_ip="203.0.113.77"))
         event = self.store.validate_event(self.event(
             type="dns_answer", hostname="C2.Example.NET.", destination_ip="203.0.113.77"))
         self.assertEqual(event["hostname"], "c2.example.net")
