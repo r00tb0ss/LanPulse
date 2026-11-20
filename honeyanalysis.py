@@ -1530,12 +1530,18 @@ class HoneyAnalysis:
 
         runtime_observations = []
         runtime_store = getattr(self.nm, "runtime_telemetry", None)
-        if runtime_store is not None and getattr(getattr(self.nm, "auth", None), "enabled", False):
+        runtime_access = bool(getattr(getattr(self.nm, "auth", None), "enabled", False))
+        if runtime_store is not None and runtime_access:
             try:
                 runtime_observations = runtime_store.events_since(since, limit=1000)
             except Exception:
                 log.warning("runtime telemetry lookup failed", exc_info=True)
                 runtime_observations = []
+        confirmation_note = (
+            "Runtime observations are hidden until a LanPulse dashboard login is configured."
+            if runtime_store is not None and not runtime_access else
+            "Runtime observations record network activity during a sample run. They do not by themselves prove command-and-control; correlate destinations, timing, protocol, and sample behavior before classifying an endpoint as C2."
+        )
 
         candidates = []
         for row in grouped.values():
@@ -1550,7 +1556,7 @@ class HoneyAnalysis:
         return {
             "hours": hours, "candidates": candidates[:limit], "total_candidates": len(candidates),
             "runtime_observations": runtime_observations, "runtime_observation_count": len(runtime_observations),
-            "confirmation_note": "Runtime observations record network activity during a sample run. They do not by themselves prove command-and-control; correlate destinations, timing, protocol, and sample behavior before classifying an endpoint as C2.",
+            "confirmation_note": confirmation_note,
             "attribution_note": "Indicators, malware-family matches, hosting networks and source IPs do not identify the malware author or operator."
         }
 
