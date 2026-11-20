@@ -2302,3 +2302,9 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 .pot-c2-evidence .mono{display:block;margin-top:5px;overflow-wrap:anywhere;white-space:pre-wrap}
 .pot-c2-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:5px}
 @media(max-width:640px){.pot-c2-row{padding:10px}.pot-c2-meta{gap:6px 12px}.pot-c2-main .mono{width:100%}}
+
+
+/* YARA summary-first filters */
+.yara-filters{display:grid;grid-template-columns:minmax(180px,2fr) minmax(150px,1fr) minmax(130px,1fr);gap:8px;margin:10px 0}
+.yara-filters input,.yara-filters select{min-width:0;width:100%;max-width:100%}
+@media(max-width:700px){.yara-filters{grid-template-columns:1fr}.yara-result-row>summary{overflow-wrap:anywhere}}
