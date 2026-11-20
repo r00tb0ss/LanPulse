@@ -163,15 +163,7 @@ async function loadC2Intel(force = false) {
             <span>${(x.samples || []).length} sample${(x.samples || []).length === 1 ? "" : "s"}</span>
           </div>
           <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
-          ${(x.evidence || []).length ? `<details class="pot-c2-evidence-details"><summary>View evidence (${(x.evidence || []).length} shown)</summary>${(x.evidence || []).map(e => `
-            <div class="pot-c2-evidence">
-              <span class="muted">${esc(e.source)} · ${e.observed_at ? esc(full(e.observed_at)) : "time unavailable"}</span>
-              ${e.context ? `<div class="mono">${esc(e.context)}</div>` : ""}
-              <div class="pot-c2-links">
-                ${e.session_id ? `<button type="button" class="linkbtn" data-c2-session="${esc(e.session_id)}">Open session</button>` : ""}
-                ${e.sample_sha256 ? `<button type="button" class="linkbtn" data-c2-sample="${esc(e.sample_sha256)}">Open sample</button>` : ""}
-              </div>
-            </div>`).join("")}</details>` : ""}
+          \${x.evidence_count ? \`<details class="pot-c2-evidence-details" data-c2-kind="\${esc(x.kind)}" data-c2-value="\${esc(x.value)}"><summary>View evidence (\${x.evidence_count} items)</summary><div class="pot-c2-evidence-body"><span class="muted">Open to load evidence…</span></div></details>\` : ""}
         </article>`).join("")}</div>` : '<div class="muted">No candidate indicators were found in the selected period.</div>'}
     </div>
     <div class="t-card">
@@ -204,6 +196,40 @@ async function loadC2Intel(force = false) {
       sensorDetails.dataset.loaded = "1";
       loadRuntimeSensors();
     }
+  });
+  box.querySelectorAll(".pot-c2-evidence-details").forEach(details => {
+    details.addEventListener("toggle", async () => {
+      if (!details.open || details.dataset.loaded === "1") return;
+      details.dataset.loaded = "1";
+      const body = details.querySelector(".pot-c2-evidence-body");
+      if (!body) return;
+      body.innerHTML = '<span class="muted">Loading evidence…</span>';
+      const q = new URLSearchParams({kind: details.dataset.c2Kind, value: details.dataset.c2Value, hours: String(potHours), limit: "300"});
+      const result = await api("/api/honeypot/c2/evidence?" + q.toString(), "GET");
+      if (!result) {
+        details.dataset.loaded = "0";
+        body.innerHTML = '<span class="muted">Could not load evidence. Close and reopen to retry.</span>';
+        return;
+      }
+      const evidence = result.evidence || [];
+      body.innerHTML = evidence.length ? evidence.map(e => \`
+        <div class="pot-c2-evidence">
+          <span class="muted">\${esc(e.source)} · \${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
+          \${e.context ? \`<div class="mono">\${esc(e.context)}</div>\` : ""}
+          <div class="pot-c2-links">
+            \${e.session_id ? \`<button type="button" class="linkbtn" data-c2-session="\${esc(e.session_id)}">Open session</button>\` : ""}
+            \${e.sample_sha256 ? \`<button type="button" class="linkbtn" data-c2-sample="\${esc(e.sample_sha256)}">Open sample</button>\` : ""}
+          </div>
+        </div>\`).join("") : '<span class="muted">No evidence details are available.</span>';
+      body.querySelectorAll("[data-c2-session]").forEach(el => el.addEventListener("click", () => {
+        setPotSection("sessions");
+        if (typeof showSession === "function") showSession(el.dataset.c2Session);
+      }));
+      body.querySelectorAll("[data-c2-sample]").forEach(el => el.addEventListener("click", () => {
+        setPotSection("artifacts");
+        if (typeof showSample === "function") showSample(el.dataset.c2Sample);
+      }));
+    });
   });
   const refresh = $("potC2Refresh");
   if (refresh) refresh.onclick = () => loadC2Intel(true);
