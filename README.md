@@ -394,9 +394,11 @@ To collect runtime observations, open **Honeypot > C2 Intelligence** and registe
 Before a run, make sure the sample's SHA-256 already appears under **Honeypot > Artifacts**. Store the one-time token in a file readable only by the analysis account (`chmod 600`), then start the agent with a unique run ID:
 
 ```bash
-sudo install -m 600 /dev/null /etc/lanpulse/runtime-token
-# Put the one-time token in /etc/lanpulse/runtime-token without adding it to shell history.
-sudo python3 runtime_sensor.py \
+python3 -m venv ~/runtime-sensor-venv
+~/runtime-sensor-venv/bin/pip install scapy
+sudo install -d -m 700 /etc/lanpulse
+sudo bash -c 'umask 077; read -r -s -p "Paste sensor token: " TOKEN; printf "\\n"; printf "%s\\n" "$TOKEN" > /etc/lanpulse/runtime-token'
+sudo ~/runtime-sensor-venv/bin/python runtime_sensor.py \
   --server-url https://LANPULSE-IP:8080 \
   --sensor-id isolated-lab-01 \
   --token-file /etc/lanpulse/runtime-token \
