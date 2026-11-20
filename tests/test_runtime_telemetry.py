@@ -73,6 +73,29 @@ class RuntimeTelemetryTests(unittest.TestCase):
         self.assertEqual(len(self.store.events_for_sample(self.sha)), 1)
         self.assertEqual(self.store.events_for_sample("b" * 64), [])
 
+    def test_sensor_inventory_and_revocation_state(self):
+        self.assertEqual(self.store.sensors(), [
+            {"id": "isolated-lab-01", "created": self.store.sensors()[0]["created"],
+             "revoked": None, "state": "active"}
+        ])
+        self.assertTrue(self.store.revoke_sensor("isolated-lab-01"))
+        self.assertEqual(self.store.sensors()[0]["state"], "revoked")
+
+    def test_request_rate_limit(self):
+        self.assertTrue(self.store.allow_request("isolated-lab-01", now=100, limit=2, window=60))
+        self.assertTrue(self.store.allow_request("isolated-lab-01", now=101, limit=2, window=60))
+        self.assertFalse(self.store.allow_request("isolated-lab-01", now=102, limit=2, window=60))
+        self.assertTrue(self.store.allow_request("isolated-lab-01", now=161, limit=2, window=60))
+
+    def test_events_since_returns_sample_linked_observations(self):
+        event = self.event(type="dns_query", hostname="c2.example.net", destination_ip="")
+        self.store.ingest("isolated-lab-01", [event])
+        rows = self.store.events_since(time.time() - 60)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["sample_sha256"], self.sha)
+        self.assertEqual(rows[0]["type"], "dns_query")
+        self.assertEqual(rows[0]["hostname"], "c2.example.net")
+
 
 if __name__ == "__main__":
     unittest.main()
