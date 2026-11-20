@@ -79,7 +79,8 @@ async function loadRuntimeSensors(tokenInfo = null) {
       See the runtime telemetry section in the project README for the full command.</p>
     <details class="pot-adv"><summary>Event format and supported observations</summary>
       <p class="hint">Every event must reference a SHA-256 already stored in LanPulse under Honeypot → Captured files.
-        Timestamps are Unix seconds. Supported types: <span class="mono">dns_query</span> (hostname),
+        Timestamps are Unix seconds. Supported types: <span class="mono">dns_query</span> (outbound DNS lookup),
+        <span class="mono">dns_answer</span> (resolved IP linked to its queried hostname),
         <span class="mono">connect</span> (destination IP or hostname), <span class="mono">tls_sni</span> (hostname),
         and <span class="mono">http_host</span> (hostname). Batches contain 1–100 events.</p>
       <pre class="mono">{"events":[{"sample_sha256":"&lt;captured-sample-sha256&gt;","run_id":"lab-run-001","timestamp":&lt;unix-seconds&gt;,"type":"connect","destination_ip":"203.0.113.20","port":443,"protocol":"tcp"}]}</pre>
