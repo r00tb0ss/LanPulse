@@ -1561,6 +1561,8 @@ class HoneyAnalysis:
         return {
             "hours": hours, "candidates": candidates[:limit], "total_candidates": len(candidates),
             "runtime_observations": runtime_observations, "runtime_observation_count": len(runtime_observations),
+            # Raw network observations are not automatically classified as command-and-control.
+            "confirmed_connections": [], "confirmed_count": 0,
             "confirmation_note": confirmation_note,
             "attribution_note": "Indicators, malware-family matches, hosting networks and source IPs do not identify the malware author or operator."
         }
