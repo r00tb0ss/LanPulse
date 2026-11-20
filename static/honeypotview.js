@@ -57,6 +57,71 @@ function setPotSection(section, persist = true) {
 }
 
 
+async function loadRuntimeSensors(tokenInfo = null) {
+  const box = $("potRuntimeSensors");
+  if (!box) return;
+  const r = await api("/api/runtime/sensors", "GET", undefined, true);
+  if (!r || r.error) {
+    box.innerHTML = `<div class="t-card"><h4>Sandbox runtime sensors</h4>
+      <p class="muted">${esc(r?.error || "Could not load runtime sensors.")}</p></div>`;
+    return;
+  }
+  const sensors = r.sensors || [];
+  box.innerHTML = `<div class="t-card">
+    <h4><span>Sandbox runtime sensors</span><span class="muted">${sensors.length} registered</span></h4>
+    <p class="hint">These credentials are for a separate, isolated malware-analysis worker — not Cowrie honeypot sensors.
+      Register a sensor, then configure its agent to POST sample-linked DNS and connection events to
+      <span class="mono">/api/runtime/ingest</span> using <span class="mono">X-LanPulse-Sensor</span> and
+      <span class="mono">X-LanPulse-Token</span> headers. Keep malware VMs off your home LAN; allow only the
+      telemetry agent's tightly restricted path to LanPulse.</p>
+    ${tokenInfo?.token ? `<div class="pot-runtime-token">
+      <b>Sensor token — shown once</b>
+      <p class="muted">Copy and store this securely now. LanPulse stores only its hash and cannot show it again.</p>
+      <div class="mono pot-c2-value">${esc(tokenInfo.token)}</div>
+      <button type="button" class="btn sm" id="potRuntimeCopy"><i class="fa-solid fa-copy"></i>Copy token</button>
+    </div>` : ""}
+    <div class="pot-runtime-create">
+      <label>New sensor ID<input id="potRuntimeSensorId" maxlength="64" placeholder="e.g. isolated-lab-01" autocomplete="off"></label>
+      <button type="button" class="btn primary" id="potRuntimeAdd"><i class="fa-solid fa-plus"></i>Register sensor</button>
+    </div>
+    ${sensors.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Sensor</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>
+      ${sensors.map(s => `<tr><td class="mono">${esc(s.id)}</td><td><span class="tagchip ${s.state === "active" ? "good" : ""}">${esc(s.state)}</span></td>
+        <td>${s.created ? esc(full(s.created)) : "—"}</td><td>${s.state === "active" ? `<button type="button" class="btn sm ghost" data-runtime-revoke="${esc(s.id)}">Revoke</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>` : '<p class="muted">No runtime sensors registered yet.</p>'}
+  </div>`;
+  const add = $("potRuntimeAdd");
+  if (add) add.onclick = async () => {
+    const id = $("potRuntimeSensorId")?.value.trim() || "";
+    if (!id) { toast("Enter a sensor ID first."); return; }
+    add.disabled = true;
+    const created = await api("/api/runtime/sensors", "POST", {id}, true);
+    if (!created || created.error) {
+      toast(created?.error || "Could not register the runtime sensor.");
+      add.disabled = false;
+      return;
+    }
+    await loadRuntimeSensors(created);
+    toast("Runtime sensor registered. Copy its token now.");
+  };
+  const copy = $("potRuntimeCopy");
+  if (copy && tokenInfo?.token) copy.onclick = () => copyPotHash(tokenInfo.token, copy);
+  box.querySelectorAll("[data-runtime-revoke]").forEach(button => {
+    button.onclick = async () => {
+      const id = button.dataset.runtimeRevoke;
+      if (!confirm(`Revoke runtime sensor "${id}"? Its token will stop working immediately.`)) return;
+      button.disabled = true;
+      const result = await api("/api/runtime/sensors/revoke", "POST", {id}, true);
+      if (!result || result.error) {
+        toast(result?.error || "Could not revoke the sensor.");
+        button.disabled = false;
+        return;
+      }
+      toast("Runtime sensor revoked.");
+      loadRuntimeSensors();
+    };
+  });
+}
+
 async function loadC2Intel() {
   const box = $("potC2Content");
   if (!box) return;
@@ -120,7 +185,9 @@ async function loadC2Intel() {
     <div class="t-card"><h4>What this means</h4>
       <p class="muted">${esc(r.confirmation_note || "")}</p>
       <p class="muted">${esc(r.attribution_note || "")}</p>
-    </div>`;
+    </div>
+    <div id="potRuntimeSensors"><div class="muted">Loading runtime sensors…</div></div>`;
+  loadRuntimeSensors();
   box.querySelectorAll("[data-c2-session]").forEach(el => el.addEventListener("click", () => {
     setPotSection("sessions");
     if (typeof showSession === "function") showSession(el.dataset.c2Session);
