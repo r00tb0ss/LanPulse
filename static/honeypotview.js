@@ -149,7 +149,7 @@ async function loadC2Intel(force = false) {
       <div class="kpi"><span class="k-lbl">Runtime observations</span><span class="k-num">${r.runtime_observation_count || 0}</span><span class="k-sub">DNS + network events</span></div>
     </div>
     <div class="t-card">
-      <h4><span>Extracted indicators</span><span class="muted">${rows.length} shown · ${r.hours}h window</span></h4>
+      <h4><span>Extracted indicators</span><span><span class="muted">${rows.length} shown · ${r.hours}h window</span> <button type="button" class="btn sm ghost" id="potC2Refresh">Refresh</button></span></h4>
       ${rows.length ? `<div class="pot-c2-list">${rows.map(x => `
         <article class="pot-c2-row">
           <div class="pot-c2-main">
@@ -163,7 +163,7 @@ async function loadC2Intel(force = false) {
             <span>${(x.samples || []).length} sample${(x.samples || []).length === 1 ? "" : "s"}</span>
           </div>
           <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
-          ${(x.evidence || []).map(e => `
+          ${(x.evidence || []).length ? `<details class="pot-c2-evidence-details"><summary>View evidence (${(x.evidence || []).length} shown)</summary>${(x.evidence || []).map(e => `
             <div class="pot-c2-evidence">
               <span class="muted">${esc(e.source)} · ${e.observed_at ? esc(full(e.observed_at)) : "time unavailable"}</span>
               ${e.context ? `<div class="mono">${esc(e.context)}</div>` : ""}
@@ -171,7 +171,7 @@ async function loadC2Intel(force = false) {
                 ${e.session_id ? `<button type="button" class="linkbtn" data-c2-session="${esc(e.session_id)}">Open session</button>` : ""}
                 ${e.sample_sha256 ? `<button type="button" class="linkbtn" data-c2-sample="${esc(e.sample_sha256)}">Open sample</button>` : ""}
               </div>
-            </div>`).join("")}
+            </div>`).join("")}</details>` : ""}
         </article>`).join("")}</div>` : '<div class="muted">No candidate indicators were found in the selected period.</div>'}
     </div>
     <div class="t-card">
@@ -205,6 +205,8 @@ async function loadC2Intel(force = false) {
       loadRuntimeSensors();
     }
   });
+  const refresh = $("potC2Refresh");
+  if (refresh) refresh.onclick = () => loadC2Intel(true);
   box.querySelectorAll("[data-c2-session]").forEach(el => el.addEventListener("click", () => {
     setPotSection("sessions");
     if (typeof showSession === "function") showSession(el.dataset.c2Session);
