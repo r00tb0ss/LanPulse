@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import os
 import re
 import secrets
 import sqlite3
@@ -45,8 +46,13 @@ class RuntimeTelemetry:
     def __init__(self, db_path):
         self.path = str(db_path)
         self.lock = threading.RLock()
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        parent = Path(self.path).parent
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(parent, 0o700)
         self.db = sqlite3.connect(self.path, check_same_thread=False)
+        os.chmod(self.path, 0o600)
+        self.db.execute("PRAGMA foreign_keys=ON")
+        self.requests = {}
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript("""
@@ -73,6 +79,8 @@ class RuntimeTelemetry:
     def register_sensor(self, sensor_id):
         """Create a sensor credential. Return the secret once; callers must display it securely."""
         sensor_id = _text(sensor_id, 64)
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", sensor_id):
+            raise ValueError("Sensor ID may contain only letters, numbers, dots, underscores, and hyphens.")
         token = secrets.token_urlsafe(32)
         digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
         with self.lock:
@@ -81,6 +89,35 @@ class RuntimeTelemetry:
                 (sensor_id, digest, time.time()))
             self.db.commit()
         return token
+
+    def sensors(self):
+        with self.lock:
+            rows = self.db.execute("SELECT sensor_id,created,revoked FROM runtime_sensors ORDER BY created").fetchall()
+        return [{"id": r[0], "created": r[1], "revoked": r[2], "state": "revoked" if r[2] else "active"} for r in rows]
+
+    def allow_request(self, sensor_id, now=None, limit=60, window=60):
+        """Bound sensor request rates in memory; batches remain independently capped at MAX_BATCH."""
+        now = time.time() if now is None else float(now)
+        with self.lock:
+            recent = [t for t in self.requests.get(sensor_id, []) if now - t < window]
+            if len(recent) >= limit:
+                self.requests[sensor_id] = recent
+                return False
+            recent.append(now)
+            self.requests[sensor_id] = recent
+            if len(self.requests) > 1024:
+                self.requests = {k: v for k, v in self.requests.items() if v and now - v[-1] < window}
+            return True
+
+    def events_since(self, since, limit=1000):
+        limit = max(1, min(int(limit), 5000))
+        with self.lock:
+            rows = self.db.execute("""
+                SELECT sensor_id,sample_sha256,run_id,observed_at,event_type AS type,
+                       hostname,destination_ip,port,protocol
+                FROM runtime_events WHERE observed_at >= ? ORDER BY observed_at DESC LIMIT ?
+            """, (float(since), limit)).fetchall()
+        return [dict(row) for row in rows]
 
     def revoke_sensor(self, sensor_id):
         with self.lock:
