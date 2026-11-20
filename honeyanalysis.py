@@ -1589,7 +1589,7 @@ class HoneyAnalysis:
             out.append({"sha256": sha, "size": size, "kind": kind, "type": typ, "first_seen": first, "last_seen": last,
                         "seen": seen, "families": a.get("families", []), "tags": a.get("tags", []), "score": a.get("score", 0),
                         "yara_status": y.get("scan_status", "pending"), "yara_match_count": len(y.get("matches") or []),
-                        "yara_scanned_at": y.get("scanned_at")})
+                        "yara_scanned_at": y.get("scanned_at"), "yara_rules_fingerprint": y.get("rules_fingerprint", "")})
         return {"samples": out, "total": total}
 
     @staticmethod
