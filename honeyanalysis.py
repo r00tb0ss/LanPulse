@@ -1488,7 +1488,10 @@ class HoneyAnalysis:
                         continue
                     add(kind, value, source, timestamp, context, session_id, source_ip, sample_sha)
                     if kind == "url":
-                        host = urllib.parse.urlsplit(str(value)).hostname or ""
+                        try:
+                            host = urllib.parse.urlsplit(str(value)).hostname or ""
+                        except ValueError:          # attacker text such as "http://[abc" is not a valid URL
+                            host = ""
                         if host:
                             try:
                                 ipaddress.ip_address(host)
