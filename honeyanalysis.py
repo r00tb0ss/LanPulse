@@ -1442,11 +1442,13 @@ class HoneyAnalysis:
         since = time.time() - hours * 3600
         with self.lock:
             sessions = self.db.execute(
-                "SELECT id, ip, start, commands FROM sessions WHERE start >= ? ORDER BY start DESC LIMIT 20000",
-                (since,)).fetchall()
+                "SELECT id, ip, start, commands FROM sessions "
+                "WHERE start >= ? AND commands IS NOT NULL AND commands NOT IN ('', '[]', 'null') "
+                "ORDER BY start DESC LIMIT 20000", (since,)).fetchall()
             samples = self.db.execute(
                 "SELECT sha256, first_seen, last_seen, analysis FROM samples "
-                "WHERE last_seen >= ? ORDER BY last_seen DESC LIMIT 2000", (since,)).fetchall()
+                "WHERE last_seen >= ? AND analysis IS NOT NULL AND analysis NOT IN ('', '{}', 'null') "
+                "ORDER BY last_seen DESC LIMIT 2000", (since,)).fetchall()
 
         grouped = {}
 
