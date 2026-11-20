@@ -98,6 +98,10 @@ class UpdaterRollbackSafety(unittest.TestCase):
         )
         self.assertLess(syntax_check, replace_updater)
 
+    def test_installer_copies_passive_runtime_sensor_tool(self):
+        copy = INSTALL.index('install -m 755 "$SRC/tools/runtime_sensor.py" "$DEST/tools/"')
+        self.assertLess(copy, INSTALL.index('echo "==> Downloading map and icon libraries'))
+
     def test_systemd_backup_directory_is_configured_and_writable(self):
         hardening = INSTALL.split("cat > /etc/systemd/system/lanpulse.service.d/hardening.conf <<HARDEN", 1)[1]
         hardening = hardening.split("\\nHARDEN", 1)[0]
