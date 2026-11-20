@@ -1528,6 +1528,15 @@ class HoneyAnalysis:
                          "Indicator extracted from captured file; file was not executed.",
                          sample_sha=sha)
 
+        runtime_observations = []
+        runtime_store = getattr(self.nm, "runtime_telemetry", None)
+        if runtime_store is not None:
+            try:
+                runtime_observations = runtime_store.events_since(since, limit=1000)
+            except Exception:
+                log.warning("runtime telemetry lookup failed", exc_info=True)
+                runtime_observations = []
+
         candidates = []
         for row in grouped.values():
             candidates.append({
@@ -1540,10 +1549,18 @@ class HoneyAnalysis:
         candidates.sort(key=lambda x: (-x["evidence_count"], -float(x["last_seen"] or 0), x["kind"], x["value"]))
         return {
             "hours": hours, "candidates": candidates[:limit], "total_candidates": len(candidates),
-            "confirmed_connections": [], "confirmed_count": 0,
-            "confirmation_note": "No runtime outbound-connection events are currently stored by this honeypot integration. A candidate becomes confirmed only when DNS or network telemetry directly records the sample's outbound activity.",
+            "runtime_observations": runtime_observations, "runtime_observation_count": len(runtime_observations),
+            "confirmation_note": "Runtime observations record network activity during a sample run. They do not by themselves prove command-and-control; correlate destinations, timing, protocol, and sample behavior before classifying an endpoint as C2.",
             "attribution_note": "Indicators, malware-family matches, hosting networks and source IPs do not identify the malware author or operator."
         }
+
+    def sample_exists(self, sha: str) -> bool:
+        """Check the local sample index without running static analysis or external lookups."""
+        sha = str(sha or "").lower()
+        if not HEX64.match(sha):
+            return False
+        with self.lock:
+            return self.db.execute("SELECT 1 FROM samples WHERE sha256=?", (sha,)).fetchone() is not None
 
     def samples(self, limit: int = 100) -> dict:
         with self.lock:
