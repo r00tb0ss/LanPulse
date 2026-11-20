@@ -737,7 +737,8 @@ class LanPulse:
         self.timeline = Timeline(str(self.data_dir / ("demo-timeline.db" if args.demo else "timeline.db")))
         self.posture = posture.PostureHistory(str(self.data_dir / ("demo-posture.db" if args.demo else "posture.db")))
         self.auth = Auth(self.data_dir / "auth.json")
-        self.runtime_telemetry = RuntimeTelemetry(self.data_dir / "runtime-telemetry" / "runtime.db")
+        runtime_dir = "demo-runtime-telemetry" if args.demo else "runtime-telemetry"
+        self.runtime_telemetry = RuntimeTelemetry(self.data_dir / runtime_dir / "runtime.db")
         self.alert_sent: dict[tuple, float] = {}
         if args.demo:
             self.net = {"iface": "demo0", "my_ip": "192.168.1.10", "my_mac": "F4:8E:38:11:22:10",
