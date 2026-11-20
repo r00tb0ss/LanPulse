@@ -64,12 +64,13 @@ async function loadC2Intel() {
   const r = await api("/api/honeypot/c2?hours=" + potHours + "&limit=300", "GET");
   if (!r) { box.innerHTML = '<div class="muted">Could not load C2 intelligence.</div>'; return; }
   const rows = r.candidates || [];
+  const observed = r.runtime_observations || [];
   box.innerHTML = `
     <div class="t-kpis four">
       <div class="kpi"><span class="k-lbl">Indicator candidates</span><span class="k-num">${r.total_candidates || 0}</span><span class="k-sub">commands + captured files</span></div>
       <div class="kpi"><span class="k-lbl">Source IPs</span><span class="k-num">${new Set(rows.flatMap(x => x.source_ips || [])).size}</span><span class="k-sub">observed honeypot sources</span></div>
       <div class="kpi"><span class="k-lbl">Linked samples</span><span class="k-num">${new Set(rows.flatMap(x => x.samples || [])).size}</span><span class="k-sub">static file evidence</span></div>
-      <div class="kpi"><span class="k-lbl">Confirmed phone-home</span><span class="k-num">0</span><span class="k-sub">no runtime network telemetry</span></div>
+      <div class="kpi"><span class="k-lbl">Runtime observations</span><span class="k-num">${r.runtime_observation_count || 0}</span><span class="k-sub">DNS / network events</span></div>
     </div>
     <div class="t-card">
       <h4><span>Extracted indicators</span><span class="muted">${rows.length} shown · ${r.hours}h window</span></h4>
@@ -96,6 +97,24 @@ async function loadC2Intel() {
               </div>
             </div>`).join("")}
         </article>`).join("")}</div>` : '<div class="muted">No candidate indicators were found in the selected period.</div>'}
+    </div>
+    <div class="t-card">
+      <h4><span>Runtime-observed activity</span><span class="muted">${observed.length} events · sample-linked</span></h4>
+      ${observed.length ? `<div class="pot-c2-list">${observed.map(e => `
+        <article class="pot-c2-row">
+          <div class="pot-c2-main">
+            <span class="tagchip">runtime observed</span><span class="tagchip">${esc(e.type)}</span>
+            <span class="mono pot-c2-value">${esc(e.hostname || e.destination_ip || "destination unavailable")}</span>
+          </div>
+          <div class="pot-c2-meta">
+            <span>${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
+            <span>${e.port ? "port " + esc(e.port) : "port unavailable"}</span>
+            <span>${esc(e.protocol || "protocol unavailable")}</span>
+            <span>sensor ${esc(e.sensor_id)}</span>
+          </div>
+          <div class="muted pot-c2-assessment">Observed during run ${esc(e.run_id)}. This confirms network activity, not that the destination is C2.</div>
+          <div class="pot-c2-links"><button type="button" class="linkbtn" data-c2-sample="${esc(e.sample_sha256)}">Open sample</button></div>
+        </article>`).join("")}</div>` : '<div class="muted">No runtime telemetry has been received yet. Static indicators remain candidates until outbound activity is observed in an isolated sample run.</div>'}
     </div>
     <div class="t-card"><h4>What this means</h4>
       <p class="muted">${esc(r.confirmation_note || "")}</p>
