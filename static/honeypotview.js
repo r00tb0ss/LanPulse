@@ -133,20 +133,20 @@ async function loadRuntimeSensors(tokenInfo = null) {
   });
 }
 
-async function loadC2Intel() {
+async function loadC2Intel(force = false) {
   const box = $("potC2Content");
   if (!box) return;
   box.innerHTML = '<div class="muted">Loading extracted indicators…</div>';
-  const r = await api("/api/honeypot/c2?hours=" + potHours + "&limit=300", "GET");
+  const r = await api("/api/honeypot/c2?hours=" + potHours + "&limit=300" + (force ? "&refresh=1" : ""), "GET");
   if (!r) { box.innerHTML = '<div class="muted">Could not load C2 intelligence.</div>'; return; }
   const rows = r.candidates || [];
   const observed = r.runtime_observations || [];
   box.innerHTML = `
     <div class="t-kpis four">
-      <div class="kpi"><span class="k-lbl">Indicator candidates</span><span class="k-num">${r.total_candidates || 0}</span><span class="k-sub">commands + captured files</span></div>
-      <div class="kpi"><span class="k-lbl">Source IPs</span><span class="k-num">${new Set(rows.flatMap(x => x.source_ips || [])).size}</span><span class="k-sub">observed honeypot sources</span></div>
-      <div class="kpi"><span class="k-lbl">Linked samples</span><span class="k-num">${new Set(rows.flatMap(x => x.samples || [])).size}</span><span class="k-sub">static file evidence</span></div>
-      <div class="kpi"><span class="k-lbl">Runtime observations</span><span class="k-num">${r.runtime_observation_count || 0}</span><span class="k-sub">DNS / network events</span></div>
+      <div class="kpi"><span class="k-lbl">Indicator candidates</span><span class="k-num">${r.total_candidates || 0}</span><span class="k-sub">Commands + captured files</span></div>
+      <div class="kpi"><span class="k-lbl">Source IPs</span><span class="k-num">${new Set(rows.flatMap(x => x.source_ips || [])).size}</span><span class="k-sub">Honeypot source IPs</span></div>
+      <div class="kpi"><span class="k-lbl">Linked samples</span><span class="k-num">${new Set(rows.flatMap(x => x.samples || [])).size}</span><span class="k-sub">Linked sample files</span></div>
+      <div class="kpi"><span class="k-lbl">Runtime observations</span><span class="k-num">${r.runtime_observation_count || 0}</span><span class="k-sub">DNS + network events</span></div>
     </div>
     <div class="t-card">
       <h4><span>Extracted indicators</span><span class="muted">${rows.length} shown · ${r.hours}h window</span></h4>
@@ -160,7 +160,7 @@ async function loadC2Intel() {
             <span>${x.evidence_count} evidence item${x.evidence_count === 1 ? "" : "s"}</span>
             <span>${(x.source_ips || []).length} source IPs</span>
             <span>${(x.sessions || []).length} sessions</span>
-            <span>${(x.samples || []).length} samples</span>
+            <span>${(x.samples || []).length} sample${(x.samples || []).length === 1 ? "" : "s"}</span>
           </div>
           <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
           ${(x.evidence || []).map(e => `
@@ -197,8 +197,14 @@ async function loadC2Intel() {
       <p class="muted">${esc(r.confirmation_note || "")}</p>
       <p class="muted">${esc(r.attribution_note || "")}</p>
     </div>
-    <div id="potRuntimeSensors"><div class="muted">Loading runtime sensors…</div></div>`;
-  loadRuntimeSensors();
+    <details id="potRuntimeSensorsDetails" class="pot-c2-sensors-details"><summary>Sandbox runtime sensors</summary><div id="potRuntimeSensors"><div class="muted">Open to load registered sensors and controls.</div></div></details>`;
+  const sensorDetails = $("potRuntimeSensorsDetails");
+  if (sensorDetails) sensorDetails.addEventListener("toggle", () => {
+    if (sensorDetails.open && sensorDetails.dataset.loaded !== "1") {
+      sensorDetails.dataset.loaded = "1";
+      loadRuntimeSensors();
+    }
+  });
   box.querySelectorAll("[data-c2-session]").forEach(el => el.addEventListener("click", () => {
     setPotSection("sessions");
     if (typeof showSession === "function") showSession(el.dataset.c2Session);
