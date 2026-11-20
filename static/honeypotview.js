@@ -70,10 +70,13 @@ async function loadRuntimeSensors(tokenInfo = null) {
   box.innerHTML = `<div class="t-card">
     <h4><span>Sandbox runtime sensors</span><span class="muted">${sensors.length} registered</span></h4>
     <p class="hint">These credentials are for a separate, isolated malware-analysis worker — not Cowrie honeypot sensors.
-      Register a sensor, then configure its agent to POST sample-linked DNS and connection events to
+      Copy the bundled <span class="mono">tools/runtime_sensor.py</span> to a disposable analysis VM. It passively
+      reports sample-linked DNS, TCP/UDP connections, TLS SNI and HTTP Host metadata to
       <span class="mono">/api/runtime/ingest</span> using <span class="mono">X-LanPulse-Sensor</span> and
-      <span class="mono">X-LanPulse-Token</span> headers. Keep malware VMs off your home LAN; allow only the
-      telemetry agent's tightly restricted path to LanPulse.</p>
+      <span class="mono">X-LanPulse-Token</span> headers. Store the token in a file with mode 600 and use HTTPS
+      (add <span class="mono">--ca-cert</span> for a self-signed LanPulse certificate). Keep malware VMs off your
+      home LAN; restrict their egress to a controlled analysis gateway and allow only the telemetry path to LanPulse.
+      See the runtime telemetry section in the project README for the full command.</p>
     <details class="pot-adv"><summary>Event format and supported observations</summary>
       <p class="hint">Every event must reference a SHA-256 already stored in LanPulse under Honeypot → Captured files.
         Timestamps are Unix seconds. Supported types: <span class="mono">dns_query</span> (hostname),
