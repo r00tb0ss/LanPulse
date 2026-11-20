@@ -76,6 +76,7 @@ class RuntimeTelemetryAPISecurity(unittest.IsolatedAsyncioTestCase):
         self.store = RuntimeTelemetry(pathlib.Path(self.temp.name) / "runtime" / "events.db")
         nm = SimpleNamespace(
             args=SimpleNamespace(demo=False, cert=None, allow_host=[]),
+            data_dir=self.temp.name,
             settings={"system": {"allow_hosts": []}},
             auth=FakeAuth(),
             runtime_telemetry=self.store,
@@ -169,6 +170,7 @@ class RuntimeTelemetryAPISecurity(unittest.IsolatedAsyncioTestCase):
     async def test_management_is_denied_when_dashboard_login_is_disabled(self):
         self.app = lanpulse_app.build_app(SimpleNamespace(
             args=SimpleNamespace(demo=False, cert=None, allow_host=[]),
+            data_dir=self.temp.name,
             settings={"system": {"allow_hosts": []}},
             auth=SimpleNamespace(enabled=False, verify=lambda _cookie: None),
             runtime_telemetry=self.store,
