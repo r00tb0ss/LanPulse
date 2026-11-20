@@ -108,6 +108,7 @@ async function loadC2Intel() {
           </div>
           <div class="pot-c2-meta">
             <span>${e.observed_at ? esc(full(e.observed_at)) : "time unavailable"}</span>
+            <span>${e.destination_ip ? esc(e.destination_ip) : "IP unavailable"}</span>
             <span>${e.port ? "port " + esc(e.port) : "port unavailable"}</span>
             <span>${esc(e.protocol || "protocol unavailable")}</span>
             <span>sensor ${esc(e.sensor_id)}</span>
