@@ -89,7 +89,7 @@ async function loadC2Intel() {
           <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
           ${(x.evidence || []).map(e => `
             <div class="pot-c2-evidence">
-              <span class="muted">${esc(e.source)} · ${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
+              <span class="muted">${esc(e.source)} · ${e.observed_at ? esc(full(e.observed_at)) : "time unavailable"}</span>
               ${e.context ? `<div class="mono">${esc(e.context)}</div>` : ""}
               <div class="pot-c2-links">
                 ${e.session_id ? `<button type="button" class="linkbtn" data-c2-session="${esc(e.session_id)}">Open session</button>` : ""}
@@ -107,7 +107,7 @@ async function loadC2Intel() {
             <span class="mono pot-c2-value">${esc(e.hostname || e.destination_ip || "destination unavailable")}</span>
           </div>
           <div class="pot-c2-meta">
-            <span>${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
+            <span>${e.observed_at ? esc(full(e.observed_at)) : "time unavailable"}</span>
             <span>${e.port ? "port " + esc(e.port) : "port unavailable"}</span>
             <span>${esc(e.protocol || "protocol unavailable")}</span>
             <span>sensor ${esc(e.sensor_id)}</span>
