@@ -163,7 +163,7 @@ async function loadC2Intel(force = false) {
             <span>${(x.samples || []).length} sample${(x.samples || []).length === 1 ? "" : "s"}</span>
           </div>
           <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
-          ${x.evidence_count ? `<details class="pot-c2-evidence-details" data-c2-kind="${esc(x.kind)}" data-c2-value="${esc(x.value)}"><summary>View evidence (${x.evidence_count} items)</summary><div class="pot-c2-evidence-body"><span class="muted">Open to load evidence…</span></div></details>` : ""}
+          ${x.evidence_count ? `<details class="pot-c2-evidence-details" data-c2-kind="${esc(x.kind)}" data-c2-value="${esc(x.value)}"><summary>View up to ${Math.min(6, Number(x.evidence_count) || 0)} examples · ${x.evidence_count} total</summary><div class="pot-c2-evidence-body"><span class="muted">Open to load evidence…</span></div></details>` : ""}
         </article>`).join("")}</div>` : '<div class="muted">No candidate indicators were found in the selected period.</div>'}
     </div>
     <div class="t-card">
