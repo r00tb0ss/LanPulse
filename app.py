@@ -2444,6 +2444,19 @@ def build_app(nm: LanPulse) -> FastAPI:
         ok = await asyncio.to_thread(nm.runtime_telemetry.revoke_sensor, body["id"])
         return {"ok": True} if ok else JSONResponse({"error": "Sensor not found or already revoked."}, 404)
 
+    @app.get("/api/runtime/events")
+    async def runtime_telemetry_events(since: float = 0, limit: int = 1000):
+        denied = runtime_admin_required()
+        if denied:
+            return denied
+        now = time.time()
+        if since < 0 or since > now:
+            return JSONResponse({"error": "since must be a Unix timestamp between zero and now."}, 400)
+        since = max(since or now - 86400, now - 7 * 86400)
+        limit = max(1, min(limit, 5000))
+        events = await asyncio.to_thread(nm.runtime_telemetry.events_since, since, limit)
+        return {"since": since, "count": len(events), "events": events}
+
     @app.get("/api/honeypot/fingerprints")
     async def honeypot_fingerprints(hours: int = 2160):
         return await asyncio.to_thread(nm.honeyan.fingerprints, max(1, min(hours, 2160)))
