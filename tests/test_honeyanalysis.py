@@ -20,6 +20,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import honeyanalysis as ha  # noqa: E402
+from runtime_telemetry import RuntimeTelemetry  # noqa: E402
 
 
 def elf(machine=40, bits=32, little=True, interp=False):
@@ -43,6 +44,51 @@ def elf(machine=40, bits=32, little=True, interp=False):
 
 
 class C2Intelligence(unittest.TestCase):
+    def test_runtime_observations_are_visible_only_with_dashboard_login(self):
+        obj = ha.HoneyAnalysis.__new__(ha.HoneyAnalysis)
+        obj.lock = threading.Lock()
+        obj.db = sqlite3.connect(":memory:")
+        obj.db.execute("CREATE TABLE sessions (id TEXT, ip TEXT, start REAL, commands TEXT)")
+        obj.db.execute("CREATE TABLE samples (sha256 TEXT, first_seen REAL, last_seen REAL, analysis TEXT)")
+        with tempfile.TemporaryDirectory() as folder:
+            store = RuntimeTelemetry(pathlib.Path(folder) / "runtime.db")
+            try:
+                token = store.register_sensor("isolated-lab-01")
+                now = time.time()
+                sample_sha = "b" * 64
+                store.ingest("isolated-lab-01", [
+                    {"sample_sha256": sample_sha, "run_id": "run-c2-01", "timestamp": now,
+                     "type": "dns_query", "hostname": "beacon.example.net"},
+                    {"sample_sha256": sample_sha, "run_id": "run-c2-01", "timestamp": now,
+                     "type": "dns_answer", "hostname": "beacon.example.net",
+                     "destination_ip": "203.0.113.77", "port": 53, "protocol": "udp"},
+                    {"sample_sha256": sample_sha, "run_id": "run-c2-01", "timestamp": now,
+                     "type": "connect", "destination_ip": "203.0.113.77",
+                     "port": 443, "protocol": "tcp"},
+                ])
+                obj.nm = types.SimpleNamespace(
+                    runtime_telemetry=store, auth=types.SimpleNamespace(enabled=False))
+                hidden = obj.c2_intelligence(24)
+                self.assertEqual(hidden["runtime_observation_count"], 0)
+                self.assertIn("hidden", hidden["confirmation_note"])
+
+                obj.nm.auth.enabled = True
+                visible = obj.c2_intelligence(24)
+                self.assertEqual(visible["runtime_observation_count"], 3)
+                self.assertEqual({event["type"] for event in visible["runtime_observations"]},
+                                 {"dns_query", "dns_answer", "connect"})
+                self.assertTrue(all(event["sample_sha256"] == sample_sha
+                                    for event in visible["runtime_observations"]))
+                self.assertTrue(all(event["run_id"] == "run-c2-01"
+                                    for event in visible["runtime_observations"]))
+                self.assertEqual(visible["confirmed_connections"], [])
+                self.assertEqual(visible["confirmed_count"], 0)
+                self.assertIn("do not by themselves prove", visible["confirmation_note"])
+                self.assertIn("not identify", visible["attribution_note"])
+                self.assertTrue(store.authenticate_sensor("isolated-lab-01", token))
+            finally:
+                store.close()
+
     def test_candidates_are_not_reported_as_confirmed_connections(self):
         obj = ha.HoneyAnalysis.__new__(ha.HoneyAnalysis)
         obj.lock = threading.Lock()
