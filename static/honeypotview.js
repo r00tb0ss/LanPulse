@@ -163,7 +163,7 @@ async function loadC2Intel(force = false) {
             <span>${(x.samples || []).length} sample${(x.samples || []).length === 1 ? "" : "s"}</span>
           </div>
           <div class="muted pot-c2-assessment">${esc(x.assessment || "Candidate only; not confirmed network activity.")}</div>
-          \${x.evidence_count ? \`<details class="pot-c2-evidence-details" data-c2-kind="\${esc(x.kind)}" data-c2-value="\${esc(x.value)}"><summary>View evidence (\${x.evidence_count} items)</summary><div class="pot-c2-evidence-body"><span class="muted">Open to load evidence…</span></div></details>\` : ""}
+          ${x.evidence_count ? `<details class="pot-c2-evidence-details" data-c2-kind="${esc(x.kind)}" data-c2-value="${esc(x.value)}"><summary>View evidence (${x.evidence_count} items)</summary><div class="pot-c2-evidence-body"><span class="muted">Open to load evidence…</span></div></details>` : ""}
         </article>`).join("")}</div>` : '<div class="muted">No candidate indicators were found in the selected period.</div>'}
     </div>
     <div class="t-card">
@@ -212,15 +212,15 @@ async function loadC2Intel(force = false) {
         return;
       }
       const evidence = result.evidence || [];
-      body.innerHTML = evidence.length ? evidence.map(e => \`
+      body.innerHTML = evidence.length ? evidence.map(e => `
         <div class="pot-c2-evidence">
-          <span class="muted">\${esc(e.source)} · \${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
-          \${e.context ? \`<div class="mono">\${esc(e.context)}</div>\` : ""}
+          <span class="muted">${esc(e.source)} · ${e.timestamp ? esc(full(e.timestamp)) : "time unavailable"}</span>
+          ${e.context ? `<div class="mono">${esc(e.context)}</div>` : ""}
           <div class="pot-c2-links">
-            \${e.session_id ? \`<button type="button" class="linkbtn" data-c2-session="\${esc(e.session_id)}">Open session</button>\` : ""}
-            \${e.sample_sha256 ? \`<button type="button" class="linkbtn" data-c2-sample="\${esc(e.sample_sha256)}">Open sample</button>\` : ""}
+            ${e.session_id ? `<button type="button" class="linkbtn" data-c2-session="${esc(e.session_id)}">Open session</button>` : ""}
+            ${e.sample_sha256 ? `<button type="button" class="linkbtn" data-c2-sample="${esc(e.sample_sha256)}">Open sample</button>` : ""}
           </div>
-        </div>\`).join("") : '<span class="muted">No evidence details are available.</span>';
+        </div>`).join("") : '<span class="muted">No evidence details are available.</span>';
       body.querySelectorAll("[data-c2-session]").forEach(el => el.addEventListener("click", () => {
         setPotSection("sessions");
         if (typeof showSession === "function") showSession(el.dataset.c2Session);
