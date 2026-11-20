@@ -1530,7 +1530,7 @@ class HoneyAnalysis:
 
         runtime_observations = []
         runtime_store = getattr(self.nm, "runtime_telemetry", None)
-        if runtime_store is not None:
+        if runtime_store is not None and getattr(getattr(self.nm, "auth", None), "enabled", False):
             try:
                 runtime_observations = runtime_store.events_since(since, limit=1000)
             except Exception:
