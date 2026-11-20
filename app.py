@@ -2354,8 +2354,12 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     def runtime_admin_required():
         # Sensor management and event review require an actual dashboard login to be configured.
-        return None if nm.auth.enabled else JSONResponse(
-            {"error": "Enable a LanPulse dashboard login before managing runtime telemetry sensors."}, 403)
+        if nm.args.demo:
+            return JSONResponse({"error": "Runtime telemetry management is disabled in demo mode."}, 403)
+        if not nm.auth.enabled:
+            return JSONResponse(
+                {"error": "Enable a LanPulse dashboard login before managing runtime telemetry sensors."}, 403)
+        return None
 
     @app.post("/api/runtime/ingest")
     async def runtime_telemetry_ingest(request: Request):
