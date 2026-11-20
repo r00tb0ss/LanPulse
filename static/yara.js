@@ -12,7 +12,7 @@ async function loadYaraView() {
   if (notice) notice.textContent = "Checking YARA engine and stored scan summaries…";
   const [status, samples] = await Promise.all([
     api("/api/honeypot/yara/status", "GET"),
-    api("/api/honeypot/samples?limit=200", "GET")
+    api("/api/honeypot/samples?limit=2000", "GET")
   ]);
   if (view !== "honeypot" || potSection !== "yara") return;
   yaraStatus = status || {};
