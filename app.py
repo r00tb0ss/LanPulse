@@ -65,6 +65,7 @@ from unifi import UniFi, UniFiError
 from topology import Topology, demo_unifi
 import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
+from runtime_telemetry import RuntimeTelemetry
 
 VERSION = "1.39.15"
 
@@ -736,6 +737,7 @@ class LanPulse:
         self.timeline = Timeline(str(self.data_dir / ("demo-timeline.db" if args.demo else "timeline.db")))
         self.posture = posture.PostureHistory(str(self.data_dir / ("demo-posture.db" if args.demo else "posture.db")))
         self.auth = Auth(self.data_dir / "auth.json")
+        self.runtime_telemetry = RuntimeTelemetry(self.data_dir / "runtime-telemetry" / "runtime.db")
         self.alert_sent: dict[tuple, float] = {}
         if args.demo:
             self.net = {"iface": "demo0", "my_ip": "192.168.1.10", "my_mac": "F4:8E:38:11:22:10",
@@ -1300,6 +1302,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         if nm.dns.client:
             nm.dns.client.logout()
         nm.save()
+        nm.runtime_telemetry.close()
 
     app = FastAPI(title="LanPulse", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
     app.add_middleware(SelectiveGzip, minimum_size=1024, compresslevel=5)
@@ -1309,7 +1312,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         return JSONResponse({"error": "Body must be JSON"}, 400)
 
     secure_cookie = bool(nm.args.cert)
-    public = ("/login", "/static/", "/api/threats/ingest", "/api/honeypot/ingest", "/api/honeypot/sensor/installer", "/favicon.ico")
+    public = ("/login", "/static/", "/api/threats/ingest", "/api/honeypot/ingest", "/api/runtime/ingest", "/api/honeypot/sensor/installer", "/favicon.ico")
     def extra_hosts() -> set:          # read live, so changes in Settings > System apply straight away
         return {h.strip().lower() for h in (nm.settings.get("system", {}).get("allow_hosts")
                                            or getattr(nm.args, "allow_host", None) or []) if h.strip()}
@@ -1334,7 +1337,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         if not nm.auth.enabled and not host_ok(request.headers):
             return Response("LanPulse only answers to IP addresses and local names when no login is set. "
                             "Set a login, or add this name under Settings > System > Extra host names", 403, media_type="text/plain")
-        if request.method not in ("GET", "HEAD", "OPTIONS") and not path.startswith(("/api/threats/ingest", "/api/honeypot/ingest")) and not origin_ok(request.headers):
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not path.startswith(("/api/threats/ingest", "/api/honeypot/ingest", "/api/runtime/ingest")) and not origin_ok(request.headers):
             return JSONResponse({"error": "Request from another web site refused"}, 403)
         if not nm.auth.enabled or path.startswith(public) or nm.auth.verify(request.cookies.get("nm_session")):
             resp = await call_next(request)
@@ -2347,6 +2350,94 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     def sensor_who(request: Request):
         return nm.honeyan.auth(request.headers.get("X-LanPulse-Key", ""))
+
+    def runtime_admin_required():
+        # Sensor management and event review require an actual dashboard login to be configured.
+        return None if nm.auth.enabled else JSONResponse(
+            {"error": "Enable a LanPulse dashboard login before managing runtime telemetry sensors."}, 403)
+
+    @app.post("/api/runtime/ingest")
+    async def runtime_telemetry_ingest(request: Request):
+        if nm.args.demo:
+            return JSONResponse({"error": "Runtime telemetry is disabled in demo mode."}, 403)
+        sensor_id = request.headers.get("X-LanPulse-Sensor", "")
+        token = request.headers.get("X-LanPulse-Token", "")
+        if not await asyncio.to_thread(nm.runtime_telemetry.authenticate_sensor, sensor_id, token):
+            return JSONResponse({"error": "Invalid or revoked runtime sensor credentials."}, 403)
+        if not await asyncio.to_thread(nm.runtime_telemetry.allow_request, sensor_id):
+            return JSONResponse({"error": "Sensor rate limit exceeded; retry shortly."}, 429)
+        raw = await read_capped(request, 256_000)
+        if raw is None:
+            return JSONResponse({"error": "Telemetry batch too large."}, 413)
+        try:
+            payload = json.loads(raw)
+        except ValueError:
+            payload = None
+        if not isinstance(payload, dict) or set(payload) != {"events"} or not isinstance(payload.get("events"), list):
+            return JSONResponse({"error": "Expected a JSON object containing only an events array."}, 400)
+        try:
+            cleaned = [RuntimeTelemetry.validate_event(event) for event in payload["events"]]
+            if not 1 <= len(cleaned) <= 100:
+                raise ValueError("Submit between 1 and 100 events.")
+        except (TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, 400)
+        sample_hashes = {event["sample_sha256"] for event in cleaned}
+        for sha in sample_hashes:
+            if not await asyncio.to_thread(nm.honeyan.sample_exists, sha):
+                return JSONResponse({"error": "Telemetry references a sample not stored by this LanPulse honeypot."}, 400)
+        try:
+            result = await asyncio.to_thread(nm.runtime_telemetry.ingest, sensor_id, payload["events"])
+        except (TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, 400)
+        except PermissionError:
+            return JSONResponse({"error": "Unknown or revoked runtime sensor."}, 403)
+        return {"ok": True, **result}
+
+    @app.get("/api/runtime/sensors")
+    async def runtime_telemetry_sensors():
+        denied = runtime_admin_required()
+        if denied:
+            return denied
+        return {"sensors": await asyncio.to_thread(nm.runtime_telemetry.sensors)}
+
+    @app.post("/api/runtime/sensors")
+    async def runtime_telemetry_sensor_add(request: Request):
+        denied = runtime_admin_required()
+        if denied:
+            return denied
+        raw = await read_capped(request, 4096)
+        if raw is None:
+            return JSONResponse({"error": "Request too large."}, 413)
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or set(body) != {"id"}:
+            return JSONResponse({"error": "Provide a sensor ID."}, 400)
+        try:
+            token = await asyncio.to_thread(nm.runtime_telemetry.register_sensor, body["id"])
+        except (TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, 400)
+        except Exception:
+            return JSONResponse({"error": "Could not register sensor; sensor IDs must be unique."}, 409)
+        return {"sensor_id": body["id"], "token": token, "warning": "This token is shown once. Store it securely."}
+
+    @app.post("/api/runtime/sensors/revoke")
+    async def runtime_telemetry_sensor_revoke(request: Request):
+        denied = runtime_admin_required()
+        if denied:
+            return denied
+        raw = await read_capped(request, 4096)
+        if raw is None:
+            return JSONResponse({"error": "Request too large."}, 413)
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or set(body) != {"id"}:
+            return JSONResponse({"error": "Provide a sensor ID."}, 400)
+        ok = await asyncio.to_thread(nm.runtime_telemetry.revoke_sensor, body["id"])
+        return {"ok": True} if ok else JSONResponse({"error": "Sensor not found or already revoked."}, 404)
 
     @app.get("/api/honeypot/fingerprints")
     async def honeypot_fingerprints(hours: int = 2160):
