@@ -2494,10 +2494,26 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def honeypot_c2(hours: int = 2160, limit: int = 300, refresh: bool = False):
         args = (max(1, min(hours, 2160)), max(1, min(limit, 500)))
         if refresh:
-            return await asyncio.to_thread(nm.honeyan.c2_intelligence, *args)
-        # C2 aggregation scans the selected session/sample window; reuse the bounded
-        # result briefly so opening the tab repeatedly does not repeat that work.
-        return await asyncio.to_thread(pot_cached, nm.honeyan.c2_intelligence, *args)
+            result = await asyncio.to_thread(nm.honeyan.c2_intelligence, *args)
+        else:
+            # C2 aggregation scans the selected session/sample window; reuse the bounded
+            # result briefly so opening the tab repeatedly does not repeat that work.
+            result = await asyncio.to_thread(pot_cached, nm.honeyan.c2_intelligence, *args)
+        # Evidence contexts can be large. Return the compact indicator summary first and
+        # fetch an indicator's evidence only when its disclosure is opened.
+        payload = dict(result)
+        payload["candidates"] = [{**row, "evidence": []} for row in result.get("candidates", [])]
+        return payload
+
+    @app.get("/api/honeypot/c2/evidence")
+    async def honeypot_c2_evidence(kind: str, value: str, hours: int = 2160, limit: int = 300):
+        args = (max(1, min(hours, 2160)), max(1, min(limit, 500)))
+        result = await asyncio.to_thread(pot_cached, nm.honeyan.c2_intelligence, *args)
+        row = next((item for item in result.get("candidates", [])
+                    if item.get("kind") == kind and item.get("value") == value), None)
+        if row is None:
+            return {"evidence": [], "evidence_count": 0}
+        return {"evidence": row.get("evidence", []), "evidence_count": row.get("evidence_count", 0)}
 
     @app.get("/api/honeypot/sessions")
     async def honeypot_sessions(hours: int = 168, limit: int = 100):
