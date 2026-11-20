@@ -176,7 +176,7 @@ class RuntimeTelemetry:
         limit = max(1, min(int(limit), 500))
         with self.lock:
             rows = self.db.execute("""
-                SELECT sensor_id,run_id,observed_at,type,hostname,destination_ip,port,protocol
+                SELECT sensor_id,run_id,observed_at,event_type AS type,hostname,destination_ip,port,protocol
                 FROM runtime_events WHERE sample_sha256=? ORDER BY observed_at DESC LIMIT ?
             """, (sha, limit)).fetchall()
         return [dict(row) for row in rows]

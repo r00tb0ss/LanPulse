@@ -482,7 +482,9 @@ def validate_attack_ids(answer: str, context: str) -> str:
     """
     candidates = set()
     for line in (context or "").splitlines():
-        if "DETERMINISTIC ATT&CK CANDIDATES:" not in line:
+        # Only the line LanPulse itself writes counts. Attacker text (a recorded command) can contain the same words
+        # further along a line, so the marker must come first.
+        if not line.lstrip().startswith("DETERMINISTIC ATT&CK CANDIDATES:"):
             continue
         candidates.update(re.findall(r"(?i)\bT\d{4}(?:\.\d{3})?\b", line))
     candidates = {item.upper() for item in candidates}
