@@ -2495,6 +2495,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         args = (max(1, min(hours, 2160)), max(1, min(limit, 500)))
         if refresh:
             result = await asyncio.to_thread(nm.honeyan.c2_intelligence, *args)
+            pot_cache[(nm.honeyan.c2_intelligence.__name__,) + args] = (time.monotonic(), result)
         else:
             # C2 aggregation scans the selected session/sample window; reuse the bounded
             # result briefly so opening the tab repeatedly does not repeat that work.
