@@ -116,3 +116,16 @@ class AttackIdGuardIgnoresAttackerText(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_analyst_save_button_sends_the_form_values():
+    """Regression: 'Save & enable' referenced a removed variable, so the click threw and nothing was saved."""
+    import re
+    from pathlib import Path
+    js = (Path(__file__).resolve().parent.parent / "static" / "analyst.js").read_text()
+    m = re.search(r'\$\("aiSave"\)\.onclick = async \(\) => \{(.*?)\n    \};', js, re.S)
+    assert m, "save handler not found"
+    body = m.group(1)
+    assert "...form()" in body and "enabled: true" in body
+    assert "...f," not in body and "...f}" not in body    # `f` is not defined in this scope
+    assert "const form = () =>" in js

@@ -82,7 +82,7 @@
       $("aiMsg").textContent = r ? r.message : "Test failed."; $("aiMsg").style.color = r && r.ok ? "var(--green)" : "var(--red)";
     };
     $("aiSave").onclick = async () => {
-      if (await api("/api/settings", "POST", {ai: {...f, enabled: true}})) { toast("Analyst enabled"); box.classList.add("hidden"); $("aiLog").innerHTML = ""; refresh(); }
+      if (await api("/api/settings", "POST", {ai: {...form(), enabled: true}})) { toast("Analyst enabled"); box.classList.add("hidden"); $("aiLog").innerHTML = ""; refresh(); }
     };
     $("aiOff").onclick = async () => {
       if (await api("/api/settings", "POST", {ai: {enabled: false}})) { toast("Analyst turned off"); refresh(); }
