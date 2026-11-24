@@ -133,3 +133,11 @@ class InTheViews(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_map_arcs_are_never_split_at_the_date_line():
+    """Arcs cross the map directly; splitting them at +/-180 left stray pieces ending at the map edge."""
+    from pathlib import Path
+    js = (Path(__file__).resolve().parent.parent / "static" / "threats.js").read_text()
+    assert "arcSegments" not in js
+    assert "const arcItems = (list) => list.map(" in js

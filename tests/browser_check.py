@@ -139,10 +139,9 @@ def check_arcs(page, problems):
       const home = homeCoord(), h = tChart.getHeight();
       const far = [[151, -33], [-70, -50], [20, -34], [139, 35], [-5, 50], [175, -41], [-58, -34]];
       let over = -1e9;
-      for (const p of far) for (const route of [[home, p], [p, home]]) for (const coords of arcSegments(route)) {
+      for (const p of far) for (const route of [[home, p], [p, home]]) for (const coords of [route]) {
         const a = tChart.convertToPixel('geo', coords[0]), b = tChart.convertToPixel('geo', coords[1]);
         if (!a || !b) continue;
-        if (Math.abs(coords[1][0] - coords[0][0]) > 180) return -2;               // a piece still runs more than half the world
         const c = arcCurve(coords), cy = (a[1] + b[1]) / 2 - (b[0] - a[0]) * c;
         over = Math.max(over, (0.25 * a[1] + 0.5 * cy + 0.25 * b[1]) - h);       // how far the arc's middle sags below the map
       }
@@ -150,8 +149,6 @@ def check_arcs(page, problems):
     }""")
     if worst is None:
         problems.append("[map arcs] the live map did not start, so the arc check could not run")
-    elif worst == -2:
-        problems.append("[map arcs] an arc still runs the long way across the whole map instead of over the date line")
     elif worst > 0:
         problems.append(f"[map arcs] an arc to a far southern place swings {worst:.0f}px below the bottom of the map")
 

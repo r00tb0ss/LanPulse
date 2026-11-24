@@ -364,18 +364,10 @@ function arcCurve(coords) {
   return (dx >= 0 ? 1 : -1) * (Math.abs(dx) > 120 ? 0.14 : 0.24);
 }
 
-// The map is flat, so an arc from Asia to the US west coast would run the long way across the whole map. When a route is
-// longer than half the world, take the short way instead: leave one edge of the map and re-enter at the other.
-function arcSegments(coords) {
-  const [[x0, y0], [x1, y1]] = coords, dx = x1 - x0;
-  if (Math.abs(dx) <= 180) return [coords];
-  const east = dx < 0;                              // going east means leaving at +180 and coming back in at -180
-  const far = east ? x1 + 360 : x1 - 360, edge = east ? 180 : -180;
-  const yc = y0 + ((edge - x0) / (far - x0)) * (y1 - y0);
-  return [[[x0, y0], [edge, yc]], [[-edge, yc], [x1, y1]]];
-}
-const arcItems = (list) => list.flatMap(({coords, lineStyle}) =>
-  arcSegments(coords).map((c) => ({coords: c, lineStyle: {...lineStyle, curveness: arcCurve(c)}})));
+// Every arc is one unbroken curve straight across the map, through the middle, even for the longest routes (Asia to the
+// US crosses Europe and the Atlantic). Splitting a route at the date line sent arcs off the map edge and back in from
+// the other side, which looked like stray pieces of arc that went nowhere.
+const arcItems = (list) => list.map(({coords, lineStyle}) => ({coords, lineStyle: {...lineStyle, curveness: arcCurve(coords)}}));
 
 function pushArc(ev) {
   const home = homeCoord();
