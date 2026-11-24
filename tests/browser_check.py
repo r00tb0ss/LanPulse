@@ -153,6 +153,39 @@ def check_arcs(page, problems):
         problems.append(f"[map arcs] an arc to a far southern place swings {worst:.0f}px below the bottom of the map")
 
 
+def check_pan_hides_then_restores(page, problems):
+    """Dragging or zooming the map hides the animated dots and arcs, then redraws them all once it settles."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(BASE, wait_until="domcontentloaded")
+    page.wait_for_selector("#vNet", timeout=20000)
+    page.evaluate("() => document.getElementById('vThreat').click()")
+    page.wait_for_timeout(4000)
+    # The demo has no GeoIP database, so put a home and a few attackers on the map ourselves.
+    page.evaluate("""() => {
+      tSummary = {countries: [], ...(tSummary || {}), home: {lat: 38, lon: -96, city: "Home", country: "US"},
+        attackers: [[51, 0], [35, 139], [-33, 151], [-23, -46]].map((c, i) => ({ip: "198.51.100." + (i + 1), lat: c[0], lon: c[1],
+          iso: "XX", count: 5 + i, services: ["ssh"], tag: null}))};
+      updateWorld();
+    }""")
+    count = """() => { const o = tChart.getOption(); const n = (id) => (o.series.find((x) => x.id === id) || {data: []}).data.length;
+      return {attackers: n('attackers'), home: n('home')}; }"""
+    if not page.evaluate("() => typeof tChart !== 'undefined' && !!tChart"):
+        problems.append("[map pan] the live map did not start, so the pan check could not run")
+        return
+    before = page.evaluate(count)
+    if not before["attackers"] or not before["home"]:
+        problems.append(f"[map pan] the demo map had no dots to test with: {before}")
+        return
+    page.evaluate("() => tChart.dispatchAction({type: 'geoRoam', componentType: 'geo', dx: -60, dy: -30})")
+    during = page.evaluate(count)
+    if during["attackers"] or during["home"]:
+        problems.append(f"[map pan] dots stay on the map while it is being dragged (they can drift): {during}")
+    page.wait_for_timeout(900)
+    after = page.evaluate(count)
+    if after != before:
+        problems.append(f"[map pan] dots were not redrawn after the map settled: before {before}, after {after}")
+
+
 def check_colours_and_ips(page, problems):
     """Map colours: attackers red, known scanners yellow, device data blue, all named in the legend. IPs never wrap."""
     page.set_viewport_size({"width": 1280, "height": 900})
@@ -298,6 +331,7 @@ def main() -> int:
                         problems.append(f"[phone {vid}] wider than the screen: {', '.join(over['wide'])}")
                     page.screenshot(path=os.path.join(ROOT, f"browser-phone-{vid}.png"))
                 check_arcs(page, problems)
+                check_pan_hides_then_restores(page, problems)
                 check_colours_and_ips(page, problems)
                 check_contrast(page, problems)
                 browser.close()

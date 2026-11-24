@@ -88,6 +88,8 @@ function updateBadge() {
 }
 
 /* ------------------------------------------------------------ world map */
+let roamActive = false, roamTimer = 0;
+const ROAM_HIDDEN = ["arcs", "flowArcs", "attackers", "dests", "home", "labels"];
 const worldLibReady = () => !!(window.echarts && echarts.getMap && echarts.getMap("world"));
 let worldLoading = null, worldTries = 0, pendingGeoView = null;
 function loadScript(src) {
@@ -196,13 +198,18 @@ function initWorld() {
     if (p.seriesId === "attackers") openIp(p.data.ip);
     else if (p.seriesId === "dests" && typeof openDest === "function") openDest(p.data.d);
   });
-  // Re-place dots and arcs whenever the map is dragged or zoomed so they stay pinned to their locations.
-  // ECharts moves the dots and arcs with the map on its own, so rebuilding everything on each drag frame only made
-  // panning slow (about 6 redraws per frame). Do one tidy-up pass once the map stops moving.
-  let roamTimer = 0;
+  // While the map is dragged or zoomed, the animated dots and arcs can drift away from their places and jump back when it
+  // stops. So hide them for the length of the gesture and redraw them all, once, when the map has settled.
+  roamActive = false;
   tChart.on("georoam", () => {
+    if (!roamActive) { roamActive = true; tChart.setOption({series: ROAM_HIDDEN.map((id) => ({id, data: []}))}); }
     clearTimeout(roamTimer);
-    roamTimer = setTimeout(() => { updateWorld(); drawArcs(); }, 300);
+    roamTimer = setTimeout(() => {
+      roamActive = false;
+      updateWorld();
+      drawArcs(true);
+      if (typeof drawFlowArcs === "function") drawFlowArcs(true);
+    }, 250);
   });
   if (pendingGeoView) {             // keep the zoom and position the person had before the rebuild
     tChart.setOption({geo: {center: pendingGeoView.center, zoom: pendingGeoView.zoom}});
@@ -282,7 +289,7 @@ function homeCoord() {
 }
 
 function updateWorld() {
-  if (!tChart || !tSummary) return;
+  if (!tChart || !tSummary || roamActive) return;
   const s = tSummary;
   const max = Math.max(1, ...s.countries.map((c) => c.count));
   const home = homeCoord();
@@ -307,6 +314,7 @@ function updateWorld() {
 // Every country with activity gets a name, busiest first; one that would land on a name already placed waits until you zoom in.
 // Hovering any country always shows its name.
 function updateCountryLabels() {
+  if (roamActive) return;
   if (!tChart) return;
   const attacksOn = typeof showAttacks !== "function" || showAttacks();
   const trafficOn = typeof showTraffic === "function" && showTraffic() && typeof flowSummary !== "undefined" && flowSummary;
@@ -381,7 +389,7 @@ function pushArc(ev) {
 }
 let arcDrawTimer = 0;
 function drawArcs(now) {
-  if (!tChart) return;
+  if (!tChart || roamActive) return;
   if (now) { clearTimeout(arcDrawTimer); arcDrawTimer = 0; }
   else if (arcDrawTimer) return;                       // a redraw is already queued: this arc rides along
   else { arcDrawTimer = setTimeout(() => drawArcs(true), 250); return; }

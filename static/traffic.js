@@ -79,7 +79,7 @@ function pushFlowArc(e) {
 // at most about 3 times a second and let all the new arcs in a burst share one redraw. Otherwise the dots stall near home.
 let flowDrawTimer = 0;
 function drawFlowArcs(now) {
-  if (!tChart) return;
+  if (!tChart || roamActive) return;
   if (now) { clearTimeout(flowDrawTimer); flowDrawTimer = 0; }
   else if (flowDrawTimer) return;
   else { flowDrawTimer = setTimeout(() => drawFlowArcs(true), 350); return; }
@@ -102,7 +102,7 @@ setInterval(() => {
 }, 1500);
 
 function updateTrafficLayer() {
-  if (!tChart) return;
+  if (!tChart || roamActive) return;
   const on = showTraffic() && flowSummary;
   const dests = on ? flowSummary.dests.filter((d) => d.lat != null) : [];
   const max = Math.max(1, ...dests.map((d) => d.count));
