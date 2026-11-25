@@ -1753,6 +1753,11 @@ def build_app(nm: LanPulse) -> FastAPI:
         scanner = str(body.get("scanner") or "").lower()
         if scanner not in ("nmap", "openvas"):
             return JSONResponse({"error": "Choose Nmap or OpenVAS."}, 400)
+        nmap_active = any(s.get("status") in ("Requested", "Running") for s in nm.public_scans.list())
+        openvas_active = any(s.get("public") and s.get("status") in ("Requested", "Queued", "Running", "New")
+                             for s in nm.openvas.scans.values())
+        if nmap_active or openvas_active:
+            return JSONResponse({"error": "An authorized public scan is already queued or running. Wait for it to finish first."}, 409)
         if scanner == "nmap":
             record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target)
             if error:
