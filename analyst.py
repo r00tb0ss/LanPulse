@@ -44,11 +44,12 @@ def _preflight_raw_evidence(nm, asked: list[str]) -> None:
             candidates.extend((("built-in honeypot hits", getattr(nm, "honeypot", None)),
                                ("Cowrie sessions and samples", getattr(nm, "honeyan", None))))
         for label, source in candidates:
-            if source is None or not hasattr(source, "evidence"):
+            if source is None:
                 continue
-            if not hasattr(source, "evidence_size"):
+            if hasattr(source, "evidence_size"):
+                sources.append((label, source.evidence_size()))
+            elif hasattr(source, "evidence"):
                 raise RuntimeError(f"{label} has raw evidence but no size preflight")
-            sources.append((label, source.evidence_size()))
     except Exception as exc:
         raise EvidenceBudgetExceeded(
             f"LanPulse could not safely estimate retained evidence size ({type(exc).__name__}). "
