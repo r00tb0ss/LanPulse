@@ -23,7 +23,7 @@
   async function refresh() {
     st = await api("/api/ai", "GET");
     if (!st) return;
-    $("aiSub").textContent = st.enabled ? `${st.model} · ${st.local ? "runs on your network" : "full requested evidence, including honeypot credentials, is sent to the cloud provider"}`
+    $("aiSub").textContent = st.enabled ? `${st.model} · ${st.local ? "runs on your network" : st.cloud_evidence_consent ? "hosted provider · raw evidence sharing approved" : "hosted provider · approval required before evidence is sent"}`
                                         : "explains your network — never changes anything";
     renderSugg();
     if (!st.enabled) { showSetup(); if (!$("aiLog").children.length) note("The analyst is off. Choose a provider above to turn it on."); }
@@ -34,10 +34,31 @@
     $("aiLog").appendChild(d); $("aiLog").scrollTop = $("aiLog").scrollHeight; return d;
   }
 
+  // Shared with the captured-sample AI action. The server independently enforces this consent.
+  window.lpEnsureCloudEvidenceConsent = async function() {
+    await refresh();
+    if (!st || !st.cloud_consent_required) return true;
+    const accepted = window.confirm(
+      "Send complete retained LanPulse evidence to the hosted " + st.provider + " provider?\\n\\n" +
+      "This can include attempted honeypot usernames and passwords, raw honeypot sessions and commands, " +
+      "raw threat-event history, LAN device names/IPs, captured-sample analysis, YARA matches, and runtime telemetry. " +
+      "This is not redacted. The provider will receive the evidence needed to answer your question.\\n\\n" +
+      "Choose OK to save one-time permission, or Cancel to send nothing."
+    );
+    if (!accepted) return false;
+    const saved = await api("/api/settings", "POST", {ai: {cloud_evidence_consent: true}}, true);
+    if (!saved) return false;
+    await refresh();
+    return !!(st && st.cloud_evidence_consent);
+  };
+
   async function ask(q) {
     q = (q || "").trim();
     if (!q || busy) return;
     if (!st || !st.enabled) { showSetup(); return; }
+    if (window.lpEnsureCloudEvidenceConsent && !(await window.lpEnsureCloudEvidenceConsent())) {
+      note("No evidence was sent. Cloud evidence sharing was not approved.", "sys"); return;
+    }
     busy = true; $("aiSend").disabled = true; $("aiQ").value = "";
     note(q, "me");
     const wait = note("Thinking…", "sys wait");
@@ -64,6 +85,7 @@
       <div class="btns"><button class="btn" id="aiTest" type="button">Test</button>
         <button class="btn primary" id="aiSave" type="button">Save &amp; enable</button>
         <button class="btn" id="aiOff" type="button">Turn off</button></div>
+      ${st && st.cloud_evidence_consent ? '<button class="btn" id="aiRevokeCloud" type="button">Revoke cloud evidence permission</button>' : ""}
       <div class="muted" id="aiMsg" style="font-size:12px"></div>`;
     const sync = () => {
       const p = $("aiProv").value, d = PROV[p];
@@ -83,6 +105,12 @@
     };
     $("aiSave").onclick = async () => {
       if (await api("/api/settings", "POST", {ai: {...form(), enabled: true}})) { toast("Analyst enabled"); box.classList.add("hidden"); $("aiLog").innerHTML = ""; refresh(); }
+    };
+    const revoke = $("aiRevokeCloud");
+    if (revoke) revoke.onclick = async () => {
+      if (await api("/api/settings", "POST", {ai: {cloud_evidence_consent: false}}, true)) {
+        toast("Cloud evidence permission revoked"); await refresh(); showSetup();
+      }
     };
     $("aiOff").onclick = async () => {
       if (await api("/api/settings", "POST", {ai: {enabled: false}})) { toast("Analyst turned off"); refresh(); }
