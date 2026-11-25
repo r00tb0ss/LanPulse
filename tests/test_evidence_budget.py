@@ -1,4 +1,6 @@
+import json
 import sqlite3
+import tempfile
 import threading
 import types
 import unittest
@@ -7,7 +9,40 @@ from unittest.mock import patch
 import analyst
 import honeyanalysis
 import honeypot
+import openvas
 import threats
+
+
+class OpenVASPublicScanLimits(unittest.TestCase):
+    def test_public_scan_target_cooldown_blocks_repeat(self):
+        obj = openvas.OpenVAS.__new__(openvas.OpenVAS)
+        obj.scans = {"8.8.8.8": {"public": True, "started": 1_800_000_000, "status": "Done"}}
+        with patch("openvas.time.time", return_value=1_800_000_030):
+            error = obj.start_scan("8.8.8.8", authorized_public=True)
+        self.assertIn("public target was scanned recently", error)
+
+    def test_public_scan_global_cooldown_blocks_another_target(self):
+        obj = openvas.OpenVAS.__new__(openvas.OpenVAS)
+        obj.scans = {"8.8.8.8": {"public": True, "started": 1_800_000_000, "status": "Done"}}
+        with patch("openvas.time.time", return_value=1_800_000_030):
+            error = obj.start_scan("1.1.1.1", authorized_public=True)
+        self.assertIn("public OpenVAS scan was started recently", error)
+
+    def test_openvas_history_pruning_keeps_newest_terminal_and_active(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            from pathlib import Path
+            state = Path(tmp) / "openvas"
+            state.mkdir()
+            scans = {f"192.0.2.{i}": {"status": "Done", "started": 1_800_000_000 - i}
+                     for i in range(1, 126)}
+            scans["active"] = {"status": "Running", "started": 1_800_000_000}
+            (state / "scans.json").write_text(json.dumps(scans))
+            nm = types.SimpleNamespace(data_dir=tmp)
+            obj = openvas.OpenVAS(nm)
+            self.assertEqual(len(obj.scans), obj.MAX_HISTORY + 1)
+            self.assertIn("active", obj.scans)
+            self.assertIn("192.0.2.1", obj.scans)
+            self.assertNotIn("192.0.2.125", obj.scans)
 
 
 class EvidenceSizeQueries(unittest.TestCase):
