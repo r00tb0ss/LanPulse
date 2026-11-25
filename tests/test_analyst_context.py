@@ -197,7 +197,7 @@ class AnalystContext(unittest.TestCase):
         nm = fake_nm()
         nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
         nm.honeypot.evidence_size = lambda: {"records": 100000, "estimated_bytes": analyst.MAX_AI_RAW_EVIDENCE_BYTES + 1}
-        with patch.object(analyst, "build_context", side_effect=AssertionError("oversized evidence must not be loaded")):
+        with patch.object(nm.honeypot, "evidence", side_effect=AssertionError("oversized evidence rows must not be loaded")):
             with patch.object(analyst, "call_model", side_effect=AssertionError("no partial evidence may be sent")):
                 result = analyst.ask(nm, "Analyze all honeypot credentials and sessions")
         self.assertIn("in-memory safety limit", result["error"])
