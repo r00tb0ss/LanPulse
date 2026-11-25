@@ -1279,6 +1279,7 @@ class SelectiveGzip(GZipMiddleware):
 
 def build_app(nm: LanPulse) -> FastAPI:
     nm.public_scans = PublicScans(nm.data_dir)
+    public_scan_lock = asyncio.Lock()
     @asynccontextmanager
     async def lifespan(app):
         tasks = [asyncio.create_task(nm.sweep_loop())]
@@ -1753,23 +1754,24 @@ def build_app(nm: LanPulse) -> FastAPI:
         scanner = str(body.get("scanner") or "").lower()
         if scanner not in ("nmap", "openvas"):
             return JSONResponse({"error": "Choose Nmap or OpenVAS."}, 400)
-        nmap_active = any(s.get("status") in ("Requested", "Running") for s in nm.public_scans.list())
-        openvas_active = any(s.get("public") and s.get("status") in ("Requested", "Queued", "Running", "New")
-                             for s in nm.openvas.scans.values())
-        if nmap_active or openvas_active:
-            return JSONResponse({"error": "An authorized public scan is already queued or running. Wait for it to finish first."}, 409)
-        if scanner == "nmap":
-            record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target)
+        async with public_scan_lock:
+            nmap_active = any(s.get("status") in ("Requested", "Running") for s in nm.public_scans.list())
+            openvas_active = any(s.get("public") and s.get("status") in ("Requested", "Queued", "Running", "New")
+                                 for s in nm.openvas.scans.values())
+            if nmap_active or openvas_active:
+                return JSONResponse({"error": "An authorized public scan is already queued or running. Wait for it to finish first."}, 409)
+            if scanner == "nmap":
+                record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target)
+                if error:
+                    return JSONResponse({"error": error}, 400)
+                log.info("Authorized public Nmap scan requested for %s", target)
+                return {"ok": True, "scan": record}
+            if not nm.openvas.cfg().get("enabled"):
+                return JSONResponse({"error": "Enable OpenVAS in Settings > Scanner first."}, 400)
+            error = await asyncio.to_thread(nm.openvas.start_scan, target, True)
             if error:
                 return JSONResponse({"error": error}, 400)
-            log.info("Authorized public Nmap scan requested for %s", target)
-            return {"ok": True, "scan": record}
-        if not nm.openvas.cfg().get("enabled"):
-            return JSONResponse({"error": "Enable OpenVAS in Settings > Scanner first."}, 400)
-        error = await asyncio.to_thread(nm.openvas.start_scan, target, True)
-        if error:
-            return JSONResponse({"error": error}, 400)
-        log.info("Authorized public OpenVAS scan requested for %s", target)
+            log.info("Authorized public OpenVAS scan requested for %s", target)
         return {"ok": True, "scanner": "openvas", "target": target, "status": "Requested"}
 
     @app.get("/api/scans/authorized-public")
