@@ -23,7 +23,7 @@
   async function refresh() {
     st = await api("/api/ai", "GET");
     if (!st) return;
-    $("aiSub").textContent = st.enabled ? `${st.model} · ${st.local ? "runs on your network" : "cloud provider"}`
+    $("aiSub").textContent = st.enabled ? `${st.model} · ${st.local ? "runs on your network" : "full requested evidence, including honeypot credentials, is sent to the cloud provider"}`
                                         : "explains your network — never changes anything";
     renderSugg();
     if (!st.enabled) { showSetup(); if (!$("aiLog").children.length) note("The analyst is off. Choose a provider above to turn it on."); }
@@ -46,7 +46,7 @@
     if (r && r.answer) {
       const m = note(r.answer, "bot");
       const f = document.createElement("div"); f.className = "ai-foot";
-      f.textContent = `${r.model} · ${r.local ? "answered on your network" : "network summary was sent to " + r.provider} · read-only`;
+      f.textContent = `${r.model} · ${r.local ? "answered on your network" : "full requested evidence was sent to " + r.provider} · read-only`;
       m.appendChild(f);
     } else note((r && r.error) || "No answer.", "err");
     busy = false; $("aiSend").disabled = false; $("aiQ").focus();
