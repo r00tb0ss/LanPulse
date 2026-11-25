@@ -827,8 +827,8 @@ def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
             answer = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, prompt, timeout=180)
             if not answer:
                 raise RuntimeError(f"The AI returned an empty result while consolidating evidence group {index}.")
-            reduced.append(answer[:12000])
-        if len(reduced) >= len(current):
+            reduced.append(answer)
+        if sum(len(item) for item in reduced) >= sum(len(item) for item in current):
             raise RuntimeError("The complete evidence ledger could not be reduced to fit the final analysis context.")
         current = reduced
     return "\n\n".join(current)
@@ -928,7 +928,7 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
                 ledger = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, chunk_prompt, timeout=180)
                 if not ledger:
                     return {"error": f"AI analysis stopped at evidence chunk {index} of {len(chunks)} because the model returned an empty result. No remaining evidence was silently skipped."}
-                ledgers.append(ledger[:12000])
+                ledgers.append(ledger)
             consolidated = _reduce_ip_chunk_summaries(cfg, ledgers)
             prompt = (
                 prompt_header
