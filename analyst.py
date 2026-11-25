@@ -762,7 +762,7 @@ def _ip_evidence_chunks(raw_evidence: dict, max_chars: int = 30000) -> list[str]
         if len(encoded) <= max_chars:
             records.append({"path": path, "value": value})
         elif isinstance(value, str):
-            width = max(1000, max_chars // 3)
+            width = max(1, max_chars // 3)
             for offset in range(0, len(value), width):
                 records.append({"path": path, "offset": offset, "text_fragment": value[offset:offset + width]})
         else:
@@ -807,6 +807,8 @@ def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
     budget = 24000
     current = list(summaries)
     while len("\n".join(current)) > budget:
+        if any(len(summary) > budget for summary in current):
+            raise RuntimeError("An evidence ledger exceeds the safe consolidation size; no ledger was truncated.")
         groups, group, size = [], [], 0
         for summary in current:
             if group and size + len(summary) > budget:
