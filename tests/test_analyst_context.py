@@ -1,3 +1,4 @@
+import json
 import types
 import unittest
 from unittest.mock import patch
@@ -144,11 +145,11 @@ class AnalystContext(unittest.TestCase):
             "long_value": "x" * 3500,
         }
         chunks = analyst._ip_evidence_chunks(raw, max_chars=2000)
-        records = [record for chunk in chunks for record in __import__("json").loads(chunk)["records"]]
-        event_ids = {record["value"]["id"] for record in records
-                     if record.get("path", "").startswith("raw_attack_events[") and isinstance(record.get("value"), dict)}
-        hit_ids = {record["value"]["id"] for record in records
-                   if record.get("path", "").startswith("built_in_honeypot_records.hits[") and isinstance(record.get("value"), dict)}
+        records = [record for chunk in chunks for record in json.loads(chunk)["records"]]
+        event_ids = {record["value"] for record in records
+                     if record.get("path", "").startswith("raw_attack_events[") and record.get("path", "").endswith(".id")}
+        hit_ids = {record["value"] for record in records
+                   if record.get("path", "").startswith("built_in_honeypot_records.hits[") and record.get("path", "").endswith(".id")}
         fragments = sorted((record for record in records if record.get("path") == "long_value"),
                            key=lambda record: record["offset"])
         self.assertEqual(event_ids, {i for i in range(12)})
