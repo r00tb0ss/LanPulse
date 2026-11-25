@@ -9,8 +9,11 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
+import re
+import selectors
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -92,13 +95,39 @@ class PublicScans:
                 return
             self.scans[scan_id]["status"] = "Running"
             self._save()
-        cmd = ["nmap", "-Pn", "-n", "-T3", "--top-ports", "1000", "-sV",
-               "--version-light", "--reason", "-oX", "-", target]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, check=False)
-            if result.returncode not in (0, 1):
-                raise RuntimeError((result.stderr or "Nmap exited with an error").strip()[:300])
-            root = ET.fromstring(result.stdout or "")
+            # Write XML to a temporary file so stderr can be streamed independently for live
+            # progress without mixing Nmap's progress messages into the XML document.
+            with tempfile.TemporaryDirectory(prefix="lanpulse-nmap-") as tmp:
+                xml_path = Path(tmp) / "scan.xml"
+                cmd = ["nmap", "-Pn", "-n", "-T3", "--top-ports", "1000", "-sV",
+                       "--version-light", "--reason", "--stats-every", "5s",
+                       "-oX", str(xml_path), target]
+                with subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                      text=True, bufsize=1) as proc:
+                    started = time.monotonic()
+                    with selectors.DefaultSelector() as selector:
+                        selector.register(proc.stderr, selectors.EVENT_READ)
+                        while True:
+                            if time.monotonic() - started > 900:
+                                proc.kill()
+                                proc.wait()
+                                raise subprocess.TimeoutExpired(cmd, 900)
+                            ready = selector.select(timeout=1)
+                            if ready:
+                                line = proc.stderr.readline()
+                                if line:
+                                    self._update_progress(scan_id, line)
+                                elif proc.poll() is not None:
+                                    break
+                            elif proc.poll() is not None:
+                                break
+                        returncode = proc.wait(timeout=5)
+                if returncode not in (0, 1):
+                    raise RuntimeError("Nmap exited with status " + str(returncode))
+                if not xml_path.exists():
+                    raise RuntimeError("Nmap finished without producing scan results.")
+                root = ET.parse(xml_path).getroot()
             host = root.find("host")
             ports = []
             if host is not None:
@@ -127,6 +156,21 @@ class PublicScans:
             self._finish_error(scan_id, "Nmap timed out after 15 minutes.")
         except Exception as exc:
             self._finish_error(scan_id, str(exc)[:300])
+
+    def _update_progress(self, scan_id: str, line: str):
+        """Persist Nmap's periodic progress without exposing raw command output to the UI."""
+        match = re.search(r"(?:About\\s+)?([0-9]+(?:\\.[0-9]+)?)%\\s+done", line, re.I)
+        phase = re.search(r"undergoing\\s+([^;]+)", line, re.I)
+        with self.lock:
+            rec = self.scans.get(scan_id)
+            if rec is None or rec.get("status") != "Running":
+                return
+            if match:
+                rec["progress"] = max(1, min(99, int(float(match.group(1)))))
+            rec["phase"] = (phase.group(1).strip()[:100] if phase else
+                            ("Nmap is scanning ports and identifying services" if not rec.get("phase") else rec["phase"]))
+            rec["updated"] = int(time.time())
+            self._save()
 
     def _finish_error(self, scan_id: str, message: str):
         with self.lock:
