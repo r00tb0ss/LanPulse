@@ -7,6 +7,9 @@ on:
     branches: [main]
 permissions:
   contents: write
+concurrency:
+  group: lanpulse-release-main
+  cancel-in-progress: false
 jobs:
   release:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -22,7 +25,7 @@ jobs:
         run: |
           MAIN_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')
           if [ "$MAIN_SHA" != "$RELEASE_SHA" ]; then
-            echo "A newer main commit exists ($MAIN_SHA); skipping stale CI result $RELEASE_SHA."
+            echo "A newer main commit exists ($MAIN_SHA); skipping stale CI result $RELEASE_SHA. Its own successful CI workflow_run will retry release publication."
             exit 0
           fi
           VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
