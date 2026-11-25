@@ -900,6 +900,16 @@ class ThreatMonitor:
             event["lan_id"], event["lan_name"] = (device["id"], self.nm.label(device)) if device else ("", "")
         return out
 
+    def evidence_size(self) -> dict:
+        """Return a cheap SQLite aggregate before the AI path materializes retained rows."""
+        with self.lock:
+            count, raw_bytes = self.db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(src,'')) + LENGTH(COALESCE(lan,'')) + "
+                "LENGTH(COALESCE(service,'')) + LENGTH(COALESCE(sensor,'')) + "
+                "LENGTH(COALESCE(detail,'')) + 192), 0) FROM attacks"
+            ).fetchone()
+        return {"records": int(count or 0), "estimated_bytes": int(raw_bytes or 0)}
+
     def evidence(self) -> list[dict]:
         """All retained raw threat events for explicit AI questions; the Threat Map uses its bounded summary path."""
         keys = ("t", "src", "dport", "proto", "action", "lan", "service", "sensor", "detail")
