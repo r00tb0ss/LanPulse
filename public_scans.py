@@ -42,6 +42,7 @@ class PublicScans:
     ACTIVE = {"Requested", "Running"}
     MAX_HISTORY = 100
     TARGET_COOLDOWN_SECONDS = 3600
+    GLOBAL_COOLDOWN_SECONDS = 60
 
     def __init__(self, data_dir: str | Path):
         self.path = Path(data_dir) / "authorized-public-scans.json"
@@ -97,6 +98,10 @@ class PublicScans:
             self._prune_history_locked(now)
             if any(s.get("status") in self.ACTIVE for s in self.scans.values()):
                 return None, "A public IP scan is already queued or running. Wait for it to finish first."
+            previous_global = max((int(s.get("started") or 0) for s in self.scans.values()), default=0)
+            global_wait = self.GLOBAL_COOLDOWN_SECONDS - (now - previous_global)
+            if previous_global and global_wait > 0:
+                return None, f"A public Nmap scan was started recently. Wait about {global_wait} second(s) before another scan."
             previous = max((s.get("started", 0) for s in self.scans.values()
                             if s.get("target") == target), default=0)
             wait = self.TARGET_COOLDOWN_SECONDS - (now - previous)
