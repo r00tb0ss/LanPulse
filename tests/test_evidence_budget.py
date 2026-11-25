@@ -12,7 +12,7 @@ import threats
 
 class EvidenceSizeQueries(unittest.TestCase):
     def test_threat_event_size_uses_aggregate_query(self):
-        obj = threats.Threats.__new__(threats.Threats)
+        obj = threats.ThreatMonitor.__new__(threats.ThreatMonitor)
         obj.lock = threading.Lock()
         obj.db = sqlite3.connect(":memory:")
         obj.db.execute("CREATE TABLE attacks (t REAL, src TEXT, dport INTEGER, proto TEXT, action TEXT, lan TEXT, service TEXT, sensor TEXT, detail TEXT)")
