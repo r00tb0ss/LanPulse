@@ -265,7 +265,7 @@ def _threats(nm, detail: bool) -> list[str]:
     try:
         public_nmap = nm.public_scans.list() if hasattr(nm, "public_scans") else []
         ov = getattr(nm, "openvas", None)
-        public_openvas = [s for s in ov.status().get("scans", []) if s.get("public")] if ov else []
+        public_openvas = [{"ip": ip, **s} for ip, s in ov.scans.items() if s.get("public")] if ov else []
         out.append("AUTHORIZED PUBLIC IP SCAN RESULTS (JSON; targets were manually entered and user-approved):")
         out.append(json.dumps({"nmap": public_nmap, "openvas": public_openvas},
                               ensure_ascii=False, sort_keys=True, default=str))
