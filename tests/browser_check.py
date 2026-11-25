@@ -197,18 +197,32 @@ def check_pan_hides_then_restores(page, problems):
     if not before["home"] or not before["dests"] or not before["arcs"] or not before["flowArcs"]:
         problems.append(f"[map pan] could not seed every map overlay before the gesture: {before}")
         return
-    page.evaluate("() => tChart.dispatchAction({type: 'geoRoam', componentType: 'geo', dx: -60, dy: -30})")
+    before_view = page.evaluate("() => { const g = tChart.getOption().geo[0]; return {center: g.center, zoom: g.zoom}; }")
+    canvas = page.locator("#worldMap canvas").first.bounding_box()
+    if not canvas:
+        problems.append("[map pan] the map canvas has no measurable browser bounds")
+        return
+    # Exercise the real pointer gesture rather than only dispatching an ECharts action.
+    x, y = canvas["x"] + canvas["width"] / 2, canvas["y"] + canvas["height"] / 2
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x - 70, y - 40, steps=8)
+    page.wait_for_timeout(100)
     during = page.evaluate(counts)
     if any(during.values()):
-        problems.append(f"[map pan] overlays remain visible during the gesture: {during}")
+        problems.append(f"[map pan] overlays remain visible during the pointer drag: {during}")
+    page.mouse.up()
     page.wait_for_timeout(900)
     after = page.evaluate(counts)
+    after_view = page.evaluate("() => { const g = tChart.getOption().geo[0]; return {center: g.center, zoom: g.zoom}; }")
+    if before_view == after_view:
+        problems.append("[map pan] a real pointer drag did not change the map position")
     # The live demo feed can legitimately refresh while the 900ms roam debounce settles,
     # so exact counts may change. Verify each overlay that was visible before the gesture
     # is visible again rather than requiring a stale snapshot to remain byte-for-byte equal.
     missing = [name for name, count in before.items() if count and not after.get(name)]
     if missing:
-        problems.append(f"[map pan] overlays were not restored after the gesture: {missing}; before {before}, after {after}")
+        problems.append(f"[map pan] overlays were not restored after the pointer drag: {missing}; before {before}, after {after}")
 
 
 
