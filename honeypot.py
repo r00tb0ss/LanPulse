@@ -695,6 +695,16 @@ class Honeypot:
             pass
         return out
 
+    def evidence_size(self) -> dict:
+        """Estimate retained hit payload size without materializing the rows."""
+        with self.lock:
+            count, raw_bytes = self.db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(ip,'')) + LENGTH(COALESCE(service,'')) + "
+                "LENGTH(COALESCE(creds,'')) + LENGTH(COALESCE(data,'')) + "
+                "LENGTH(COALESCE(sensor,'')) + 192), 0) FROM hits"
+            ).fetchone()
+        return {"records": int(count or 0), "estimated_bytes": int(raw_bytes or 0)}
+
     def evidence(self) -> list[dict]:
         """All retained built-in honeypot hit records; called only for explicit AI analysis."""
         keys = ("t", "ip", "service", "port", "internal", "creds", "data", "sensor")
