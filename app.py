@@ -58,6 +58,7 @@ import redteam
 import reports
 import analyst
 from openvas import OpenVAS
+from public_scans import PublicScans
 from services import ServiceMonitor
 from honeypot import Honeypot
 from honeyanalysis import HoneyAnalysis, MAX_SAMPLE, clean_base_url, cert_fingerprint, installer_script, install_command, sensor_options
@@ -1277,6 +1278,7 @@ class SelectiveGzip(GZipMiddleware):
 
 
 def build_app(nm: LanPulse) -> FastAPI:
+    nm.public_scans = PublicScans(nm.data_dir)
     @asynccontextmanager
     async def lifespan(app):
         tasks = [asyncio.create_task(nm.sweep_loop())]
@@ -1728,6 +1730,44 @@ def build_app(nm: LanPulse) -> FastAPI:
             body = None
         question = str(body.get("question", ""))[:500] if isinstance(body, dict) else ""
         return await asyncio.to_thread(analyst.investigate_ip, nm, ip, question)
+
+    @app.post("/api/scans/authorized-public")
+    async def authorized_public_scan(request: Request):
+        """Start a bounded scan of a manually entered public IPv4 address with explicit authorization."""
+        if nm.args.demo:
+            return JSONResponse({"error": "Active scans are disabled in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a LanPulse dashboard login before launching public scans."}, 403)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict) or body.get("authorized") is not True:
+            return JSONResponse({"error": "Confirm that you own or are explicitly authorized to test this target."}, 400)
+        try:
+            from public_scans import validate_public_ipv4
+            target = validate_public_ipv4(body.get("target", ""))
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, 400)
+        scanner = str(body.get("scanner") or "").lower()
+        if scanner not in ("nmap", "openvas"):
+            return JSONResponse({"error": "Choose Nmap or OpenVAS."}, 400)
+        if scanner == "nmap":
+            record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target)
+            if error:
+                return JSONResponse({"error": error}, 400)
+            return {"ok": True, "scan": record}
+        if not nm.openvas.cfg().get("enabled"):
+            return JSONResponse({"error": "Enable OpenVAS in Settings > Scanner first."}, 400)
+        error = await asyncio.to_thread(nm.openvas.start_scan, target, True)
+        if error:
+            return JSONResponse({"error": error}, 400)
+        return {"ok": True, "scanner": "openvas", "target": target, "status": "Requested"}
+
+    @app.get("/api/scans/authorized-public")
+    async def authorized_public_scans():
+        openvas_scans = [s for s in nm.openvas.status().get("scans", []) if s.get("public")]
+        return {"nmap": nm.public_scans.list(), "openvas": openvas_scans}
 
     @app.post("/api/threats/ip/{ip}/scan")
     async def threat_ip_scan(ip: str, request: Request):
