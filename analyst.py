@@ -26,7 +26,7 @@ import urllib.request
 
 log = logging.getLogger("lanpulse.analyst")
 
-MAX_AI_RAW_EVIDENCE_BYTES = 24 * 1024 * 1024
+MAX_AI_RAW_EVIDENCE_BYTES = 8 * 1024 * 1024
 
 
 class EvidenceBudgetExceeded(RuntimeError):
