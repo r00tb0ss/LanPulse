@@ -47,7 +47,7 @@ class PublicScanQueue(unittest.TestCase):
             scans = PublicScans(tmp)
             try:
                 with patch("public_scans.shutil.which", return_value="/usr/bin/nmap"), \
-                     patch("public_scans.time.time", return_value=1_800_000_000), \
+                     patch("public_scans.time.time", side_effect=[1_800_000_000, 1_800_000_061]), \
                      patch.object(scans.pool, "submit"):
                     first, error = scans.start_nmap("8.8.8.8", "operator")
                     self.assertFalse(error)
