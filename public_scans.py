@@ -83,7 +83,7 @@ class PublicScans:
             scan_id = uuid.uuid4().hex[:12]
             record = {"id": scan_id, "target": target, "scanner": "nmap", "scope": "top-1000-tcp-ports",
                       "status": "Requested", "progress": 0, "started": int(time.time()),
-                      "finished": 0, "ports": [], "error": "", "authorized": True}
+                      "finished": 0, "ports": [], "host_state": "unknown", "error": "", "authorized": True}
             self.scans[scan_id] = record
             self._save()
         self.pool.submit(self._run_nmap, scan_id, target)
@@ -129,6 +129,8 @@ class PublicScans:
                     raise RuntimeError("Nmap finished without producing scan results.")
                 root = ET.parse(xml_path).getroot()
             host = root.find("host")
+            host_status = host.find("status") if host is not None else None
+            host_state = host_status.get("state", "unknown") if host_status is not None else "unknown"
             ports = []
             if host is not None:
                 for port in host.findall("ports/port"):
@@ -150,7 +152,7 @@ class PublicScans:
                 rec = self.scans.get(scan_id)
                 if rec is not None:
                     rec.update({"status": "Done", "progress": 100, "finished": int(time.time()),
-                                "ports": ports, "summary": summary})
+                                "ports": ports, "host_state": host_state, "summary": summary})
                     self._save()
         except subprocess.TimeoutExpired:
             self._finish_error(scan_id, "Nmap timed out after 15 minutes.")
