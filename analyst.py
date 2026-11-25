@@ -317,6 +317,35 @@ def _join(rows, fmt, n: int) -> str:
     return ", ".join(fmt(r) for r in list(rows)[:n])
 
 
+MAX_AI_EVIDENCE_BYTES = 24 * 1024 * 1024
+
+
+def retained_evidence_preflight(nm, question: str) -> str:
+    """Refuse oversized all-retained evidence requests before loading rows into memory.
+
+    This is a safety boundary, not a record limit: below the budget every retained
+    record remains available; above it no partial evidence is sent.
+    """
+    q = (question or "").lower()
+    asked = {topic for topic, words in TOPIC_WORDS.items() if any(word in q for word in words)}
+    estimates = []
+    if "threats" in asked and hasattr(nm.threats, "evidence_size"):
+        estimates.append(("threat", nm.threats.evidence_size()))
+    if "honeypot" in asked:
+        if hasattr(nm.honeypot, "evidence_size"):
+            estimates.append(("built-in honeypot", nm.honeypot.evidence_size()))
+        if hasattr(nm.honeyan, "evidence_size"):
+            estimates.append(("Cowrie and samples", nm.honeyan.evidence_size()))
+    total = sum(int(item.get("estimated_bytes") or 0) for _, item in estimates)
+    if total <= MAX_AI_EVIDENCE_BYTES:
+        return ""
+    detail = ", ".join(f"{name}: {int(item.get('estimated_bytes') or 0):,} bytes"
+                       for name, item in estimates)
+    return (f"The complete retained evidence for this request is estimated at {total:,} bytes "
+            f"({detail}), above LanPulse's safe in-memory evidence budget of {MAX_AI_EVIDENCE_BYTES:,} bytes. "
+            "No evidence was truncated or sent. Narrow the investigation to one source IP or ask about a smaller evidence area.")
+
+
 def _authorized_scan_evidence(nm, targets: set[str] | None = None) -> dict:
     """Return saved public scan results, optionally limited to explicitly relevant target IPs."""
     wanted = set(targets or ())
@@ -693,7 +722,10 @@ def ask(nm, question: str) -> dict:
         # entire retained threat database (or unrelated honeypot history) into Ollama.
         return investigate_ip(nm, ip_targets[0], q)
     try:
-        context = build_context(nm, q)
+        preflight_error = retained_evidence_preflight(nm, q)
+    if preflight_error:
+        return {"error": preflight_error}
+    context = build_context(nm, q)
     except EvidenceBudgetExceeded as exc:
         return {"error": str(exc)}
     user = f"{context}\n\n----\nQUESTION: {q}\n\nAnswer using only the context above, citing specific devices/IPs/CVEs."
