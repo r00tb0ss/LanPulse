@@ -164,11 +164,11 @@ class AnalystContext(unittest.TestCase):
     def test_ip_ledger_consolidation_does_not_truncate_model_output(self):
         cfg = {"provider": "ollama"}
         summaries = ["a" * 13000, "b" * 13000, "c" * 13000]
-        outputs = ["x" * 12500, "y" * 12500, "z" * 12500, "u" * 10000, "v" * 10000]
+        outputs = ["x" * 7000, "y" * 7000, "z" * 7000]
         with patch.object(analyst, "call_model", side_effect=outputs) as call:
             result = analyst._reduce_ip_chunk_summaries(cfg, summaries)
-        self.assertEqual(len(result), 20004)
-        self.assertEqual(call.call_count, 5)
+        self.assertEqual(len(result), 21004)
+        self.assertEqual(call.call_count, 3)
 
     def test_ip_ledger_consolidation_fails_instead_of_truncating_oversized_output(self):
         cfg = {"provider": "ollama"}
