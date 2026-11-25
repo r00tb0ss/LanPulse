@@ -704,8 +704,12 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
             local_context = (nm.threats.ip_context(ip).get("context") or {})
         local_context = dict(local_context or {})
         target_evidence = []
-        for target in (data.get("targets") or []):
-            device = next((d for d in nm.devices.values() if d.get("ip") == target.get("lan")), None)
+        target_ips = list(dict.fromkeys(
+            [str(target.get("lan") or "") for target in (data.get("targets") or [])] +
+            [str(event.get("lan") or "") for event in (data.get("recent") or [])]
+        ))
+        for target_ip in (ip for ip in target_ips if ip):
+            device = next((d for d in nm.devices.values() if d.get("ip") == target_ip), None)
             if not device:
                 continue
             try:
