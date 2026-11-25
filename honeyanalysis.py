@@ -1440,7 +1440,7 @@ class HoneyAnalysis:
                                                 (login.get("u") or "unknown user"), "evidence": ""})
                 for command in commands_raw:
                     command_tags = classify_command(command)
-                    stage = ("Command and control" if re.search(r"\\b(?:JOIN\\s+#[\\w.-]+|PRIVMSG)\\b", command, re.I) else
+                    stage = ("Command and control" if re.search(r"\b(?:JOIN\s+#[\w.-]+|PRIVMSG)\b", command, re.I) else
                              "Persistence" if any(t.startswith("persistence") or t == "ssh-key-plant" for t in command_tags) else
                              "Defense evasion" if any(t in command_tags for t in ("disable-defenses", "cover-tracks", "deletes-files")) else
                              "Execution" if any(t in command_tags for t in ("run-dropped-file", "reverse-shell")) else
@@ -1469,7 +1469,7 @@ class HoneyAnalysis:
                     "iocs": command_analysis["iocs"], "ai_attack_intelligence": intelligence,
                     "timeline": timeline,
                     "timeline_note": "Sequence is reconstructed from available session fields; exact cross-event ordering and per-command timestamps were not supplied.",
-                    "decoded": decoded_view("\\n".join(commands_raw)), "files": files, "tags": tags,
+                    "decoded": decoded_view("\n".join(commands_raw)), "files": files, "tags": tags,
                     "score": score, "tag_info": TAG_INFO,
                     **{k: geo[k] for k in ("iso", "country", "city", "org", "asn") if k in geo},
                 })
