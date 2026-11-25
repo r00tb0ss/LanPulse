@@ -268,8 +268,14 @@ class OpenVAS:
             return "That isn't a valid IPv4 address."
         if authorized_public:
             import ipaddress
-            if not ipaddress.ip_address(ip).is_global:
-                return "The target must be a globally routable public IPv4 address."
+            try:
+                if not ipaddress.ip_address(ip).is_global:
+                    return "The target must be a globally routable public IPv4 address."
+            except ValueError:
+                return "That isn't a valid public IPv4 address."
+            if any(s.get("public") and s.get("status") in ("Requested", "Queued", "Running", "New")
+                   for s in self.scans.values()):
+                return "An authorized public OpenVAS scan is already queued or running."
         elif not any(d.get("ip") == ip for d in self.nm.devices.values()):
             return "That device isn't on your network map."
         cur = self.scans.get(ip)
