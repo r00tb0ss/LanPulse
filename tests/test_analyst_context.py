@@ -46,6 +46,21 @@ class AnalystContext(unittest.TestCase):
         self.assertIn("Services monitor", c)
 
 
+    def test_threat_context_includes_authorized_public_scan_results(self):
+        nm = fake_nm()
+        nm.public_scans = types.SimpleNamespace(list=lambda: [
+            {"target": "8.8.8.8", "scanner": "nmap", "status": "Done",
+             "ports": [{"port": 443, "service": "https"}]}
+        ])
+        nm.openvas = types.SimpleNamespace(status=lambda: {"scans": [
+            {"ip": "1.1.1.1", "public": True, "status": "Done",
+             "results": [{"name": "TLS certificate issue", "severity": 5.0}]}
+        ]})
+        context = analyst.topic_context(nm, "analyze my public IP scan results")
+        self.assertIn("AUTHORIZED PUBLIC IP SCAN RESULTS", context)
+        self.assertIn("8.8.8.8", context)
+        self.assertIn("TLS certificate issue", context)
+
     def test_threat_context_includes_all_raw_attack_events(self):
         nm = fake_nm()
         nm.threats.evidence = lambda: [
