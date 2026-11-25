@@ -1384,19 +1384,101 @@ class HoneyAnalysis:
                 "session_count": len(sessions), "sample_count": len(samples)}
 
     def evidence(self) -> dict:
-        """All retained Cowrie session records and cached sample/runtime evidence for explicit AI analysis."""
-        with self.lock:
-            rows = self.db.execute(
-                "SELECT id, files FROM sessions ORDER BY start DESC").fetchall()
+        """All retained Cowrie evidence, read in bounded pages without one session query per row."""
         sessions, hashes = [], set()
-        for sid, files_json in rows:
-            record = self.session(sid)
-            if record:
-                sessions.append(record)
-            for item in json.loads(files_json or "[]"):
-                sha = str(item.get("sha256") or "").lower() if isinstance(item, dict) else ""
-                if HEX64.fullmatch(sha):
-                    hashes.add(sha)
+        page_size = 200
+        last_start, last_id = None, None
+        columns = ("id", "sensor", "ip", "port", "proto", "start", "end", "client",
+                   "hassh", "logins", "commands", "files", "tags", "score")
+        while True:
+            with self.lock:
+                if last_start is None:
+                    rows = self.db.execute(
+                        "SELECT id, sensor, ip, port, proto, start, end, client, hassh, logins, commands, files, tags, score "
+                        "FROM sessions ORDER BY start DESC, id DESC LIMIT ?", (page_size,)).fetchall()
+                else:
+                    rows = self.db.execute(
+                        "SELECT id, sensor, ip, port, proto, start, end, client, hassh, logins, commands, files, tags, score "
+                        "FROM sessions WHERE start < ? OR (start = ? AND id < ?) "
+                        "ORDER BY start DESC, id DESC LIMIT ?", (last_start, last_start, last_id, page_size)).fetchall()
+            if not rows:
+                break
+
+            page_hashes = set()
+            for row in rows:
+                for item in json.loads(row[11] or "[]"):
+                    sha = str(item.get("sha256") or "").lower() if isinstance(item, dict) else ""
+                    if HEX64.fullmatch(sha):
+                        page_hashes.add(sha)
+                        hashes.add(sha)
+            # Resolve all file metadata for this page in one query rather than one query per session/file.
+            sample_meta = {}
+            ordered_hashes = sorted(page_hashes)
+            for start in range(0, len(ordered_hashes), 500):
+                batch = ordered_hashes[start:start + 500]
+                if not batch:
+                    continue
+                marks = ",".join("?" for _ in batch)
+                with self.lock:
+                    found = self.db.execute(
+                        f"SELECT sha256, type, size FROM samples WHERE sha256 IN ({marks})", batch).fetchall()
+                sample_meta.update({sha: (typ, size) for sha, typ, size in found})
+
+            for row in rows:
+                (sid, sensor, ip, port, proto, started, ended, client, hassh,
+                 logins_json, commands_json, files_json, tags_json, score) = row
+                logins = json.loads(logins_json or "[]")
+                commands_raw = json.loads(commands_json or "[]")
+                files = json.loads(files_json or "[]")
+                tags = json.loads(tags_json or "[]")
+                duration = round(max(0, ended - started), 1)
+                command_analysis = analyze_commands(commands_raw)
+                intelligence = analyze_attack_intelligence(commands_raw, logins, files, duration)
+                timeline = [{"sequence": 1, "kind": "session", "stage": "Initial access",
+                             "summary": f"Connection opened to {str(proto).upper()}:{port}", "evidence": ""}]
+                for login in logins:
+                    timeline.append({"sequence": len(timeline) + 1, "kind": "login", "stage": "Initial access",
+                                     "summary": ("Accepted" if login.get("ok") else "Attempted") + " login for " +
+                                                (login.get("u") or "unknown user"), "evidence": ""})
+                for command in commands_raw:
+                    command_tags = classify_command(command)
+                    stage = ("Command and control" if re.search(r"\\b(?:JOIN\\s+#[\\w.-]+|PRIVMSG)\\b", command, re.I) else
+                             "Persistence" if any(t.startswith("persistence") or t == "ssh-key-plant" for t in command_tags) else
+                             "Defense evasion" if any(t in command_tags for t in ("disable-defenses", "cover-tracks", "deletes-files")) else
+                             "Execution" if any(t in command_tags for t in ("run-dropped-file", "reverse-shell")) else
+                             "File permission change" if "make-executable" in command_tags else
+                             "Delivery" if any(t in command_tags for t in ("download", "pipe-to-shell")) else
+                             "Reconnaissance" if any(t.startswith("recon") or t == "ssh-scan" for t in command_tags) else "Activity")
+                    labels = [TAG_INFO[t]["label"] for t in command_tags if t in TAG_INFO]
+                    timeline.append({"sequence": len(timeline) + 1, "kind": "command", "stage": stage,
+                                     "summary": "; ".join(labels) if labels else "Command entered",
+                                     "evidence": command[:240]})
+                for item in files:
+                    sha = str(item.get("sha256") or "").lower()
+                    meta = sample_meta.get(sha)
+                    item["known"] = bool(meta)
+                    item["type"], item["size"] = meta if meta else ("", 0)
+                    item["url_defanged"] = defang(item["url"]) if item.get("url") else ""
+                    timeline.append({"sequence": len(timeline) + 1, "kind": "file", "stage": "Delivery",
+                                     "summary": ("Uploaded " if item.get("dir") == "upload" else "Downloaded ") +
+                                                str(item.get("name") or sha[:16]),
+                                     "evidence": sha})
+                geo = self.hp._geo(ip)
+                sessions.append({
+                    "id": sid, "sensor": sensor, "ip": ip, "port": port, "proto": proto,
+                    "start": started, "duration": duration, "client": client, "hassh": hassh,
+                    "logins": logins, "commands": command_analysis["commands"],
+                    "iocs": command_analysis["iocs"], "ai_attack_intelligence": intelligence,
+                    "timeline": timeline,
+                    "timeline_note": "Sequence is reconstructed from available session fields; exact cross-event ordering and per-command timestamps were not supplied.",
+                    "decoded": decoded_view("\\n".join(commands_raw)), "files": files, "tags": tags,
+                    "score": score, "tag_info": TAG_INFO,
+                    **{k: geo[k] for k in ("iso", "country", "city", "org", "asn") if k in geo},
+                })
+            last_start, last_id = rows[-1][5], rows[-1][0]
+            if len(rows) < page_size:
+                break
+
         samples, runtime = [], {}
         telemetry = getattr(self.nm, "runtime_telemetry", None)
         for sha in sorted(hashes):
