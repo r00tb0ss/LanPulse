@@ -697,12 +697,19 @@ class Honeypot:
 
     def evidence(self) -> list[dict]:
         """All retained built-in honeypot hit records; called only for explicit AI analysis."""
-        with self.lock:
-            rows = self.db.execute(
-                "SELECT t, ip, service, port, internal, creds, data, sensor FROM hits ORDER BY t DESC"
-            ).fetchall()
         keys = ("t", "ip", "service", "port", "internal", "creds", "data", "sensor")
-        return [dict(zip(keys, row)) for row in rows]
+        out = []
+        # Fetch in bounded batches while retaining every row for the AI evidence pack.
+        with self.lock:
+            cursor = self.db.execute(
+                "SELECT t, ip, service, port, internal, creds, data, sensor FROM hits ORDER BY t DESC, rowid DESC"
+            )
+            while True:
+                rows = cursor.fetchmany(500)
+                if not rows:
+                    break
+                out.extend(dict(zip(keys, row)) for row in rows)
+        return out
 
     def detail(self, ip: str, hours: int = 2160, full: bool = False) -> dict:
         """Everything this one address did to the decoys: totals, every login tried, every request."""
