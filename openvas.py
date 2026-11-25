@@ -153,6 +153,10 @@ def parse_results(root: ET.Element, only_host: str = "") -> list[dict]:
 
 
 class OpenVAS:
+    MAX_HISTORY = 100
+    TARGET_COOLDOWN_SECONDS = 3600
+    GLOBAL_PUBLIC_COOLDOWN_SECONDS = 60
+
     def __init__(self, nm):
         self.nm = nm
         self.dir = Path(nm.data_dir) / "openvas"
@@ -164,6 +168,21 @@ class OpenVAS:
             self.scans = json.loads(self.state_file.read_text())
         except (OSError, ValueError):
             pass
+        self._prune_history()
+
+    def _prune_history(self):
+        """Keep the OpenVAS audit file bounded while retaining active tasks and newest history."""
+        active = {ip: row for ip, row in self.scans.items()
+                  if row.get("status") in ("Requested", "Queued", "Running", "New")}
+        terminal = sorted(
+            ((ip, row) for ip, row in self.scans.items() if ip not in active),
+            key=lambda item: int(item[1].get("started") or 0), reverse=True,
+        )
+        keep = dict(terminal[:self.MAX_HISTORY])
+        keep.update(active)
+        if len(keep) != len(self.scans):
+            self.scans = keep
+            self._save()
 
     # ------------------------------------------------------------------ config
     def cfg(self) -> dict:
@@ -281,6 +300,17 @@ class OpenVAS:
         cur = self.scans.get(ip)
         if cur and cur.get("status") in ("Requested", "Queued", "Running", "New"):
             return "A scan of this device is already running."
+        if authorized_public:
+            now = int(time.time())
+            previous_target = int((cur or {}).get("started") or 0)
+            target_wait = self.TARGET_COOLDOWN_SECONDS - (now - previous_target)
+            if previous_target and target_wait > 0:
+                return f"This public target was scanned recently. Try again in about {max(1, (target_wait + 59) // 60)} minute(s)."
+            previous_public = max((int(row.get("started") or 0) for row in self.scans.values()
+                                   if row.get("public")), default=0)
+            global_wait = self.GLOBAL_PUBLIC_COOLDOWN_SECONDS - (now - previous_public)
+            if previous_public and global_wait > 0:
+                return f"A public OpenVAS scan was started recently. Wait about {global_wait} second(s) before another public scan."
         clash = self.nm.local.conflict_for(ip) if not authorized_public else []
         if clash:
             return (f"{ip} is being answered by more than one device ({', '.join(clash)}), so a scan could land on either "
@@ -305,6 +335,7 @@ class OpenVAS:
         self.scans[ip] = {"task": tid, "status": "Requested", "progress": 0, "started": int(time.time()),
                           "finished": 0, "error": "", "count": 0, "mac": str(dev.get("mac") or "").lower(),
                           "public": bool(authorized_public), "authorized": bool(authorized_public), "results": []}
+        self._prune_history()
         self._save()
         self.wake.set()
         return ""
