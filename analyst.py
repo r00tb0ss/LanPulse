@@ -245,7 +245,19 @@ def _device_lines(nm) -> list[str]:
 
 
 # --------------------------------------------------------------------------- what the analyst knows beyond the basics
-NUM_CTX = 32768                 # Ollama's default window is small and silently drops the start of a long prompt
+NUM_CTX = 32768                 # Ollama's configured context window
+
+
+def _ollama_prompt_fits(system: str, user: str, reserve: int = 4096) -> bool:
+    """Conservatively bound prompt tokens using UTF-8 bytes, not a chars-per-token guess.
+
+    Byte count is an intentionally pessimistic upper bound for byte-based BPE tokenizers;
+    the reserve covers message framing and generated output. This can chunk early, but
+    prevents dense JSON and multibyte evidence from passing a dangerously optimistic check.
+    """
+    prompt_bytes = len((system or "").encode("utf-8")) + len((user or "").encode("utf-8")) + 256
+    return prompt_bytes <= max(0, NUM_CTX - max(1024, int(reserve)))
+
 
 GUIDE = """LANPULSE GUIDE (what LanPulse is and where things are; use it to answer "how do I..." and "what is..." questions):
 LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubuntu/Debian/Raspberry Pi machine and is opened in a browser. Tabs along the top: Network, Threats, DNS, Vulns, Services, Red Team, Honeypot. The gear icon opens Settings; the wand icon opens this analyst.
@@ -806,16 +818,16 @@ def format_ip_evidence(ip: str, data: dict, context: dict | None = None, known_c
     return "\n".join(lines)
 
 
-def _ip_evidence_chunks(raw_evidence: dict, max_chars: int = 30000) -> list[str]:
+def _ip_evidence_chunks(raw_evidence: dict, max_chars: int = 12000) -> list[str]:
     """Split every retained IP evidence field into bounded, traceable chunks without dropping values."""
     records = []
 
     def add(path: str, value):
         encoded = json.dumps({"path": path, "value": value}, ensure_ascii=False, sort_keys=True, default=str)
-        if len(encoded) <= max_chars:
+        if len(encoded.encode("utf-8")) <= max_chars:
             records.append({"path": path, "value": value})
         elif isinstance(value, str):
-            width = max(1, max_chars // 3)
+            width = max(1, max_chars // 12)
             for offset in range(0, len(value), width):
                 records.append({"path": path, "offset": offset, "text_fragment": value[offset:offset + width]})
         else:
@@ -843,13 +855,14 @@ def _ip_evidence_chunks(raw_evidence: dict, max_chars: int = 30000) -> list[str]
     chunks, current, size = [], [], 0
     for record in records:
         encoded = json.dumps(record, ensure_ascii=False, sort_keys=True, default=str)
-        if len(encoded) > max_chars:
+        if len(encoded.encode("utf-8")) > max_chars:
             raise ValueError(f"One retained evidence value at {record.get('path', 'unknown')} exceeds the analysis chunk limit.")
-        if current and size + len(encoded) + 1 > max_chars:
+        encoded_size = len(encoded.encode("utf-8"))
+        if current and size + encoded_size + 1 > max_chars:
             chunks.append(json.dumps({"records": current}, ensure_ascii=False, sort_keys=True, default=str))
             current, size = [], 0
         current.append(record)
-        size += len(encoded) + 1
+        size += encoded_size + 1
     if current:
         chunks.append(json.dumps({"records": current}, ensure_ascii=False, sort_keys=True, default=str))
     return chunks or [json.dumps({"records": []})]
@@ -857,18 +870,19 @@ def _ip_evidence_chunks(raw_evidence: dict, max_chars: int = 30000) -> list[str]
 
 def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
     """Hierarchically consolidate chunk ledgers so the final answer also fits the model context."""
-    budget = 24000
+    budget = 16000  # UTF-8 bytes; leaves room for system prompt, framing, and answer tokens
     current = list(summaries)
-    while len("\n".join(current)) > budget:
-        if any(len(summary) > budget for summary in current):
+    while len("\n".join(current).encode("utf-8")) > budget:
+        if any(len(summary.encode("utf-8")) > budget for summary in current):
             raise RuntimeError("An evidence ledger exceeds the safe consolidation size; no ledger was truncated.")
         groups, group, size = [], [], 0
         for summary in current:
-            if group and size + len(summary) > budget:
+            summary_size = len(summary.encode("utf-8"))
+            if group and size + summary_size > budget:
                 groups.append(group)
                 group, size = [], 0
             group.append(summary)
-            size += len(summary)
+            size += summary_size
         if group:
             groups.append(group)
         reduced = []
@@ -879,6 +893,8 @@ def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
                 "Do not invent facts. Keep the ledger concise enough for a final synthesis.\n\n"
                 + "\n\n".join(items)
             )
+            if cfg.get("provider") == "ollama" and not _ollama_prompt_fits(IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096):
+                raise RuntimeError("An evidence-ledger consolidation prompt exceeds the safe Ollama context budget.")
             answer = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, prompt, timeout=180)
             if not answer:
                 raise RuntimeError(f"The AI returned an empty result while consolidating evidence group {index}.")
@@ -987,6 +1003,8 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
                 chunk_error = _ollama_context_error(IP_AGENT_SYSTEM_PROMPT, chunk_prompt, reserve=4096) if cfg["provider"] == "ollama" else ""
                 if chunk_error:
                     return {"error": f"Evidence chunk {index} cannot safely fit the configured Ollama context. {chunk_error}"}
+                if cfg.get("provider") == "ollama" and not _ollama_prompt_fits(IP_AGENT_SYSTEM_PROMPT, chunk_prompt, reserve=4096):
+                    raise RuntimeError(f"Evidence chunk {index} exceeds the safe Ollama context budget; no evidence was sent.")
                 ledger = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, chunk_prompt, timeout=180)
                 if not ledger:
                     return {"error": f"AI analysis stopped at evidence chunk {index} of {len(chunks)} because the model returned an empty result. No remaining evidence was silently skipped."}
