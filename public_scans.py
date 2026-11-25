@@ -45,6 +45,12 @@ class PublicScans:
             self.scans = raw if isinstance(raw, dict) else {}
         except (OSError, ValueError):
             self.scans = {}
+        # A process restart cannot resume an in-flight subprocess; make that explicit.
+        for scan in self.scans.values():
+            if scan.get("status") in self.ACTIVE:
+                scan.update({"status": "Interrupted", "finished": int(time.time()),
+                             "error": "LanPulse restarted before this scan finished."})
+        self._save()
 
     def _save(self):
         try:
@@ -68,8 +74,8 @@ class PublicScans:
         if not shutil.which("nmap"):
             return None, "Nmap is not installed on this LanPulse server."
         with self.lock:
-            if any(s.get("target") == target and s.get("status") in self.ACTIVE for s in self.scans.values()):
-                return None, "A public scan of this target is already running."
+            if any(s.get("status") in self.ACTIVE for s in self.scans.values()):
+                return None, "A public IP scan is already queued or running. Wait for it to finish first."
             scan_id = uuid.uuid4().hex[:12]
             record = {"id": scan_id, "target": target, "scanner": "nmap", "scope": "top-1000-tcp-ports",
                       "status": "Requested", "progress": 0, "started": int(time.time()),
@@ -127,3 +133,6 @@ class PublicScans:
             if rec is not None:
                 rec.update({"status": "Failed", "finished": int(time.time()), "error": message})
                 self._save()
+
+    def close(self):
+        self.pool.shutdown(wait=False, cancel_futures=True)
