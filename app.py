@@ -68,7 +68,7 @@ import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
 from runtime_telemetry import RuntimeTelemetry
 
-VERSION = "1.39.20"
+VERSION = "1.39.21"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1714,6 +1714,20 @@ def build_app(nm: LanPulse) -> FastAPI:
         except ValueError:
             return JSONResponse({"error": "Not a valid IP address"}, 400)
         return await asyncio.to_thread(nm.threats.investigate, ip)
+
+
+    @app.post("/api/threats/ip/{ip}/ai")
+    async def threat_ip_ai(ip: str, request: Request):
+        try:
+            ip = str(ipaddress.ip_address(ip))
+        except ValueError:
+            return JSONResponse({"error": "Not a valid IP address"}, 400)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        question = str(body.get("question", ""))[:500] if isinstance(body, dict) else ""
+        return await asyncio.to_thread(analyst.investigate_ip, nm, ip, question)
 
     @app.get("/api/threats/ip/{ip}/context")
     async def threat_ip_context(ip: str):
