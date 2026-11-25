@@ -46,15 +46,15 @@ class PublicScanQueue(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             scans = PublicScans(tmp)
             try:
-                with patch("public_scans.shutil.which", return_value="/usr/bin/nmap"), \
-                     patch("public_scans.time.time", side_effect=[1_800_000_000, 1_800_000_061]), \
-                     patch.object(scans.pool, "submit"):
-                    first, error = scans.start_nmap("8.8.8.8", "operator")
+                with patch("public_scans.shutil.which", return_value="/usr/bin/nmap"), patch.object(scans.pool, "submit"):
+                    with patch("public_scans.time.time", return_value=1_800_000_000):
+                        first, error = scans.start_nmap("8.8.8.8", "operator")
                     self.assertFalse(error)
                     scans.scans[first["id"]]["status"] = "Done"
-                    second, error = scans.start_nmap("8.8.8.8", "operator")
+                    with patch("public_scans.time.time", return_value=1_800_000_061):
+                        second, error = scans.start_nmap("8.8.8.8", "operator")
                     self.assertIsNone(second)
-                    self.assertIn("scanned recently", error)
+                    self.assertIn("target was scanned recently", error)
             finally:
                 scans.close()
 
