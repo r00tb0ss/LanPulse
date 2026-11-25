@@ -86,7 +86,7 @@ class EvidenceSizeQueries(unittest.TestCase):
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"sessions": 10, "estimated_bytes": 200}),
         )
         with patch.object(analyst, "MAX_AI_RAW_EVIDENCE_BYTES", 1000):
-            with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No evidence was loaded or sent"):
+            with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No records were omitted or sent"):
                 analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
 
     def test_small_complete_pack_passes_preflight(self):
