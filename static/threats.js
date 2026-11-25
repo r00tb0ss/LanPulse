@@ -763,13 +763,15 @@ function ipAiHtml(d) {
     (s.loading ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles') + '"></i>' +
     (s.loading ? 'Investigating…' : s.answer ? 'Ask follow-up' : 'Ask AI to investigate') + '</button>';
   if (targets.length) {
-    html += '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:10px">' +
-      '<b style="font-size:12px">Scan an affected LAN device</b>' +
-      '<p class="muted" style="font-size:11px;margin:4px 0 8px">Only devices this source reached are eligible. Choose a target and explicitly confirm the scan. This never scans the public attacker IP.</p>' +
-      '<select id="ipAiScanTarget" style="width:100%;margin-bottom:7px">' +
+    html += '<div class="ip-lan-scan">' +
+      '<h4><i class="fa-solid fa-network-wired"></i> Scan an affected LAN device</h4>' +
+      '<p class="muted" style="font-size:12px;margin:4px 0 10px">This scans a device on your own network that this source reached. It does not scan the public attacker IP. Public-target scanning is a separate, manually authorized workflow below.</p>' +
+      '<label class="muted" for="ipAiScanTarget" style="display:block;font-size:11px;margin-bottom:4px">LAN device</label>' +
+      '<select id="ipAiScanTarget" style="width:100%;margin-bottom:9px">' +
       targets.map((t) => '<option value="' + esc(t.lan) + '">' + esc(t.name) + ' · ' + esc(t.lan) + '</option>').join("") + '</select>' +
-      '<select id="ipAiScanEngine" style="width:100%;margin-bottom:7px"><option value="nmap">Nmap · thorough port and service scan</option><option value="openvas">OpenVAS · vulnerability assessment</option></select>' +
-      '<button class="btn sm ghost" id="bIpAiScan">Launch approved scan</button></div>';
+      '<label class="muted" for="ipAiScanEngine" style="display:block;font-size:11px;margin-bottom:4px">Scanner</label>' +
+      '<select id="ipAiScanEngine" style="width:100%;margin-bottom:9px"><option value="nmap">Nmap · thorough port and service scan</option><option value="openvas">OpenVAS · vulnerability assessment</option></select>' +
+      '<button class="btn sm ghost" id="bIpAiScan"><i class="fa-solid fa-radar"></i> Scan selected LAN device</button></div>';
   }
   html += '</div>';
   return html;
@@ -917,9 +919,11 @@ function renderIpPanel(d) {
     ${ipContextHtml(d)}
     ${ipAiHtml(d)}
     <div class="p-sec public-scan">
-      <h4><i class="fa-solid fa-shield-halved"></i> Authorized public IP scan</h4>
-      <p class="muted" style="font-size:12px;margin:4px 0 9px">Scan a public IPv4 address you own or have explicit permission to test. This target is entered manually; the attacker IP above is never selected automatically. Nmap checks the 1,000 most common TCP ports with light service detection. OpenVAS runs its Full and Fast vulnerability assessment.</p>
+      <h4><i class="fa-solid fa-globe"></i> Authorized public-target scan</h4>
+      <p class="muted" style="font-size:12px;margin:4px 0 10px">Separate workflow for a public IPv4 address you own or are explicitly authorized to test. The attacker IP above is never prefilled or scanned automatically.</p>
+      <label class="muted" for="publicScanTarget" style="display:block;font-size:11px;margin-bottom:4px">Public IPv4 target</label>
       <input id="publicScanTarget" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Public IPv4 address" style="width:100%;margin-bottom:7px">
+      <label class="muted" for="publicScanEngine" style="display:block;font-size:11px;margin:2px 0 4px">Scanner</label>
       <select id="publicScanEngine" style="width:100%;margin-bottom:7px">
         <option value="nmap">Nmap · top 1,000 TCP ports</option>
         <option value="openvas">OpenVAS · Full and Fast</option>
