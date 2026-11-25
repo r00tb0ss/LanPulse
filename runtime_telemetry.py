@@ -239,9 +239,9 @@ class RuntimeTelemetry:
         """Estimate retained runtime-event payload size without loading event rows."""
         with self.lock:
             count, raw_bytes = self.db.execute(
-                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(sensor_id,'')) + LENGTH(COALESCE(run_id,'')) + "
-                "LENGTH(COALESCE(hostname,'')) + LENGTH(COALESCE(destination_ip,'')) + "
-                "LENGTH(COALESCE(event_type,'')) + 192), 0) FROM runtime_events"
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(sensor_id,'')) + LENGTH(CAST(COALESCE(run_id,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(hostname,'') AS BLOB)) + LENGTH(CAST(COALESCE(destination_ip,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(event_type,'') AS BLOB)) + 192), 0) FROM runtime_events"
             ).fetchone()
         return {"records": int(count or 0), "estimated_bytes": int(raw_bytes or 0)}
 
