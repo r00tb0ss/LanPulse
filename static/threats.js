@@ -708,28 +708,42 @@ function addLocalEvent(e) {
   toast(`${e.title}: ${e.src_name || e.src || e.mac}`);
 }
 
+let publicScanPoll = null;
 async function refreshAuthorizedPublicScans() {
   const box = $("publicScanStatus");
-  if (!box) return;
+  if (!box) { if (publicScanPoll) clearInterval(publicScanPoll); publicScanPoll = null; return; }
   const data = await api("/api/scans/authorized-public", "GET");
-  if (!data) { box.textContent = "Could not load public scan history."; return; }
+  if (!data) { box.textContent = "Could not load public scan history. Check the server connection and try again."; return; }
   const rows = [...(data.nmap || []), ...(data.openvas || [])].sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 8);
-  if (!rows.length) { box.textContent = "No authorized public scans yet."; return; }
+  if (!rows.length) { box.textContent = "No authorized public scans yet."; if (publicScanPoll) clearInterval(publicScanPoll); publicScanPoll = null; return; }
+  const active = rows.some((s) => ["Requested","Queued","Running","New"].includes(s.status));
+  if (active && !publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
+  if (!active && publicScanPoll) { clearInterval(publicScanPoll); publicScanPoll = null; }
   box.innerHTML = rows.map((s) => {
+    const scanner = (s.scanner || "openvas").toUpperCase();
+    const terminal = ["Done","Failed","Interrupted"].includes(s.status);
     const findings = s.scanner === "openvas" ? (s.count || 0) + " findings" :
-      ((s.ports || []).length + " open ports");
-    const error = s.error ? " · " + esc(s.error) : "";
-    const details = s.status === "Done" && s.scanner === "nmap" && (s.ports || []).length
-      ? '<div class="muted" style="padding:2px 0 4px">Open TCP: ' + s.ports.slice(0, 12).map((p) =>
-          esc(p.port + "/" + p.protocol + " " + p.service + (p.product ? " · " + p.product : "") +
-            (p.version ? " " + p.version : ""))).join(" · ") + '</div>'
+      ((s.ports || []).length + " open TCP ports");
+    const error = s.error ? '<div style="color:var(--red);margin-top:4px">' + esc(s.error) + '</div>' : "";
+    const ports = (s.ports || []);
+    const details = s.status === "Done" && s.scanner === "nmap"
+      ? (ports.length
+        ? '<div style="margin-top:7px"><b>Open ports and detected services</b><ul style="margin:4px 0 0;padding-left:19px">' +
+          ports.map((p) => '<li>' + esc(p.port + "/" + p.protocol) + ' · ' + esc(p.service || "unknown service") +
+            (p.product ? ' · ' + esc(p.product) : "") + (p.version ? ' ' + esc(p.version) : "") + '</li>').join("") +
+          '</ul></div>'
+        : '<div class="muted" style="margin-top:5px">Scan completed. No open TCP ports were found in the scanned top 1,000.</div>')
       : s.status === "Done" && s.results?.length
-        ? '<div class="muted" style="padding:2px 0 4px">' + s.results.slice(0, 5).map((f) =>
+        ? '<div class="muted" style="padding:5px 0">' + s.results.slice(0, 8).map((f) =>
             esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
         : "";
-    return '<div style="padding:5px 0;border-top:1px solid var(--line)"><b>' + esc(s.target || s.ip || "") +
-      '</b> · ' + esc(s.scanner || "OpenVAS") + ' · ' + esc(s.status || "") +
-      (s.status === "Done" ? ' · ' + esc(findings) : "") + error + details + '</div>';
+    const state = terminal ? esc(s.status) : esc(s.status || "Queued") + " · scan in progress";
+    return '<div style="padding:9px 0;border-top:1px solid var(--line)"><b>' + esc(s.target || s.ip || "") +
+      '</b><div class="muted" style="font-size:11px;margin:3px 0">' + scanner + ' · ' + state +
+      (terminal && s.status === "Done" ? ' · ' + esc(findings) : "") + '</div>' +
+      (!terminal ? '<div class="muted" style="font-size:12px">Nmap is checking the selected TCP ports and identifying services. This panel refreshes automatically.</div>' : "") +
+      (s.summary ? '<div class="muted" style="margin-top:4px">' + esc(s.summary) + '</div>' : "") +
+      error + details + '</div>';
   }).join("");
 }
 
@@ -1032,8 +1046,9 @@ function renderIpPanel(d) {
     button.disabled = false; button.innerHTML = '<i class="fa-solid fa-radar"></i> Start authorized scan';
     if (result && result.ok) {
       toast(label + " started for " + target);
-      $("publicScanStatus").textContent = "Scan requested for " + target + ". Refresh this panel to see progress and findings.";
+      $("publicScanStatus").textContent = "Scan accepted for " + target + ". Waiting for Nmap to start…";
       refreshAuthorizedPublicScans();
+      if (!publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
     } else toast(result?.error || "The scan could not be started");
   };
   if ($("bIpAiScan")) $("bIpAiScan").onclick = async () => {
