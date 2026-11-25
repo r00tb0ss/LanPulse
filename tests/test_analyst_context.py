@@ -196,12 +196,12 @@ class AnalystContext(unittest.TestCase):
     def test_oversized_retained_evidence_fails_preflight_before_materialization(self):
         nm = fake_nm()
         nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
-        nm.honeypot.evidence_size = lambda: {"records": 100000, "estimated_bytes": analyst.MAX_AI_EVIDENCE_BYTES + 1}
+        nm.honeypot.evidence_size = lambda: {"records": 100000, "estimated_bytes": analyst.MAX_AI_RAW_EVIDENCE_BYTES + 1}
         with patch.object(analyst, "build_context", side_effect=AssertionError("oversized evidence must not be loaded")):
             with patch.object(analyst, "call_model", side_effect=AssertionError("no partial evidence may be sent")):
                 result = analyst.ask(nm, "Analyze all honeypot credentials and sessions")
-        self.assertIn("safe in-memory evidence budget", result["error"])
-        self.assertIn("No evidence was truncated or sent", result["error"])
+        self.assertIn("in-memory safety limit", result["error"])
+        self.assertIn("No records were omitted or sent", result["error"])
     def test_hosted_ai_requires_explicit_consent_before_loading_or_sending_evidence(self):
         nm = fake_nm()
         nm.settings = {"ai": {"enabled": True, "provider": "openai",
