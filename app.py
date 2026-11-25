@@ -1761,17 +1761,29 @@ def build_app(nm: LanPulse) -> FastAPI:
             if nmap_active or openvas_active:
                 return JSONResponse({"error": "An authorized public scan is already queued or running. Wait for it to finish first."}, 409)
             if scanner == "nmap":
-                record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target)
+                actor = nm.auth.verify(request.cookies.get("nm_session")) or nm.auth.user or "dashboard-admin"
+                record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target, actor)
                 if error:
                     return JSONResponse({"error": error}, 400)
                 log.info("Authorized public Nmap scan requested for %s", target)
                 return {"ok": True, "scan": record}
             if not nm.openvas.cfg().get("enabled"):
                 return JSONResponse({"error": "Enable OpenVAS in Settings > Scanner first."}, 400)
+            previous = nm.openvas.scans.get(target) or {}
+            previous_started = int(previous.get("started") or 0)
+            cooldown = 3600 - (int(time.time()) - previous_started)
+            if previous_started and cooldown > 0:
+                return JSONResponse({"error": f"This target was scanned recently. Try again in about {max(1, (cooldown + 59) // 60)} minute(s)."}, 429)
             error = await asyncio.to_thread(nm.openvas.start_scan, target, True)
             if error:
                 return JSONResponse({"error": error}, 400)
-            log.info("Authorized public OpenVAS scan requested for %s", target)
+            actor = nm.auth.verify(request.cookies.get("nm_session")) or nm.auth.user or "dashboard-admin"
+            audit = nm.openvas.scans.get(target)
+            if audit is not None:
+                audit.update({"authorized_by": actor[:80], "authorized_at": int(time.time()),
+                              "authorization_attestation": "User confirmed ownership or explicit authorization in dashboard"})
+                nm.openvas._save()
+            log.info("Authorized public OpenVAS scan requested for %s by %s", target, actor)
         return {"ok": True, "scanner": "openvas", "target": target, "status": "Requested"}
 
     @app.get("/api/scans/authorized-public")
