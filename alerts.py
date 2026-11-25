@@ -459,6 +459,7 @@ def apply_update(current: dict, incoming: dict) -> dict:
     ai = incoming.get("ai")
     if isinstance(ai, dict):
         cur = new["ai"]
+        previous_ai_target = (cur.get("provider"), cur.get("base_url"))
         if "enabled" in ai:
             cur["enabled"] = bool(ai["enabled"])
         if ai.get("provider") in ("ollama", "openai", "anthropic"):
@@ -473,6 +474,9 @@ def apply_update(current: dict, incoming: dict) -> dict:
             cur["api_key"] = re.sub(r"[^\x21-\x7e]", "", str(ai["api_key"]))[:300]
         if "cloud_evidence_consent" in ai:
             cur["cloud_evidence_consent"] = bool(ai["cloud_evidence_consent"])
+        elif previous_ai_target != (cur.get("provider"), cur.get("base_url")):
+            # Permission is tied to the configured provider endpoint; changing destination requires fresh consent.
+            cur["cloud_evidence_consent"] = False
     sv = incoming.get("services")
     if isinstance(sv, dict) and isinstance(sv.get("checks"), list):
         new["services"]["checks"] = [c for c in (clean_check(x) for x in sv["checks"][:50]) if c]
