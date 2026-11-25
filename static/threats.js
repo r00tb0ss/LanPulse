@@ -787,7 +787,7 @@ function ipAiHtml(d) {
   const s = ipAiState.ip === d.ip ? ipAiState : {ip: d.ip, loading: false, answer: "", error: ""};
   const targets = (d.targets || []).filter((t) => t && t.id && t.lan);
   let html = '<div class="p-sec ip-ai"><h4><i class="fa-solid fa-robot"></i> AI security investigation</h4>' +
-    '<p class="muted" style="font-size:12px;margin:4px 0 10px">AI receives the complete available threat and honeypot evidence, including attempted credentials and raw events. Cloud providers receive this sensitive evidence; local Ollama is recommended. Public attacker IPs are never scanned.</p>';
+    '<p class="muted" style="font-size:12px;margin:4px 0 10px">AI can use complete available threat and honeypot evidence, including attempted credentials and raw events. Hosted providers require your explicit one-time approval before any evidence is sent; local Ollama stays on your network. Public attacker IPs are never scanned.</p>';
   if (s.answer) {
     html += '<div class="muted" style="font-size:11px;margin-bottom:6px">' +
       (s.local ? 'Local AI' : 'Provider') + ' · ' + esc(s.provider) + ' · ' + esc(s.model) + '</div>' +
