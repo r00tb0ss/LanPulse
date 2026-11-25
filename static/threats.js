@@ -734,7 +734,7 @@ async function runIpAi(d, question) {
   ipAiState.error = "";
   renderIpPanel(d);
   const result = await api('/api/threats/ip/' + encodeURIComponent(d.ip) + '/ai', 'POST', {question: question || ""});
-  if (selectedIp !== d.ip) return;
+  if (selectedIp !== d.ip) { if (ipAiState.ip === d.ip) ipAiState.loading = false; return; }
   ipAiState.loading = false;
   if (!result || result.error) {
     ipAiState.error = result?.error || "The AI investigation could not be completed.";
