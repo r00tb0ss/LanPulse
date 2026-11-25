@@ -1729,6 +1729,64 @@ def build_app(nm: LanPulse) -> FastAPI:
         question = str(body.get("question", ""))[:500] if isinstance(body, dict) else ""
         return await asyncio.to_thread(analyst.investigate_ip, nm, ip, question)
 
+    @app.post("/api/threats/ip/{ip}/scan")
+    async def threat_ip_scan(ip: str, request: Request):
+        """Launch a user-approved scan only against a private LAN device reached by this threat source."""
+        try:
+            ip = str(ipaddress.ip_address(ip))
+        except ValueError:
+            return JSONResponse({"error": "Not a valid threat IP address."}, 400)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Expected scanner and target fields."}, 400)
+        scanner = str(body.get("scanner") or "").lower()
+        target = str(body.get("target") or "").strip()
+        if scanner not in ("nmap", "openvas"):
+            return JSONResponse({"error": "Choose Nmap or OpenVAS."}, 400)
+        try:
+            address = ipaddress.ip_address(target)
+        except ValueError:
+            return JSONResponse({"error": "Target must be a valid IP address."}, 400)
+        if not address.is_private or address.is_loopback or address.is_link_local or address.is_multicast:
+            return JSONResponse({"error": "AI-assisted scans are limited to private LAN devices. Public threat-source IPs are not scanned."}, 403)
+        if nm.args.demo:
+            return JSONResponse({"error": "Active scans are disabled in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a LanPulse dashboard login before launching AI-assisted scans."}, 403)
+
+        investigation = await asyncio.to_thread(nm.threats.investigate, ip)
+        linked = next((row for row in (investigation.get("targets") or []) if row.get("lan") == target), None)
+        if not linked:
+            return JSONResponse({"error": "This LAN device is not listed as a target of the selected threat."}, 403)
+        device = next((d for d in nm.devices.values()
+                       if d.get("ip") == target and d.get("id") == linked.get("id")), None)
+        if not device or device.get("is_self") or not device.get("online"):
+            return JSONResponse({"error": "The affected device is not an online, scannable LAN device."}, 400)
+        conflict = nm.local.conflict_for(target)
+        if conflict:
+            return JSONResponse({"error": f"{target} has an IP conflict ({', '.join(conflict)}); scanning is blocked."}, 409)
+
+        if scanner == "nmap":
+            if not nm.meta.get("nmap"):
+                return JSONResponse({"error": "Nmap is not available on this LanPulse server."}, 400)
+            try:
+                nm.enqueue(device["id"])
+            except Exception as exc:
+                log.warning("AI-assisted Nmap queue failed for %s: %s", target, exc)
+                return JSONResponse({"error": "Could not queue the Nmap scan; check the scanner queue and try again."}, 429)
+        else:
+            if not nm.openvas.cfg().get("enabled"):
+                return JSONResponse({"error": "Enable OpenVAS in Settings > Scanner first."}, 400)
+            error = await asyncio.to_thread(nm.openvas.start_scan, target)
+            if error:
+                return JSONResponse({"error": error}, 400)
+
+        nm.event("you", device, f"AI-assisted {scanner.upper()} scan requested for {target} after threat investigation of {ip}", feed=False)
+        return {"ok": True, "scanner": scanner, "target": target, "device": nm.label(device)}
+
     @app.get("/api/threats/ip/{ip}/context")
     async def threat_ip_context(ip: str):
         try:

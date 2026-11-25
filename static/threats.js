@@ -711,8 +711,9 @@ let ipAiState = {ip: "", loading: false, answer: "", error: "", provider: "", mo
 
 function ipAiHtml(d) {
   const s = ipAiState.ip === d.ip ? ipAiState : {ip: d.ip, loading: false, answer: "", error: ""};
+  const targets = (d.targets || []).filter((t) => t && t.id && t.lan);
   let html = '<div class="p-sec ip-ai"><h4><i class="fa-solid fa-robot"></i> AI security investigation</h4>' +
-    '<p class="muted" style="font-size:12px;margin:4px 0 10px">Sends a bounded LanPulse evidence summary to your configured AI provider (cloud providers receive that summary). No ports are scanned and no traffic is sent to the target IP.</p>';
+    '<p class="muted" style="font-size:12px;margin:4px 0 10px">AI receives the complete available threat and honeypot evidence, including attempted credentials and raw events. Cloud providers receive this sensitive evidence; local Ollama is recommended. Public attacker IPs are never scanned.</p>';
   if (s.answer) {
     html += '<div class="muted" style="font-size:11px;margin-bottom:6px">' +
       (s.local ? 'Local AI' : 'Provider') + ' · ' + esc(s.provider) + ' · ' + esc(s.model) + '</div>' +
@@ -724,7 +725,17 @@ function ipAiHtml(d) {
     '" style="width:100%;margin:8px 0"></textarea>' +
     '<button class="btn" id="bIpAiRun" ' + (s.loading ? 'disabled' : '') + '><i class="fa-solid ' +
     (s.loading ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles') + '"></i>' +
-    (s.loading ? 'Investigating…' : s.answer ? 'Ask follow-up' : 'Ask AI to investigate') + '</button></div>';
+    (s.loading ? 'Investigating…' : s.answer ? 'Ask follow-up' : 'Ask AI to investigate') + '</button>';
+  if (targets.length) {
+    html += '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:10px">' +
+      '<b style="font-size:12px">Scan an affected LAN device</b>' +
+      '<p class="muted" style="font-size:11px;margin:4px 0 8px">Only devices this source reached are eligible. Choose a target and explicitly confirm the scan. This never scans the public attacker IP.</p>' +
+      '<select id="ipAiScanTarget" style="width:100%;margin-bottom:7px">' +
+      targets.map((t) => '<option value="' + esc(t.lan) + '">' + esc(t.name) + ' · ' + esc(t.lan) + '</option>').join("") + '</select>' +
+      '<select id="ipAiScanEngine" style="width:100%;margin-bottom:7px"><option value="nmap">Nmap · thorough port and service scan</option><option value="openvas">OpenVAS · vulnerability assessment</option></select>' +
+      '<button class="btn sm ghost" id="bIpAiScan">Launch approved scan</button></div>';
+  }
+  html += '</div>';
   return html;
 }
 
@@ -952,6 +963,17 @@ function renderIpPanel(d) {
   };
   $("bCopyRule").onclick = () => copyText($("ruleText"));
   $("bIpAiRun").onclick = () => runIpAi(d, $("ipAiQuestion").value.trim());
+  if ($("bIpAiScan")) $("bIpAiScan").onclick = async () => {
+    const target = $("ipAiScanTarget").value, scanner = $("ipAiScanEngine").value;
+    const label = scanner === "nmap" ? "thorough Nmap scan" : "OpenVAS vulnerability assessment";
+    if (!window.confirm("Launch a " + label + " against affected LAN device " + target + "? This sends active scan traffic to that device.")) return;
+    const button = $("bIpAiScan");
+    button.disabled = true; button.textContent = "Starting scan…";
+    const result = await api("/api/threats/ip/" + encodeURIComponent(d.ip) + "/scan", "POST", {target, scanner});
+    if (result && result.ok) toast(label + " queued for " + target);
+    else toast(result?.error || "The scan could not be started");
+    if (selectedIp === d.ip) renderIpPanel(d);
+  };
   $("bGoRules").onclick = () => $("ruleTabs").scrollIntoView({behavior: "smooth", block: "center"});
   if ($("bBlockSetup")) $("bBlockSetup").onclick = () => { setTab = "unifi"; openSettings(); };
   if ($("bBlock")) $("bBlock").onclick = async (e) => {
