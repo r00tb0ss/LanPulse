@@ -69,7 +69,7 @@ import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
 from runtime_telemetry import RuntimeTelemetry
 
-VERSION = "1.39.29"
+VERSION = "1.39.30"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1731,7 +1731,8 @@ def build_app(nm: LanPulse) -> FastAPI:
         except Exception:
             body = None
         question = str(body.get("question", ""))[:500] if isinstance(body, dict) else ""
-        return await asyncio.to_thread(analyst.investigate_ip, nm, ip, question)
+        model = str(body.get("model", ""))[:120] if isinstance(body, dict) else ""
+        return await asyncio.to_thread(analyst.investigate_ip, nm, ip, question, model)
 
     @app.post("/api/scans/authorized-public")
     async def authorized_public_scan(request: Request):
@@ -2123,6 +2124,12 @@ def build_app(nm: LanPulse) -> FastAPI:
     async def ai_status():
         return analyst.status(nm)
 
+    @app.get("/api/ai/models")
+    async def ai_models():
+        cfg = analyst._cfg(nm)
+        models = await asyncio.to_thread(analyst.list_models, cfg)
+        return {"models": models, "current": cfg["model"], "provider": cfg["provider"]}
+
     @app.post("/api/ai/ask")
     async def ai_ask(request: Request):
         try:
@@ -2130,7 +2137,8 @@ def build_app(nm: LanPulse) -> FastAPI:
         except Exception:
             body = None
         q = str(body.get("question", ""))[:1000] if isinstance(body, dict) else ""
-        return await asyncio.to_thread(analyst.ask, nm, q)
+        model = str(body.get("model", ""))[:120] if isinstance(body, dict) else ""
+        return await asyncio.to_thread(analyst.ask, nm, q, model)
 
     @app.post("/api/ai/test")
     async def ai_test(request: Request):
@@ -2897,7 +2905,8 @@ def build_app(nm: LanPulse) -> FastAPI:
             return JSONResponse({"error": "Expected a sample hash and optional question."}, 400)
         sha = str(body.get("sha256") or "")
         question = str(body.get("question") or "")[:1000]
-        return await asyncio.to_thread(analyst.investigate_sample, nm, sha, question)
+        model = str(body.get("model") or "")[:120]
+        return await asyncio.to_thread(analyst.investigate_sample, nm, sha, question, model)
 
     @app.get("/api/honeypot/sample/content")
     async def honeypot_sample_content(sha: str, offset: int = 0, mode: str = "auto"):
