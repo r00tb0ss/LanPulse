@@ -50,7 +50,7 @@ def _preflight_raw_evidence(nm, asked: list[str]) -> None:
             "No evidence was loaded or sent. Check the evidence databases and retry, or narrow the investigation."
         ) from exc
     total = sum(max(0, int((stats or {}).get("estimated_bytes", 0))) for _name, stats in sources)
-    if total > MAX_AI_RAW_EVIDENCE_BYTES:
+    if total > MAX_AI_RAW_EVIDENCE_BYTES or MAX_AI_RAW_EVIDENCE_BYTES <= 0:
         breakdown = ", ".join(
             f"{name}: {int((stats or {}).get('estimated_bytes', 0)) / (1024 * 1024):.1f} MiB"
             for name, stats in sources
@@ -58,7 +58,7 @@ def _preflight_raw_evidence(nm, asked: list[str]) -> None:
         raise EvidenceBudgetExceeded(
             f"The complete retained evidence pack is estimated at {total / (1024 * 1024):.1f} MiB "
             f"and exceeds LanPulse's {MAX_AI_RAW_EVIDENCE_BYTES // (1024 * 1024)} MiB in-memory safety limit "
-            f"({breakdown}). No records were omitted or sent to the AI. Narrow the investigation to a specific "
+            f"({breakdown}). No evidence was loaded or sent. No records were omitted. Narrow the investigation to a specific "
             "IP or reduce the retained-data time window before retrying."
         )
 
