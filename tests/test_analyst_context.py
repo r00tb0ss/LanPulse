@@ -52,10 +52,10 @@ class AnalystContext(unittest.TestCase):
             {"target": "8.8.8.8", "scanner": "nmap", "status": "Done",
              "ports": [{"port": 443, "service": "https"}]}
         ])
-        nm.openvas = types.SimpleNamespace(status=lambda: {"scans": [
-            {"ip": "1.1.1.1", "public": True, "status": "Done",
-             "results": [{"name": "TLS certificate issue", "severity": 5.0}]}
-        ]})
+        nm.openvas = types.SimpleNamespace(scans={
+            "1.1.1.1": {"public": True, "status": "Done",
+                        "results": [{"name": "TLS certificate issue", "severity": 5.0}]}
+        })
         context = analyst.topic_context(nm, "analyze my public IP scan results")
         self.assertIn("AUTHORIZED PUBLIC IP SCAN RESULTS", context)
         self.assertIn("8.8.8.8", context)
