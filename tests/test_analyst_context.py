@@ -237,8 +237,9 @@ class AnalystContext(unittest.TestCase):
             honeypot=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
         )
-        with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No evidence was loaded or sent"):
-            analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
+        with patch.object(analyst, "MAX_AI_RAW_EVIDENCE_BYTES", 8 * 1024 * 1024):
+            with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No evidence was loaded or sent"):
+                analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
 
     def test_raw_evidence_preflight_allows_complete_pack_within_limit(self):
         nm = types.SimpleNamespace(
