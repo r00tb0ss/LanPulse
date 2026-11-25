@@ -65,7 +65,7 @@ DEFAULT_SETTINGS = {
                  "alert_external": True, "ignore": "", "delay_ms": 0},
     "openvas": {"enabled": False, "auto": False, "username": "admin", "password": ""},
     "wizard": {"done": False},
-    "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""},
+    "ai": {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": "", "cloud_evidence_consent": False},
     "keys": {"abuseipdb": "", "abusech": "", "nvd": "", "ai": "", "unifi": ""},
     "services": {"checks": []},
     "system": {"iface": "", "subnet": "", "interval": 10, "offline_after": 0, "rescan": 60, "top_ports": 1000,
@@ -471,6 +471,8 @@ def apply_update(current: dict, incoming: dict) -> dict:
             cur["model"] = re.sub(r"[^\w.:/\-@]", "", str(ai["model"]))[:120]
         if "api_key" in ai and ai["api_key"] != MASK:
             cur["api_key"] = re.sub(r"[^\x21-\x7e]", "", str(ai["api_key"]))[:300]
+        if "cloud_evidence_consent" in ai:
+            cur["cloud_evidence_consent"] = bool(ai["cloud_evidence_consent"])
     sv = incoming.get("services")
     if isinstance(sv, dict) and isinstance(sv.get("checks"), list):
         new["services"]["checks"] = [c for c in (clean_check(x) for x in sv["checks"][:50]) if c]
