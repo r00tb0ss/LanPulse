@@ -732,7 +732,11 @@ async function refreshAuthorizedPublicScans() {
           ports.map((p) => '<li>' + esc(p.port + "/" + p.protocol) + ' · ' + esc(p.service || "unknown service") +
             (p.product ? ' · ' + esc(p.product) : "") + (p.version ? ' ' + esc(p.version) : "") + '</li>').join("") +
           '</ul></div>'
-        : '<div class="muted" style="margin-top:5px">Scan completed. No open TCP ports were found in the scanned top 1,000.</div>')
+        : (s.host_state === "down"
+          ? '<div class="muted" style="margin-top:5px">The target did not respond to Nmap probes. No open ports could be confirmed.</div>'
+          : s.host_state === "up"
+            ? '<div class="muted" style="margin-top:5px">Target responded. No open TCP ports were found in the scanned top 1,000.</div>'
+            : '<div class="muted" style="margin-top:5px">Nmap completed but did not return a confirmed host state or open ports.</div>'))
       : s.status === "Done" && s.results?.length
         ? '<div class="muted" style="padding:5px 0">' + s.results.slice(0, 8).map((f) =>
             esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
