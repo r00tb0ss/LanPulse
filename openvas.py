@@ -227,7 +227,7 @@ class OpenVAS:
         for ip, s in self.scans.items():
             d = devs.get(ip)
             scans.append({"ip": ip, "name": self.nm.label(d) if d else ip, **{k: s.get(k) for k in
-                          ("status", "progress", "started", "finished", "error", "count")}})
+                          ("status", "progress", "started", "finished", "error", "count", "public", "results")}})
         c = self.cfg()
         try:
             log_tail = "\n".join((self.dir / "log.txt").read_text(errors="replace").splitlines()[-30:])
@@ -262,16 +262,20 @@ class OpenVAS:
         return st
 
     # ------------------------------------------------------------------ scanning
-    def start_scan(self, ip: str) -> str:
-        """Create a target + task for one device and start it. Returns '' or an error message."""
+    def start_scan(self, ip: str, authorized_public: bool = False) -> str:
+        """Create a target + task for a mapped device or explicitly authorized public IPv4 target."""
         if not IP_RE.match(ip or ""):
-            return "That isn't a valid address."
-        if not any(d.get("ip") == ip for d in self.nm.devices.values()):
+            return "That isn't a valid IPv4 address."
+        if authorized_public:
+            import ipaddress
+            if not ipaddress.ip_address(ip).is_global:
+                return "The target must be a globally routable public IPv4 address."
+        elif not any(d.get("ip") == ip for d in self.nm.devices.values()):
             return "That device isn't on your network map."
         cur = self.scans.get(ip)
         if cur and cur.get("status") in ("Requested", "Queued", "Running", "New"):
             return "A scan of this device is already running."
-        clash = self.nm.local.conflict_for(ip)
+        clash = self.nm.local.conflict_for(ip) if not authorized_public else []
         if clash:
             return (f"{ip} is being answered by more than one device ({', '.join(clash)}), so a scan could land on either "
                     "one. Give one of them another address, then scan again.")
@@ -293,7 +297,8 @@ class OpenVAS:
             return f"{type(e).__name__}: {e}"[:200]
         dev = next((d for d in self.nm.devices.values() if d.get("ip") == ip), {})
         self.scans[ip] = {"task": tid, "status": "Requested", "progress": 0, "started": int(time.time()),
-                          "finished": 0, "error": "", "count": 0, "mac": str(dev.get("mac") or "").lower()}
+                          "finished": 0, "error": "", "count": 0, "mac": str(dev.get("mac") or "").lower(),
+                          "public": bool(authorized_public), "results": []}
         self._save()
         self.wake.set()
         return ""
@@ -332,6 +337,8 @@ class OpenVAS:
                             s["error"] = (f"{ip} was answered by more than one device ({', '.join(clash)}) during the scan, "
                                           "so the results can't be trusted and were not saved. Fix the address conflict and scan again.")
                             s["count"] = 0
+                        elif s.get("public"):
+                            s["results"] = items
                         else:
                             self._import(ip, items)
                     elif s["status"] in ("Stopped", "Interrupted", "Failed"):
