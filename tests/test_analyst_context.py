@@ -194,6 +194,35 @@ class AnalystContext(unittest.TestCase):
         self.assertIn("Threat Map presence does not establish permission", result["error"])
         self.assertIn("No scan was started", result["error"])
 
+    def test_hosted_ai_requires_explicit_consent_before_loading_or_sending_evidence(self):
+        nm = fake_nm()
+        nm.settings = {"ai": {"enabled": True, "provider": "openai",
+                              "base_url": "https://api.openai.com/v1", "cloud_evidence_consent": False}}
+        with patch.object(analyst, "build_context", side_effect=AssertionError("evidence must not be loaded")), \
+             patch.object(analyst, "call_model", side_effect=AssertionError("provider must not be called")):
+            result = analyst.ask(nm, "What happened overnight?")
+        self.assertTrue(result.get("consent_required"))
+        self.assertIn("No evidence was sent", result["error"])
+
+    def test_direct_ip_and_sample_ai_actions_also_require_cloud_consent(self):
+        nm = fake_nm()
+        nm.settings = {"ai": {"enabled": True, "provider": "anthropic",
+                              "base_url": "https://api.anthropic.com", "cloud_evidence_consent": False}}
+        ip_result = analyst.investigate_ip(nm, "198.51.100.44")
+        sample_result = analyst.investigate_sample(nm, "a" * 64)
+        self.assertTrue(ip_result.get("consent_required"))
+        self.assertTrue(sample_result.get("consent_required"))
+
+    def test_local_ollama_does_not_require_cloud_evidence_consent(self):
+        nm = fake_nm()
+        nm.settings = {"ai": {"enabled": True, "provider": "ollama",
+                              "base_url": "http://127.0.0.1:11434", "cloud_evidence_consent": False}}
+        with patch.object(analyst, "build_context", return_value="local context"), \
+             patch.object(analyst, "call_model", return_value="Local answer") as call:
+            result = analyst.ask(nm, "What happened overnight?")
+        self.assertEqual(result.get("answer"), "Local answer")
+        call.assert_called_once()
+
     def test_question_is_passed_through(self):
         self.assertIn("num_ctx", open(analyst.__file__).read())
         self.assertGreater(analyst.NUM_CTX, 8000)
