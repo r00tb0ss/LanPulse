@@ -39,10 +39,10 @@
     await refresh();
     if (!st || !st.cloud_consent_required) return true;
     const accepted = window.confirm(
-      "Send complete retained LanPulse evidence to the hosted " + st.provider + " provider?\\n\\n" +
+      "Send complete retained LanPulse evidence to the hosted " + st.provider + " provider?\n\n" +
       "This can include attempted honeypot usernames and passwords, raw honeypot sessions and commands, " +
       "raw threat-event history, LAN device names/IPs, captured-sample analysis, YARA matches, and runtime telemetry. " +
-      "This is not redacted. The provider will receive the evidence needed to answer your question.\\n\\n" +
+      "This is not redacted. The provider will receive the evidence needed to answer your question.\n\n" +
       "Choose OK to save one-time permission, or Cancel to send nothing."
     );
     if (!accepted) return false;
@@ -91,9 +91,9 @@
       const p = $("aiProv").value, d = PROV[p];
       $("aiBase").placeholder = d[1]; $("aiModel").placeholder = d[2];
       $("aiWarn").innerHTML = p === "anthropic"
-        ? `<i class="fa-solid fa-triangle-exclamation"></i> A summary of your network (device names, IPs, open ports, vulnerabilities) is sent to this provider with each question.`
-        : p === "openai" ? `<i class="fa-solid fa-circle-info"></i> Point this at a local server to keep data on your network; a hosted service receives a summary of your network with each question.`
-        : `<i class="fa-solid fa-lock"></i> Nothing leaves your network.`;
+        ? `<i class="fa-solid fa-triangle-exclamation"></i> Hosted Anthropic receives complete retained evidence—including attempted passwords, raw sessions/events, and LAN device details—only after a separate one-time confirmation. Local endpoints stay local.`
+        : p === "openai" ? `<i class="fa-solid fa-circle-info"></i> A hosted OpenAI-compatible service receives complete retained evidence only after a separate one-time confirmation. Local endpoints stay local.`
+        : `<i class="fa-solid fa-lock"></i> Local Ollama keeps evidence on your network.`;
     };
     $("aiProv").onchange = () => { $("aiBase").value = ""; $("aiModel").value = ""; sync(); };
     sync();
