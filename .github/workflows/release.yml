@@ -1,5 +1,5 @@
 name: Release
-# Publish only after the CI workflow has completed successfully for a push to main.
+# Publish only a version whose current main commit has a successful CI run.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -7,9 +7,7 @@ on:
     branches: [main]
 permissions:
   contents: write
-concurrency:
-  group: lanpulse-release-main
-  cancel-in-progress: false
+  actions: read
 jobs:
   release:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -18,20 +16,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-      - name: Publish if this version has no release yet
+      - name: Resolve and publish the newest CI-verified main commit
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          MAIN_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')
-          if [ "$MAIN_SHA" != "$RELEASE_SHA" ]; then
-            echo "A newer main commit exists ($MAIN_SHA); skipping stale CI result $RELEASE_SHA. Its own successful CI workflow_run will retry release publication."
+          git fetch origin main --depth=1
+          MAIN_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$MAIN_SHA" != "$EVENT_SHA" ]; then
+            echo "The triggering CI run is stale ($EVENT_SHA); checking whether the newer main commit is already CI-verified."
+          fi
+          CI_OK=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&head_sha=$MAIN_SHA&status=completed&per_page=20" --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
+          if [ "$CI_OK" -lt 1 ]; then
+            echo "Latest main commit $MAIN_SHA has no successful CI run yet; its own workflow_run event will retry release publication."
             exit 0
           fi
+          git checkout --detach "$MAIN_SHA"
           VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
-          if gh release view "v$VER" >/dev/null 2>&1; then echo "v$VER already released"; exit 0; fi
-          git archive --prefix=lanpulse/ "$RELEASE_SHA" -o /tmp/lanpulse.zip --format=zip
-          # The in-app updater refuses a release without this checksum file.
+          if gh release view "v$VER" >/dev/null 2>&1; then
+            echo "v$VER already released; nothing to publish."
+            exit 0
+          fi
+          git archive --prefix=lanpulse/ "$MAIN_SHA" -o /tmp/lanpulse.zip --format=zip
           (cd /tmp && sha256sum lanpulse.zip > lanpulse.zip.sha256)
           if [ -f "docs/releases/$VER.md" ]; then NOTES=(-F "docs/releases/$VER.md"); else NOTES=(--generate-notes); fi
-          gh release create "v$VER" /tmp/lanpulse.zip /tmp/lanpulse.zip.sha256 --title "LanPulse $VER" --target "$RELEASE_SHA" "${NOTES[@]}"
+          gh release create "v$VER" /tmp/lanpulse.zip /tmp/lanpulse.zip.sha256 --title "LanPulse $VER" --target "$MAIN_SHA" "${NOTES[@]}"
