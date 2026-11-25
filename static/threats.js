@@ -716,14 +716,24 @@ async function openIp(ip) {
   if (!d || selectedIp !== ip) return;
   renderIpPanel(d);
   if (view === "threats" && d.geo && d.geo.lat != null) flyTo([d.geo.lon, d.geo.lat], Math.max(geoView().zoom, 4));
-  if (d.intel_pending) {      // the outside lookups (ISP, abuse score, Shodan...) can be slow, so they fill in afterwards
+  if (d.intel_pending) {      // local evidence and outside reputation fill in independently
+    let extraDone = false;
+    const renderUpdate = (change) => {
+      if (selectedIp !== ip) return;
+      const keep = [$("panelBody"), $("panel")].map((el) => el ? el.scrollTop : 0);
+      change();
+      renderIpPanel(d);
+      [$("panelBody"), $("panel")].forEach((el, i) => { if (el) el.scrollTop = keep[i]; });
+    };
+    const localContext = api(`/api/threats/ip/${encodeURIComponent(ip)}/context`, "GET").then((c) => {
+      if (c && !extraDone && selectedIp === ip) renderUpdate(() => { d.context = c.context; });
+    });
     const x = await api(`/api/threats/ip/${encodeURIComponent(ip)}/extra`, "GET");
     if (selectedIp !== ip) return;
+    extraDone = true;
     d.intel_pending = false;
-    if (x) { d.intel = x.intel || {}; d.tag = x.tag || d.tag; d.context = x.context; }
-    const keep = [$("panelBody"), $("panel")].map((el) => el ? el.scrollTop : 0);     // do not jump back to the top
-    renderIpPanel(d);
-    [$("panelBody"), $("panel")].forEach((el, i) => { if (el) el.scrollTop = keep[i]; });
+    if (x) renderUpdate(() => { d.intel = x.intel || {}; d.tag = x.tag || d.tag; d.context = x.context; });
+    await localContext;
   }
 }
 
