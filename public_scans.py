@@ -104,8 +104,9 @@ class PublicScans:
                        "--version-light", "--reason", "--stats-every", "5s",
                        "-oX", str(xml_path), target]
                 with subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                                      text=True, bufsize=1) as proc:
+                                      text=False, bufsize=0) as proc:
                     started = time.monotonic()
+                    pending = b""
                     with selectors.DefaultSelector() as selector:
                         selector.register(proc.stderr, selectors.EVENT_READ)
                         while True:
@@ -115,13 +116,28 @@ class PublicScans:
                                 raise subprocess.TimeoutExpired(cmd, 900)
                             ready = selector.select(timeout=1)
                             if ready:
-                                line = proc.stderr.readline()
-                                if line:
-                                    self._update_progress(scan_id, line)
-                                elif proc.poll() is not None:
+                                # Nmap writes live progress with carriage returns, not necessarily
+                                # newline-terminated lines. readline() can therefore block until the
+                                # scan ends and leave the UI stuck at "started". Read available bytes
+                                # and split on either line ending so progress is persisted live.
+                                chunk = proc.stderr.read1(4096)
+                                if chunk:
+                                    pending += chunk
+                                    while True:
+                                        cuts = [p for p in (pending.find(b"\\r"), pending.find(b"\\n")) if p >= 0]
+                                        if not cuts:
+                                            break
+                                        cut = min(cuts)
+                                        line = pending[:cut]
+                                        pending = pending[cut + 1:]
+                                        if line.strip():
+                                            self._update_progress(scan_id, line.decode("utf-8", "replace"))
+                                else:
                                     break
                             elif proc.poll() is not None:
                                 break
+                        if pending.strip():
+                            self._update_progress(scan_id, pending.decode("utf-8", "replace"))
                         returncode = proc.wait(timeout=5)
                 if returncode not in (0, 1):
                     raise RuntimeError("Nmap exited with status " + str(returncode))
