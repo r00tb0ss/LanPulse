@@ -563,7 +563,6 @@ def topic_context(nm, question: str) -> str:
     q = (question or "").lower()
     asked = [t for t, words in TOPIC_WORDS.items() if any(w in q for w in words)]
     general = not asked or any(w in q for w in OVERVIEW_WORDS)
-    _preflight_raw_evidence(nm, asked)
     lines = []
     for topic, builder in TOPIC_BUILDERS.items():
         if topic not in asked and not general:
@@ -696,10 +695,12 @@ def ask(nm, question: str) -> dict:
         # Route a focused IP question to the per-IP evidence collector. Do not load the
         # entire retained threat database (or unrelated honeypot history) into Ollama.
         return investigate_ip(nm, ip_targets[0], q)
+    asked_topics = [topic for topic, words in TOPIC_WORDS.items() if any(word in q.lower() for word in words)]
     try:
-        context = build_context(nm, q)
+        _preflight_raw_evidence(nm, asked_topics)
     except EvidenceBudgetExceeded as exc:
         return {"error": str(exc)}
+    context = build_context(nm, q)
     user = f"{context}\n\n----\nQUESTION: {q}\n\nAnswer using only the context above, citing specific devices/IPs/CVEs."
     context_error = _ollama_context_error(SYSTEM_PROMPT, user) if cfg["provider"] == "ollama" else ""
     if context_error:
