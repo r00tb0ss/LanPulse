@@ -289,6 +289,9 @@ def main() -> int:
                 page.wait_for_selector("#vThreat", timeout=20000)
                 page.evaluate("document.getElementById('vThreat').click()")
                 page.wait_for_timeout(800)
+                tabs_h = page.evaluate("() => document.getElementById('threatSubTabs').getBoundingClientRect().height")
+                if tabs_h < 30:
+                    problems.append(f"[phone public scan tab] the Attacks / Public scan tab bar is squashed to {tabs_h:.0f}px")
                 page.evaluate("document.querySelector('#threatSubTabs [data-tsub=scan]').click()")
                 page.wait_for_timeout(500)
                 scan = page.evaluate("""() => {
