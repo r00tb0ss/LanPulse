@@ -68,7 +68,7 @@ import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
 from runtime_telemetry import RuntimeTelemetry
 
-VERSION = "1.39.21"
+VERSION = "1.39.22"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
