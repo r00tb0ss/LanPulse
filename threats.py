@@ -902,13 +902,20 @@ class ThreatMonitor:
 
     def evidence(self) -> list[dict]:
         """All retained raw threat events for explicit AI questions; the Threat Map uses its bounded summary path."""
-        with self.lock:
-            rows = self.db.execute(
-                "SELECT t, src, dport, proto, action, lan, service, sensor, detail "
-                "FROM attacks ORDER BY t DESC").fetchall()
         keys = ("t", "src", "dport", "proto", "action", "lan", "service", "sensor", "detail")
         by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
-        out = [dict(zip(keys, row)) for row in rows]
+        out = []
+        # Bound each SQLite allocation. The caller still receives every retained record;
+        # only the fetch batch size is capped, never the evidence set.
+        with self.lock:
+            cursor = self.db.execute(
+                "SELECT t, src, dport, proto, action, lan, service, sensor, detail "
+                "FROM attacks ORDER BY t DESC, rowid DESC")
+            while True:
+                rows = cursor.fetchmany(500)
+                if not rows:
+                    break
+                out.extend(dict(zip(keys, row)) for row in rows)
         for event in out:
             device = by_ip.get(event.get("lan"))
             event["lan_id"], event["lan_name"] = (device["id"], self.nm.label(device)) if device else ("", "")
