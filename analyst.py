@@ -286,39 +286,6 @@ def _join(rows, fmt, n: int) -> str:
     return ", ".join(fmt(r) for r in list(rows)[:n])
 
 
-MAX_AI_EVIDENCE_BYTES = 8 * 1024 * 1024
-
-
-def retained_evidence_preflight(nm, question: str) -> str:
-    """Refuse oversized all-retained evidence requests before loading rows into memory.
-
-    This is a safety boundary, not a record limit: below the budget every retained
-    record remains available; above it no partial evidence is sent.
-    """
-    q = (question or "").lower()
-    asked = {topic for topic, words in TOPIC_WORDS.items() if any(word in q for word in words)}
-    estimates = []
-    try:
-        if "threats" in asked and hasattr(nm.threats, "evidence_size"):
-            estimates.append(("threat", nm.threats.evidence_size()))
-        if "honeypot" in asked:
-            if hasattr(nm.honeypot, "evidence_size"):
-                estimates.append(("built-in honeypot", nm.honeypot.evidence_size()))
-            if hasattr(nm.honeyan, "evidence_size"):
-                estimates.append(("Cowrie and samples", nm.honeyan.evidence_size()))
-    except Exception as exc:
-        log.warning("AI evidence size preflight failed; refusing unbounded retrieval", exc_info=True)
-        return f"LanPulse could not safely estimate the retained evidence size ({type(exc).__name__}). No evidence was loaded or sent. Retry after checking the database, or narrow the investigation to a specific IP."
-    total = sum(int(item.get("estimated_bytes") or 0) for _, item in estimates)
-    if total <= MAX_AI_EVIDENCE_BYTES:
-        return ""
-    detail = ", ".join(f"{name}: {int(item.get('estimated_bytes') or 0):,} bytes"
-                       for name, item in estimates)
-    return (f"The complete retained evidence for this request is estimated at {total:,} bytes "
-            f"({detail}), above LanPulse's safe in-memory evidence budget of {MAX_AI_EVIDENCE_BYTES:,} bytes. "
-            "No evidence was truncated or sent. Narrow the investigation to one source IP or ask about a smaller evidence area.")
-
-
 def _authorized_scan_evidence(nm, targets: set[str] | None = None) -> dict:
     """Return saved public scan results, optionally limited to explicitly relevant target IPs."""
     wanted = set(targets or ())
@@ -689,10 +656,10 @@ def ask(nm, question: str) -> dict:
         # Route a focused IP question to the per-IP evidence collector. Do not load the
         # entire retained threat database (or unrelated honeypot history) into Ollama.
         return investigate_ip(nm, ip_targets[0], q)
-    preflight_error = retained_evidence_preflight(nm, q)
-    if preflight_error:
-        return {"error": preflight_error}
-    context = build_context(nm, q)
+    try:
+        context = build_context(nm, q)
+    except EvidenceBudgetExceeded as exc:
+        return {"error": str(exc)}
     user = f"{context}\n\n----\nQUESTION: {q}\n\nAnswer using only the context above, citing specific devices/IPs/CVEs."
     context_error = _ollama_context_error(SYSTEM_PROMPT, user) if cfg["provider"] == "ollama" else ""
     if context_error:
