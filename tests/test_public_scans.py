@@ -23,7 +23,7 @@ class PublicScanQueue(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             scans = PublicScans(tmp)
             try:
-                with patch("public_scans.shutil.which", return_value="/usr/bin/nmap"):
+                with patch("public_scans.shutil.which", return_value="/usr/bin/nmap"), \\
                     with patch.object(scans.pool, "submit") as submit:
                         record, error = scans.start_nmap("8.8.8.8")
                         self.assertFalse(error)
