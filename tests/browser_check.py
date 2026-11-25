@@ -153,6 +153,61 @@ def check_arcs(page, problems):
         problems.append(f"[map arcs] an arc to a far southern place swings {worst:.0f}px below the bottom of the map")
 
 
+
+def check_pan_hides_then_restores(page, problems):
+    """Animated map overlays disappear during a roam and return at the new map position."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.goto(BASE, wait_until="domcontentloaded")
+    page.wait_for_selector("#vNet", timeout=20000)
+    page.evaluate("() => document.getElementById('vThreat').click()")
+    page.wait_for_timeout(3000)
+    page.evaluate("""() => {
+      if (!tChart) return;
+      tLayer = "traffic";
+      tSummary = {
+        countries: [{country: "United States", count: 5}],
+        home: {lat: 38, lon: -96, city: "Home", country: "US"},
+        attackers: [{ip: "198.51.100.7", lat: 40, lon: -100, iso: "US", country: "United States",
+          count: 5, tag: null, city: "Test", services: ["ssh"]}]
+      };
+      flowSummary = {
+        countries: [{country: "Japan", count: 4}],
+        dests: [{ip: "203.0.113.8", lat: 35, lon: 139, lon: 139, iso: "JP", org: "Test network",
+          count: 4, bad: false}],
+        recent: []
+      };
+      arcs = [{at: Date.now(), coords: [[-100, 40], [-96, 38]], lineStyle: {color: "#f43f5e"}}];
+      flowArcs = [{at: Date.now(), coords: [[-96, 38], [139, 35]], lineStyle: {color: "#38bdf8"}}];
+      updateWorld();
+      drawArcs(true);
+      drawFlowArcs(true);
+    }""")
+    counts = """() => {
+      const ids = ["arcs", "flowArcs", "attackers", "dests", "home", "labels"];
+      const o = tChart.getOption();
+      return Object.fromEntries(ids.map(id => {
+        const row = o.series.find(x => x.id === id);
+        return [id, row && row.data ? row.data.length : 0];
+      }));
+    }"""
+    if not page.evaluate("() => !!tChart"):
+        problems.append("[map pan] the live map did not start, so the pan check could not run")
+        return
+    before = page.evaluate(counts)
+    if not before["home"] or not before["dests"] or not before["arcs"] or not before["flowArcs"]:
+        problems.append(f"[map pan] could not seed every map overlay before the gesture: {before}")
+        return
+    page.evaluate("() => tChart.dispatchAction({type: 'geoRoam', componentType: 'geo', dx: -60, dy: -30})")
+    during = page.evaluate(counts)
+    if any(during.values()):
+        problems.append(f"[map pan] overlays remain visible during the gesture: {during}")
+    page.wait_for_timeout(900)
+    after = page.evaluate(counts)
+    if after != before:
+        problems.append(f"[map pan] overlays were not fully restored after the gesture: before {before}, after {after}")
+
+
+
 def check_colours_and_ips(page, problems):
     """Map colours: attackers red, known scanners yellow, device data blue, all named in the legend. IPs never wrap."""
     page.set_viewport_size({"width": 1280, "height": 900})
@@ -298,6 +353,7 @@ def main() -> int:
                         problems.append(f"[phone {vid}] wider than the screen: {', '.join(over['wide'])}")
                     page.screenshot(path=os.path.join(ROOT, f"browser-phone-{vid}.png"))
                 check_arcs(page, problems)
+                check_pan_hides_then_restores(page, problems)
                 check_colours_and_ips(page, problems)
                 check_contrast(page, problems)
                 browser.close()
