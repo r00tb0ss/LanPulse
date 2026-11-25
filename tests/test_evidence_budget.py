@@ -50,9 +50,9 @@ class EvidenceSizeQueries(unittest.TestCase):
             honeypot=types.SimpleNamespace(evidence_size=lambda: {"records": 10, "estimated_bytes": 200}),
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"sessions": 10, "estimated_bytes": 200}),
         )
-        with patch.object(analyst, "MAX_AI_RAW_EVIDENCE_BYTES", 1000):
-            with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No records were omitted or sent"):
-                analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
+        with patch.object(analyst, "MAX_AI_EVIDENCE_BYTES", 1000):
+            error = analyst.retained_evidence_preflight(nm, "investigate threat and honeypot")
+        self.assertIn("No evidence was truncated or sent", error)
 
     def test_small_complete_pack_passes_preflight(self):
         nm = types.SimpleNamespace(
@@ -60,8 +60,8 @@ class EvidenceSizeQueries(unittest.TestCase):
             honeypot=types.SimpleNamespace(evidence_size=lambda: {"records": 1, "estimated_bytes": 100}),
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"sessions": 1, "estimated_bytes": 100}),
         )
-        with patch.object(analyst, "MAX_AI_RAW_EVIDENCE_BYTES", 1000):
-            analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
+        with patch.object(analyst, "MAX_AI_EVIDENCE_BYTES", 1000):
+            self.assertEqual(analyst.retained_evidence_preflight(nm, "investigate threat and honeypot"), "")
 
 
 if __name__ == "__main__":
