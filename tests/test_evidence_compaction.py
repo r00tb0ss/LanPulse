@@ -16,6 +16,15 @@ class Compaction(unittest.TestCase):
         self.assertEqual((out[0]["count"], out[0]["first_t"], out[0]["last_t"]), (2000, 1000, 2999))
         self.assertEqual(out[0]["detail"], "ET SCAN")
 
+    def test_every_timestamp_can_be_rebuilt_from_the_gaps(self):
+        times = [1000, 1000, 1003, 1010, 1010, 1500]
+        events = [{"t": t, "dport": 22} for t in times]
+        out = analyst.compact_ip_evidence(events)[0]
+        rebuilt = [out["first_t"]]
+        for gap in out["t_gaps"]:
+            rebuilt.append(rebuilt[-1] + gap)
+        self.assertEqual(rebuilt, times)
+
     def test_distinct_values_are_all_kept(self):
         events = [{"t": i, "dport": p, "detail": d} for i, (p, d) in enumerate(
             [(22, "a"), (23, "a"), (22, "b"), (22, "a")])]
@@ -38,7 +47,7 @@ class Compaction(unittest.TestCase):
         events = [{"t": i, "dport": 2200 + i % 3, "proto": "tcp", "action": "block", "lan": "192.168.0.5",
                    "service": "ssh", "sensor": "udm", "detail": "ET SCAN"} for i in range(5000)]
         before = len(json.dumps(events)); after = len(json.dumps(analyst.compact_ip_evidence(events)))
-        self.assertLess(after * 100, before)
+        self.assertLess(after * 20, before)
         self.assertEqual(sum(e["count"] for e in analyst.compact_ip_evidence(events)), 5000)
 
     def test_format_ip_evidence_states_that_repeats_are_merged(self):
