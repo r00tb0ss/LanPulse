@@ -572,7 +572,7 @@ def _question_ip_targets(question: str) -> list[str]:
     """Extract valid IP literals from a question without treating arbitrary text as a target."""
     import ipaddress
     found = []
-    for candidate in re.findall(r"(?<![A-Fa-f0-9:.])(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?![A-Fa-f0-9:.])|(?<![A-Fa-f0-9:])[A-Fa-f0-9]*:[A-Fa-f0-9:]+(?![A-Fa-f0-9:])", question or ""):
+    for candidate in re.findall(r"(?<![A-Fa-f0-9:.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![A-Fa-f0-9:.])|(?<![A-Fa-f0-9:])[A-Fa-f0-9]*:[A-Fa-f0-9:]+(?![A-Fa-f0-9:])", question or ""):
         try:
             normalized = str(ipaddress.ip_address(candidate))
         except ValueError:
@@ -590,7 +590,7 @@ def ask(nm, question: str) -> dict:
     if not q:
         return {"error": "Ask a question."}
     ip_targets = _question_ip_targets(q)
-    if len(ip_targets) == 1 and re.search(r"\\b(nmap|openvas|port[ -]?scan|scan|probe)\\b", q, re.I):
+    if len(ip_targets) == 1 and re.search(r"\b(nmap|openvas|port[ -]?scan|scan|probe)\b", q, re.I):
         target = ip_targets[0]
         return {"error": (
             f"{target} is an IP mentioned in your question, but Threat Map presence does not establish "
