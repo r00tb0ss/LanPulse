@@ -81,6 +81,15 @@ def _cfg(nm) -> dict:
     return c
 
 
+def cloud_evidence_consent_error(cfg: dict) -> str:
+    """Block retained evidence from leaving the network until the owner explicitly opts in."""
+    if not is_local(cfg.get("base_url", "")) and not cfg.get("cloud_evidence_consent", False):
+        return ("Cloud AI is blocked from receiving LanPulse evidence until you explicitly enable "
+                "the cloud evidence consent setting in the AI Analyst setup. This includes attempted "
+                "honeypot credentials, raw sessions/events, and LAN device details. No evidence was sent.")
+    return ""
+
+
 def is_local(url: str) -> bool:
     """Does this AI server sit on your own network (so questions never leave it)? Judged by the real host name,
     not by text that merely appears somewhere in the address."""
@@ -607,6 +616,9 @@ def ask(nm, question: str) -> dict:
     q = (question or "").strip()
     if not q:
         return {"error": "Ask a question."}
+    consent_error = cloud_evidence_consent_error(cfg)
+    if consent_error:
+        return {"error": consent_error}
     ip_targets = _question_ip_targets(q)
     if len(ip_targets) == 1 and re.search(r"\b(nmap|openvas|port[ -]?scan|scan|probe)\b", q, re.I):
         target = ip_targets[0]
