@@ -154,7 +154,7 @@ class PublicScans:
                                 if chunk:
                                     pending += chunk
                                     while True:
-                                        cuts = [p for p in (pending.find(b"\\r"), pending.find(b"\\n")) if p >= 0]
+                                        cuts = [p for p in (pending.find(b"\r"), pending.find(b"\n")) if p >= 0]
                                         if not cuts:
                                             break
                                         cut = min(cuts)
