@@ -159,8 +159,8 @@ class PublicScans:
 
     def _update_progress(self, scan_id: str, line: str):
         """Persist Nmap's periodic progress without exposing raw command output to the UI."""
-        match = re.search(r"(?:About\\s+)?([0-9]+(?:\\.[0-9]+)?)%\\s+done", line, re.I)
-        phase = re.search(r"undergoing\\s+([^;]+)", line, re.I)
+        match = re.search(r"(?:About\s+)?([0-9]+(?:\.[0-9]+)?)%\s+done", line, re.I)
+        phase = re.search(r"undergoing\s+([^;]+)", line, re.I)
         with self.lock:
             rec = self.scans.get(scan_id)
             if rec is None or rec.get("status") != "Running":
