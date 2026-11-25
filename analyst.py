@@ -329,13 +329,17 @@ def retained_evidence_preflight(nm, question: str) -> str:
     q = (question or "").lower()
     asked = {topic for topic, words in TOPIC_WORDS.items() if any(word in q for word in words)}
     estimates = []
-    if "threats" in asked and hasattr(nm.threats, "evidence_size"):
-        estimates.append(("threat", nm.threats.evidence_size()))
-    if "honeypot" in asked:
-        if hasattr(nm.honeypot, "evidence_size"):
-            estimates.append(("built-in honeypot", nm.honeypot.evidence_size()))
-        if hasattr(nm.honeyan, "evidence_size"):
-            estimates.append(("Cowrie and samples", nm.honeyan.evidence_size()))
+    try:
+        if "threats" in asked and hasattr(nm.threats, "evidence_size"):
+            estimates.append(("threat", nm.threats.evidence_size()))
+        if "honeypot" in asked:
+            if hasattr(nm.honeypot, "evidence_size"):
+                estimates.append(("built-in honeypot", nm.honeypot.evidence_size()))
+            if hasattr(nm.honeyan, "evidence_size"):
+                estimates.append(("Cowrie and samples", nm.honeyan.evidence_size()))
+    except Exception as exc:
+        log.warning("AI evidence size preflight failed; refusing unbounded retrieval", exc_info=True)
+        return f"LanPulse could not safely estimate the retained evidence size ({type(exc).__name__}). No evidence was loaded or sent. Retry after checking the database, or narrow the investigation to a specific IP."
     total = sum(int(item.get("estimated_bytes") or 0) for _, item in estimates)
     if total <= MAX_AI_EVIDENCE_BYTES:
         return ""
