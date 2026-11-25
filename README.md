@@ -47,7 +47,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
 - **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
 - **Guided setup** wizard on first run, and lateral-movement detection
-- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic. For honeypot and threat investigations, AI can inspect all retained raw attack records, attempted usernames/passwords, Cowrie sessions and commands, captured malware analysis, YARA results, and available runtime telemetry. A dedicated malware analyst investigates individual captured samples, while Threat Map investigations correlate attacker activity with affected LAN devices and vulnerability findings. Full sensitive evidence is sent to the configured provider; local Ollama is recommended. When evidence exceeds the configured local model context, LanPulse reports that explicitly rather than silently dropping records
+- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic. For honeypot and threat investigations, AI can inspect all retained raw attack records, attempted usernames/passwords, Cowrie sessions and commands, captured malware analysis, YARA results, and available runtime telemetry. A dedicated malware analyst investigates individual captured samples, while Threat Map investigations correlate attacker activity with affected LAN devices and vulnerability findings. Hosted OpenAI-compatible and Anthropic providers require explicit one-time approval before any retained raw evidence is sent; the confirmation names the sensitive categories involved, and permission can be revoked in the analyst settings. Local Ollama needs no cloud consent and keeps prompts on your network. When evidence exceeds the configured model context, LanPulse reports that explicitly rather than silently dropping records
 - **AI-assisted active scanning**: from a Threat Map investigation, explicitly launch Nmap or OpenVAS against a private LAN device that the selected threat actually reached. Requires dashboard authentication and a separate confirmation. Public attacker IPs and arbitrary third-party systems are never scanned
 - **Daily summary** to any alert channel, and **quiet mode** (the bell in the top bar) to mute alerts for 1 hour, 4 hours or until 8 AM
 - **Health board** on the Services tab: shows whether each data source LanPulse depends on (router logs, UniFi, SNMP, Pi-hole, vulnerability data, honeypot sensors) is working, when it last reported, and what to check when it isn't
@@ -443,16 +443,19 @@ The wand button in the top bar opens a chat that answers questions about your ne
 |---|---|---|
 | Ollama | `http://localhost:11434` | Local; nothing leaves your network |
 | OpenAI-compatible | `http://localhost:1234/v1` | LM Studio, vLLM, LocalAI, Groq, OpenRouter, OpenAI... needs an API key if hosted |
-| Anthropic | `https://api.anthropic.com` | Needs an API key; a network summary is sent to Anthropic |
+| Anthropic | `https://api.anthropic.com` | Needs an API key; no evidence is sent until you explicitly approve cloud evidence sharing |
 
 The analyst is strictly read-only: it is given a built-in guide to everything LanPulse does (so "what can it do?" and
-"where do I find...?" questions work) plus a capped summary of what LanPulse already knows (risk profile, devices and
-ports, vulnerabilities, threats, recent events). Depending on your question it also gets the detail for that area:
-honeypot credentials, top sources, sensor sessions and captured samples; DNS; services; device traffic; inside-LAN
-threats; vulnerabilities. It cites what it was given and can only explain; for fixes it gives steps for you to run.
-With Ollama, LanPulse asks for a larger context window so none of this is silently cut off. The suggested questions are
-hidden until you tap **Show suggested questions**. Device names and banners are treated as untrusted data. With a cloud provider, that summary is sent to
-them with each question, and the panel says so. API keys are stored on the LanPulse box and masked in settings.
+"where do I find...?" questions work) plus network context and the relevant retained evidence for the question. This can
+include attempted honeypot usernames/passwords, raw threat events, complete Cowrie sessions and commands, captured
+sample analysis, YARA matches, runtime telemetry, LAN device names and IPs, and authorized scan results. It cites what
+it was given and can only explain; for fixes it gives steps for you to run. Evidence is processed in bounded batches and
+chunked analysis paths preserve the complete record set; if the complete prompt cannot safely fit the model context,
+LanPulse reports an explicit error rather than silently dropping records. Device names and banners are treated as
+untrusted data. **Cloud privacy:** hosted OpenAI-compatible and Anthropic endpoints receive no retained evidence until
+you approve a clear one-time confirmation. You can revoke that permission from the analyst configuration. If you
+switch back to local Ollama, no cloud approval is needed and prompts stay on your network. API keys are stored on the
+LanPulse box and masked in settings.
 
 ![AI Security Analyst](docs/images/analyst.png)
 
