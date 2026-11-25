@@ -900,6 +900,20 @@ class ThreatMonitor:
             event["lan_id"], event["lan_name"] = (device["id"], self.nm.label(device)) if device else ("", "")
         return out
 
+    def evidence(self) -> list[dict]:
+        """All retained raw threat events for explicit AI questions; the Threat Map uses its bounded summary path."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT t, src, dport, proto, action, lan, service, sensor, detail "
+                "FROM attacks ORDER BY t DESC").fetchall()
+        keys = ("t", "src", "dport", "proto", "action", "lan", "service", "sensor", "detail")
+        by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
+        out = [dict(zip(keys, row)) for row in rows]
+        for event in out:
+            device = by_ip.get(event.get("lan"))
+            event["lan_id"], event["lan_name"] = (device["id"], self.nm.label(device)) if device else ("", "")
+        return out
+
     def _context(self, ip, rows, intel, tag):
         try:
             gn = (intel.get("greynoise") or {}).get("classification", "")

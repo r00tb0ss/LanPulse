@@ -46,6 +46,17 @@ class AnalystContext(unittest.TestCase):
         self.assertIn("Services monitor", c)
 
 
+    def test_threat_context_includes_all_raw_attack_events(self):
+        nm = fake_nm()
+        nm.threats.evidence = lambda: [
+            {"src": "198.51.100.44", "detail": "username=admin password=raw-attempted-secret",
+             "action": "ssh-login", "lan": "192.0.2.10"}
+        ]
+        context = analyst.topic_context(nm, "investigate this threat IP")
+        self.assertIn("COMPLETE RAW THREAT EVIDENCE", context)
+        self.assertIn("raw-attempted-secret", context)
+        self.assertIn("192.0.2.10", context)
+
     def test_honeypot_context_includes_commands_credentials_and_rule_backed_attack_candidates(self):
         nm = fake_nm()
         nm.honeyan.sessions = lambda hours, limit: {
