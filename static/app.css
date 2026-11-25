@@ -2332,6 +2332,12 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 }
 .public-scan{border-color:color-mix(in srgb,var(--threat,#f43f5e) 35%,var(--border))}
 .public-scan h4 i{color:var(--threat,#f43f5e)}
+#threatSubTabs{margin:2px 0 10px;padding:0}
+#threatView.ps-mode>:not(.v-head):not(#threatSubTabs):not(#publicScanPane){display:none!important}
+#threatView:not(.ps-mode) #publicScanPane{display:none}
+#publicScanPane{display:grid;gap:12px}
+#publicScanHistory h4{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.public-scan .ps-del{padding:3px 8px}
 .public-scan .ps-form{display:grid;gap:7px;max-width:520px}
 .public-scan .ps-form label{font-size:11px}
 .public-scan .ps-form input[type=text],.public-scan .ps-form select{width:100%}

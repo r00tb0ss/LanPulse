@@ -48,6 +48,9 @@ class PublicScans:
         self.path = Path(data_dir) / "authorized-public-scans.json"
         self.lock = threading.RLock()
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="lanpulse-public-scan")
+        # target -> start time of a scan whose history was deleted, kept only until its cooldown ends so
+        # clearing history cannot be used to dodge the scan rate limits.
+        self._cooldown_memory: dict[str, int] = {}
         try:
             raw = json.loads(self.path.read_text())
             self.scans = raw if isinstance(raw, dict) else {}
@@ -86,6 +89,21 @@ class PublicScans:
             rows = [dict(v) for v in self.scans.values()]
         return sorted(rows, key=lambda x: x.get("started", 0), reverse=True)[:30]
 
+    def delete(self, ids=None) -> int:
+        """Delete finished scans from history (all of them when ids is None). Queued or running scans are never removed."""
+        with self.lock:
+            now = int(time.time())
+            keys = [k for k, row in self.scans.items()
+                    if row.get("status") not in self.ACTIVE and (ids is None or k in ids)]
+            for key in keys:
+                row = self.scans.pop(key)
+                started = int(row.get("started") or 0)
+                if now - started < max(self.TARGET_COOLDOWN_SECONDS, self.GLOBAL_COOLDOWN_SECONDS) and row.get("target"):
+                    self._cooldown_memory[row["target"]] = max(self._cooldown_memory.get(row["target"], 0), started)
+            if keys:
+                self._save()
+            return len(keys)
+
     def start_nmap(self, target: str, authorized_by: str = "dashboard-admin") -> tuple[dict | None, str]:
         try:
             target = validate_public_ipv4(target)
@@ -98,12 +116,15 @@ class PublicScans:
             self._prune_history_locked(now)
             if any(s.get("status") in self.ACTIVE for s in self.scans.values()):
                 return None, "A public IP scan is already queued or running. Wait for it to finish first."
-            previous_global = max((int(s.get("started") or 0) for s in self.scans.values()), default=0)
+            window = max(self.TARGET_COOLDOWN_SECONDS, self.GLOBAL_COOLDOWN_SECONDS)
+            self._cooldown_memory = {t: ts for t, ts in self._cooldown_memory.items() if now - ts < window}
+            previous_global = max([int(s.get("started") or 0) for s in self.scans.values()]
+                                  + list(self._cooldown_memory.values()), default=0)
             global_wait = self.GLOBAL_COOLDOWN_SECONDS - (now - previous_global)
             if previous_global and global_wait > 0:
                 return None, f"A public Nmap scan was started recently. Wait about {global_wait} second(s) before another scan."
-            previous = max((s.get("started", 0) for s in self.scans.values()
-                            if s.get("target") == target), default=0)
+            previous = max([s.get("started", 0) for s in self.scans.values() if s.get("target") == target]
+                           + [self._cooldown_memory.get(target, 0)], default=0)
             wait = self.TARGET_COOLDOWN_SECONDS - (now - previous)
             if previous and wait > 0:
                 return None, f"This target was scanned recently. Try again in about {max(1, (wait + 59) // 60)} minute(s)."

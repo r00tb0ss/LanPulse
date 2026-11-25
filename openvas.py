@@ -164,6 +164,7 @@ class OpenVAS:
         self.scans: dict[str, dict] = {}     # ip -> {task, status, progress, started, finished, error}
         self.ready_cache = (0.0, None)
         self.wake = asyncio.Event()
+        self._public_cooldown_memory: dict[str, int] = {}   # see PublicScans: cooldowns survive a history delete
         try:
             self.scans = json.loads(self.state_file.read_text())
         except (OSError, ValueError):
@@ -280,6 +281,21 @@ class OpenVAS:
                         "restarted or run out of disk space). Press Install to continue where it left off."}
         return st
 
+    def delete_public(self, ips=None) -> int:
+        """Delete finished authorized public scans from history (all when ips is None); active ones are kept."""
+        now = int(time.time())
+        gone = [ip for ip, row in self.scans.items()
+                if row.get("public") and row.get("status") not in ("Requested", "Queued", "Running", "New")
+                and (ips is None or ip in ips)]
+        for ip in gone:
+            started = int(self.scans.pop(ip).get("started") or 0)
+            if now - started < self.TARGET_COOLDOWN_SECONDS:
+                memory = self.__dict__.setdefault("_public_cooldown_memory", {})
+            memory[ip] = max(memory.get(ip, 0), started)
+        if gone:
+            self._save()
+        return len(gone)
+
     # ------------------------------------------------------------------ scanning
     def start_scan(self, ip: str, authorized_public: bool = False) -> str:
         """Create a target + task for a mapped device or explicitly authorized public IPv4 target."""
@@ -302,12 +318,14 @@ class OpenVAS:
             return "A scan of this device is already running."
         if authorized_public:
             now = int(time.time())
-            previous_target = int((cur or {}).get("started") or 0)
+            memory = self.__dict__.setdefault("_public_cooldown_memory", {})
+            memory = self._public_cooldown_memory = {t: ts for t, ts in memory.items() if now - ts < self.TARGET_COOLDOWN_SECONDS}
+            previous_target = max(int((cur or {}).get("started") or 0), memory.get(ip, 0))
             target_wait = self.TARGET_COOLDOWN_SECONDS - (now - previous_target)
             if previous_target and target_wait > 0:
                 return f"This public target was scanned recently. Try again in about {max(1, (target_wait + 59) // 60)} minute(s)."
-            previous_public = max((int(row.get("started") or 0) for row in self.scans.values()
-                                   if row.get("public")), default=0)
+            previous_public = max([int(row.get("started") or 0) for row in self.scans.values() if row.get("public")]
+                                  + list(memory.values()), default=0)
             global_wait = self.GLOBAL_PUBLIC_COOLDOWN_SECONDS - (now - previous_public)
             if previous_public and global_wait > 0:
                 return f"A public OpenVAS scan was started recently. Wait about {global_wait} second(s) before another public scan."
