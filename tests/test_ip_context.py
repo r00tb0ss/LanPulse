@@ -169,6 +169,20 @@ class IntelSpeed(unittest.TestCase):
         self.assertLess(took, 1.0)
         self.assertTrue(d["intel_pending"])
 
+    def test_local_ip_context_does_not_wait_for_external_intelligence(self):
+        t = self.threats
+        orig = t._get_json
+        t._get_json = lambda *a, **k: time.sleep(3) or {}
+        try:
+            start = time.time()
+            result = self.tm.ip_context("203.0.113.12")
+            took = time.time() - start
+        finally:
+            t._get_json = orig
+        self.assertLess(took, 1.0)
+        self.assertIn("context", result)
+        self.assertIn("behaviour", result["context"])
+
 
 if __name__ == "__main__":
     unittest.main()
