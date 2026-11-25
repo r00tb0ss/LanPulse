@@ -7,6 +7,7 @@ let view = "net";
 let tSummary = null;
 let tHours = 24;
 let tChart = null;
+let roamActive = false;
 let arcs = [];
 let unseen = 0;
 let selectedIp = null;
@@ -196,13 +197,23 @@ function initWorld() {
     if (p.seriesId === "attackers") openIp(p.data.ip);
     else if (p.seriesId === "dests" && typeof openDest === "function") openDest(p.data.d);
   });
-  // Re-place dots and arcs whenever the map is dragged or zoomed so they stay pinned to their locations.
-  // ECharts moves the dots and arcs with the map on its own, so rebuilding everything on each drag frame only made
-  // panning slow (about 6 redraws per frame). Do one tidy-up pass once the map stops moving.
+  // ECharts animates geo overlays independently while the map is roaming. Hide them for the gesture so
+  // dots, labels and animated routes cannot drift or leave trails; restore one consistent snapshot afterward.
+  const roamHiddenSeries = ["arcs", "flowArcs", "attackers", "dests", "home", "labels"];
   let roamTimer = 0;
+  roamActive = false;
   tChart.on("georoam", () => {
+    if (!roamActive) {
+      roamActive = true;
+      tChart.setOption({series: roamHiddenSeries.map((id) => ({id, data: []}))});
+    }
     clearTimeout(roamTimer);
-    roamTimer = setTimeout(() => { updateWorld(); drawArcs(); }, 300);
+    roamTimer = setTimeout(() => {
+      roamActive = false;
+      updateWorld();
+      drawArcs(true);
+      if (typeof drawFlowArcs === "function") drawFlowArcs(true);
+    }, 250);
   });
   if (pendingGeoView) {             // keep the zoom and position the person had before the rebuild
     tChart.setOption({geo: {center: pendingGeoView.center, zoom: pendingGeoView.zoom}});
@@ -282,7 +293,7 @@ function homeCoord() {
 }
 
 function updateWorld() {
-  if (!tChart || !tSummary) return;
+  if (!tChart || !tSummary || roamActive) return;
   const s = tSummary;
   const max = Math.max(1, ...s.countries.map((c) => c.count));
   const home = homeCoord();
@@ -307,7 +318,7 @@ function updateWorld() {
 // Every country with activity gets a name, busiest first; one that would land on a name already placed waits until you zoom in.
 // Hovering any country always shows its name.
 function updateCountryLabels() {
-  if (!tChart) return;
+  if (!tChart || roamActive) return;
   const attacksOn = typeof showAttacks !== "function" || showAttacks();
   const trafficOn = typeof showTraffic === "function" && showTraffic() && typeof flowSummary !== "undefined" && flowSummary;
   const label = {}, spot = {};   // map region name -> {name, atk, dst}; and where on the map its name goes
@@ -381,7 +392,7 @@ function pushArc(ev) {
 }
 let arcDrawTimer = 0;
 function drawArcs(now) {
-  if (!tChart) return;
+  if (!tChart || roamActive) return;
   if (now) { clearTimeout(arcDrawTimer); arcDrawTimer = 0; }
   else if (arcDrawTimer) return;                       // a redraw is already queued: this arc rides along
   else { arcDrawTimer = setTimeout(() => drawArcs(true), 250); return; }
