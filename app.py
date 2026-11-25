@@ -1772,7 +1772,10 @@ def build_app(nm: LanPulse) -> FastAPI:
 
     @app.get("/api/scans/authorized-public")
     async def authorized_public_scans():
-        openvas_scans = [s for s in nm.openvas.status().get("scans", []) if s.get("public")]
+        # Read persisted in-memory scan records directly; do not make a GMP/OpenVAS network call
+        # just to refresh the Threat Map panel.
+        openvas_scans = [{"ip": ip, "target": ip, "scanner": "openvas", **s}
+                         for ip, s in nm.openvas.scans.items() if s.get("public")]
         return {"nmap": nm.public_scans.list(), "openvas": openvas_scans}
 
     @app.post("/api/threats/ip/{ip}/scan")
