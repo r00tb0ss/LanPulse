@@ -156,6 +156,24 @@ class AnalystContext(unittest.TestCase):
         self.assertEqual(hit_ids, {"hit-" + str(i) for i in range(5)})
         self.assertEqual("".join(record["text_fragment"] for record in fragments), raw["long_value"])
 
+    def test_ip_evidence_chunks_respect_small_limits(self):
+        chunks = analyst._ip_evidence_chunks({"large": "z" * 4000}, max_chars=500)
+        self.assertTrue(chunks)
+        self.assertTrue(all(len(chunk) <= 500 for chunk in chunks))
+
+    def test_ip_ledger_consolidation_does_not_truncate_model_output(self):
+        cfg = {"provider": "ollama"}
+        with patch.object(analyst, "call_model", return_value="x" * 13000) as call:
+            result = analyst._reduce_ip_chunk_summaries(cfg, ["a" * 13000, "b" * 13000])
+        self.assertEqual(len(result), 13000)
+        call.assert_called_once()
+
+    def test_ip_ledger_consolidation_fails_instead_of_truncating_oversized_output(self):
+        cfg = {"provider": "ollama"}
+        with patch.object(analyst, "call_model", return_value="x" * 25000):
+            with self.assertRaisesRegex(RuntimeError, "no content was truncated"):
+                analyst._reduce_ip_chunk_summaries(cfg, ["a" * 13000, "b" * 13000])
+
     def test_single_ip_question_uses_focused_ip_evidence_not_global_context(self):
         nm = fake_nm()
         nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
