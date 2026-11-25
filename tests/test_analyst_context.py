@@ -173,7 +173,7 @@ class AnalystContext(unittest.TestCase):
     def test_ip_ledger_consolidation_fails_instead_of_truncating_oversized_output(self):
         cfg = {"provider": "ollama"}
         with patch.object(analyst, "call_model", return_value="x" * 25000):
-            with self.assertRaisesRegex(RuntimeError, "no content was truncated"):
+            with self.assertRaisesRegex(RuntimeError, "could not be reduced"):
                 analyst._reduce_ip_chunk_summaries(cfg, ["a" * 13000, "b" * 13000])
 
     def test_single_ip_question_uses_focused_ip_evidence_not_global_context(self):
