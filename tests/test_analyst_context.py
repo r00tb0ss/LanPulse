@@ -198,9 +198,11 @@ class AnalystContext(unittest.TestCase):
         nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
         nm.honeypot.evidence_size = lambda: {"records": 100000, "estimated_bytes": analyst.MAX_AI_RAW_EVIDENCE_BYTES + 1}
         nm.honeypot.evidence = lambda: (_ for _ in ()).throw(AssertionError("oversized evidence rows must not be loaded"))
-        with patch.object(nm.honeypot, "evidence", side_effect=AssertionError("oversized evidence rows must not be loaded")):
-            with patch.object(analyst, "call_model", side_effect=AssertionError("no partial evidence may be sent")):
-                result = analyst.ask(nm, "Analyze all honeypot credentials and sessions")
+        def fail_if_loaded():
+            raise AssertionError("oversized evidence rows must not be loaded")
+        nm.honeypot.evidence = fail_if_loaded
+        with patch.object(analyst, "call_model", side_effect=AssertionError("no partial evidence may be sent")):
+            result = analyst.ask(nm, "Analyze all honeypot credentials and sessions")
         self.assertIn("in-memory safety limit", result["error"])
         self.assertIn("No records were omitted or sent", result["error"])
     def test_hosted_ai_requires_explicit_consent_before_loading_or_sending_evidence(self):
