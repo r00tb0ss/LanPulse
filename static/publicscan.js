@@ -87,12 +87,23 @@ async function refreshAuthorizedPublicScans() {
   };
   const pane = $("threatView");
   const showSub = (sub) => {
+    const wasScan = pane.classList.contains("ps-mode");
+    if (sub === "scan" && !wasScan) {
+      // Same housekeeping as leaving the tab: a chart left in a hidden box comes back blank in some browsers.
+      if (typeof mapIsFull === "function" && mapIsFull()) toggleMapFull(false);
+      if (typeof tChart !== "undefined" && tChart) {
+        try { pendingGeoView = geoView(); } catch (_) { pendingGeoView = null; }
+        try { tChart.dispose(); } catch (_) {}
+        tChart = null;
+        $("worldMap").innerHTML = "";
+      }
+    }
     pane.classList.toggle("ps-mode", sub === "scan");
     document.querySelectorAll("#threatSubTabs [data-tsub]").forEach((b) => {
       b.classList.toggle("on", b.dataset.tsub === sub); b.setAttribute("aria-selected", String(b.dataset.tsub === sub));
     });
     if (sub === "scan") refreshAuthorizedPublicScans();
-    else if (typeof tChart !== "undefined" && tChart) setTimeout(() => tChart.resize(), 0);
+    else if (wasScan) setView("threats");          // rebuild the map exactly as when the Threats tab is opened
   };
   $("threatSubTabs").onclick = (e) => { const b = e.target.closest("[data-tsub]"); if (b) showSub(b.dataset.tsub); };
   const remove = async (payload, what) => {
@@ -107,5 +118,5 @@ async function refreshAuthorizedPublicScans() {
   });
   $("bPublicScanClear").onclick = () => remove({all_finished: true}, "all finished scans");
   const prev = viewHooks.threats;
-  viewHooks.threats = () => { showSub("attacks"); if (prev) prev(); };   // opening Threats always starts on the map
+  viewHooks.threats = () => { if (pane.classList.contains("ps-mode")) showSub("attacks"); if (prev) prev(); };   // opening Threats always starts on the map
 })();

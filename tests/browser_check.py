@@ -315,6 +315,11 @@ def main() -> int:
                 back = page.evaluate("() => document.getElementById('mapCard').getBoundingClientRect().height")
                 if back < 100:
                     problems.append("[phone public scan tab] the attack map did not come back after leaving Public scan")
+                page.wait_for_timeout(800)
+                canvas = page.evaluate("""() => { const c = document.querySelector('#worldMap canvas');
+                  return c ? [c.getBoundingClientRect().width, c.getBoundingClientRect().height] : null; }""")
+                if not canvas or canvas[0] < 100 or canvas[1] < 100:
+                    problems.append(f"[phone public scan tab] the attack map is blank after returning from Public scan ({canvas})")
                 # Phone layout: a device card with many tags must keep a readable name column (it once became one letter wide).
                 page.set_viewport_size({"width": 390, "height": 800})
                 current["view"] = "phone vulns"
