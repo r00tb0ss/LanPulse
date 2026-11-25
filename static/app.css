@@ -2308,3 +2308,38 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 .yara-filters{display:grid;grid-template-columns:minmax(180px,2fr) minmax(150px,1fr) minmax(130px,1fr);gap:8px;margin:10px 0}
 .yara-filters input,.yara-filters select{min-width:0;width:100%;max-width:100%}
 @media(max-width:700px){.yara-filters{grid-template-columns:1fr}.yara-result-row>summary{overflow-wrap:anywhere}}
+
+
+/* Threat/IP detail panel: turn the long stream of sections into distinct, readable cards. */
+#panelBody{min-width:0;overflow-wrap:anywhere}
+#panelBody>.p-sec{
+  margin:10px 12px;
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--panel) 88%,transparent),var(--bg2));
+}
+#panelBody>.p-sec h4{display:flex;align-items:center;gap:8px;margin-bottom:11px;color:var(--text);letter-spacing:.65px}
+#panelBody>.p-sec .muted{line-height:1.55}
+#panelBody>.p-sec textarea,#panelBody>.p-sec input:not([type=checkbox]),#panelBody>.p-sec select{
+  min-width:0;max-width:100%;border-radius:9px;
+}
+#panelBody .ip-ai{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 8%,var(--panel)),var(--bg2))}
+#panelBody .ip-ai h4 i{color:var(--accent)}
+#panelBody .ip-ai #bIpAiRun{margin-top:2px}
+#panelBody .ip-ai .ip-lan-scan{
+  margin-top:14px;padding-top:13px;border-top:1px solid var(--border);
+}
+#panelBody .public-scan{border-color:color-mix(in srgb,var(--threat,#f43f5e) 35%,var(--border))}
+#panelBody .public-scan h4 i{color:var(--threat,#f43f5e)}
+#panelBody .ip-ai .finding{padding:10px;border-radius:9px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:8px 0}
+#panelBody .ip-ai [style*="white-space:pre-wrap"]{padding:11px;border:1px solid var(--border);border-radius:9px;background:color-mix(in srgb,var(--bg) 65%,transparent)}
+@media(max-width:560px){
+  #panelBody>.p-sec{margin:8px;padding:12px}
+  #panelBody .p-head{padding:18px 14px 14px;gap:10px}
+  #panelBody .p-icon{width:46px;height:46px;border-radius:12px;font-size:20px}
+  #panelBody .p-title{font-size:16px}
+  #panelBody .actions{grid-template-columns:minmax(0,1fr)}
+  #panelBody .actions .btn{width:100%;justify-content:center}
+  #panelBody .ip-ai .btn,#panelBody .public-scan .btn{width:100%;justify-content:center}
+}
