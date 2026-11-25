@@ -462,6 +462,7 @@ class ThreatMonitor:
         self.lock = threading.Lock()
         self.geo = Geo(self.data_dir)
         self.intel_cache: dict[str, tuple[float, dict]] = {}
+        self.ip_context_cache: dict[str, tuple[float, dict | None]] = {}
         self.tor_exits: set[str] = set()
         self.tor_loaded = 0.0
         self.c2_ips: set[str] = set()
@@ -892,21 +893,30 @@ class ThreatMonitor:
             return None
 
     def ip_context(self, ip: str) -> dict:
-        """Fast local-only context for the IP panel; never waits for external reputation services."""
+        """Fast local-only context, cached briefly so IP details and an on-demand AI review can share it."""
+        now = time.time()
+        hit = self.ip_context_cache.get(ip)
+        if hit and now - hit[0] < 45:
+            return {"context": hit[1]}
         with self.lock:
             rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
                                    "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
         tag = self.tags.cache.get(ip)
-        return {"context": self._context(ip, rows, {}, tag)}
+        context = self._context(ip, rows, {}, tag)
+        if len(self.ip_context_cache) >= 500:
+            for key, (stamp, _) in list(self.ip_context_cache.items()):
+                if now - stamp >= 45:
+                    self.ip_context_cache.pop(key, None)
+            if len(self.ip_context_cache) >= 500:
+                oldest = min(self.ip_context_cache, key=lambda key: self.ip_context_cache[key][0])
+                self.ip_context_cache.pop(oldest, None)
+        self.ip_context_cache[ip] = (now, context)
+        return {"context": context}
 
     def ip_extra(self, ip: str) -> dict:
-        """The slower half of the IP box: outside lookups (in parallel) and enriched context."""
-        with self.lock:
-            rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
-                                   "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
+        """Fetch external reputation only; local context is already loaded independently by /context."""
         intel = self.intel(ip)
-        tag = self.tags.cache.get(ip)
-        return {"intel": intel, "tag": tag, "context": self._context(ip, rows, intel, tag)}
+        return {"intel": intel, "tag": self.tags.cache.get(ip)}
 
     def cached_intel(self, ip: str):
         hit = self.intel_cache.get(ip)
@@ -922,8 +932,15 @@ class ThreatMonitor:
         hit = self.intel_cache.get(ip)
         if hit and time.time() - hit[0] < 6 * 3600:
             return hit[1]
-        if len(self.intel_cache) > 2000:          # entries expire after 6 h but were never removed
-            self.intel_cache.clear()
+        if len(self.intel_cache) >= 2000:
+            now = time.time()
+            # Expire old entries first; retain useful recent results instead of flushing the whole cache.
+            for key, (stamp, _) in list(self.intel_cache.items()):
+                if now - stamp >= 6 * 3600:
+                    self.intel_cache.pop(key, None)
+            while len(self.intel_cache) >= 2000:
+                oldest = min(self.intel_cache, key=lambda key: self.intel_cache[key][0])
+                self.intel_cache.pop(oldest, None)
         if self.nm.args.demo:
             r = random.Random(ip)
             info = {"rdns": f"host-{ip.replace('.', '-')}.example.net", "isp": r.choice(["Example Hosting Ltd", "Demo Cloud Inc", "Sample Telecom"]),
