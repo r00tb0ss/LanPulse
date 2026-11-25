@@ -31,7 +31,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **24-hour history** for each device: an uptime bar and a latency chart (kept for 7 days)
 - **Trusted devices**: anything new shows a red dashed ring until you trust it
 - **Watched devices**: get an alert when an important device goes offline or comes back
-- **Threats view**: live world attack map of who is hitting your public IP, which LAN device they target, and an investigation panel for each attacker (location, ISP/ASN, abuse score, Shodan data, what they tried, block rules)
+- **Threats view**: live world attack map of who is hitting your public IP, which LAN device they target, and an investigation panel for each attacker (location, ISP/ASN, abuse score, Shodan data, what they tried, block rules), with an on-demand passive AI investigation of the selected IP
 - **Four map views**, opening on **Topology** (internet, gateway, switches, access points, then the devices on each, with Wi-Fi signal, SSIDs, ports and VLAN zones; UniFi is read automatically, compatible routers and switches can provide read-only SNMP v2c / LLDP neighbour and port data, and manual connections remain available as a fallback; exports to SVG, PNG, draw.io and CSV) plus rings, tiles and a sortable table
 - **Inside-the-LAN detection**: network sweeps (nmap/Fing), router impersonation (ARP spoofing), IP conflicts, port scans against the LanPulse server, and any LAN device touching a honeypot
 - **One-click blocking** of attackers on your UniFi gateway (UDM, UDM Pro, UCG) through an IP group
@@ -47,7 +47,7 @@ Licensed under **GPL-2.0-or-later**. Runs on Ubuntu, Debian or a 64-bit Raspberr
 - **Confirmed vulnerabilities**: safe active checks (nmap NSE) prove flaws version matching misses, such as EternalBlue on unpatched Windows, ranked above version guesses
 - **OpenVAS integration**: install and drive Greenbone's vulnerability scanner from Settings > Scanner for real, accurate vulnerability tests
 - **Guided setup** wizard on first run, and lateral-movement detection
-- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data. It knows what LanPulse is and where each feature lives, and sees live honeypot, DNS, services, traffic and vulnerability data
+- **AI Security Analyst**: ask questions in plain language using Ollama, any OpenAI-compatible server or Anthropic; read-only and grounded in your own data. It knows what LanPulse is and where each feature lives, sees live honeypot, DNS, services, traffic and vulnerability data, and can investigate a selected Threat Map IP on demand with evidence, confidence, unknowns and follow-up questions. IP investigations are passive and never scan or probe the target
 - **Daily summary** to any alert channel, and **quiet mode** (the bell in the top bar) to mute alerts for 1 hour, 4 hours or until 8 AM
 - **Health board** on the Services tab: shows whether each data source LanPulse depends on (router logs, UniFi, SNMP, Pi-hole, vulnerability data, honeypot sensors) is working, when it last reported, and what to check when it isn't
 - **Device traffic on the attack map**: live arcs showing where each device connects (Google, Netflix, Amazon...), top destinations and busiest devices, and an alert when a device contacts an IP that attacked you
