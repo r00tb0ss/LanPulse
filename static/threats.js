@@ -706,9 +706,52 @@ async function onThreatSummary(s) {
 }
 
 /* ------------------------------------------------------------ attacker investigation */
+
+let ipAiState = {ip: "", loading: false, answer: "", error: "", provider: "", model: "", local: false};
+
+function ipAiHtml(d) {
+  const s = ipAiState.ip === d.ip ? ipAiState : {ip: d.ip, loading: false, answer: "", error: ""};
+  let html = '<div class="p-sec ip-ai"><h4><i class="fa-solid fa-robot"></i> AI security investigation</h4>' +
+    '<p class="muted" style="font-size:12px;margin:4px 0 10px">On-demand passive review of LanPulse evidence. No ports are scanned and no traffic is sent to the target IP.</p>';
+  if (s.answer) {
+    html += '<div class="muted" style="font-size:11px;margin-bottom:6px">' +
+      (s.local ? 'Local AI' : 'Provider') + ' · ' + esc(s.provider) + ' · ' + esc(s.model) + '</div>' +
+      '<div style="white-space:pre-wrap;line-height:1.55;overflow-wrap:anywhere">' + esc(s.answer) + '</div>';
+  }
+  if (s.error) html += '<div class="finding"><span class="sev high">AI</span><span>' + esc(s.error) + '</span></div>';
+  html += '<textarea id="ipAiQuestion" rows="2" placeholder="' +
+    (s.answer ? 'Ask a follow-up about this IP…' : 'Optional: focus the investigation on a specific concern…') +
+    '" style="width:100%;margin:8px 0"></textarea>' +
+    '<button class="btn" id="bIpAiRun" ' + (s.loading ? 'disabled' : '') + '><i class="fa-solid ' +
+    (s.loading ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles') + '"></i>' +
+    (s.loading ? 'Investigating…' : s.answer ? 'Ask follow-up' : 'Ask AI to investigate') + '</button></div>';
+  return html;
+}
+
+async function runIpAi(d, question) {
+  if (ipAiState.ip !== d.ip) ipAiState = {ip: d.ip, loading: false, answer: "", error: "", provider: "", model: "", local: false};
+  ipAiState.loading = true;
+  ipAiState.error = "";
+  renderIpPanel(d);
+  const result = await api('/api/threats/ip/' + encodeURIComponent(d.ip) + '/ai', 'POST', {question: question || ""});
+  if (selectedIp !== d.ip) return;
+  ipAiState.loading = false;
+  if (!result || result.error) {
+    ipAiState.error = result?.error || "The AI investigation could not be completed.";
+    ipAiState.answer = "";
+  } else {
+    ipAiState.answer = result.answer || "";
+    ipAiState.provider = result.provider || "";
+    ipAiState.model = result.model || "";
+    ipAiState.local = !!result.local;
+  }
+  renderIpPanel(d);
+}
+
 async function openIp(ip) {
   selected = null; selectedIp = ip;
   clearInterval(historyTimer);
+  if (ipAiState.ip !== ip) ipAiState = {ip, loading: false, answer: "", error: "", provider: "", model: "", local: false};
   $("panelBody").innerHTML = `<div class="loading-line"><i class="fa-solid fa-spinner fa-spin"></i>Looking up ${esc(ip)}…</div>`;
   $("panel").classList.add("open");
   $("panel").setAttribute("aria-hidden", "false");
@@ -717,7 +760,6 @@ async function openIp(ip) {
   renderIpPanel(d);
   if (view === "threats" && d.geo && d.geo.lat != null) flyTo([d.geo.lon, d.geo.lat], Math.max(geoView().zoom, 4));
   if (d.intel_pending) {      // local evidence and outside reputation fill in independently
-    let extraDone = false;
     const renderUpdate = (change) => {
       if (selectedIp !== ip) return;
       const keep = [$("panelBody"), $("panel")].map((el) => el ? el.scrollTop : 0);
@@ -725,15 +767,16 @@ async function openIp(ip) {
       renderIpPanel(d);
       [$("panelBody"), $("panel")].forEach((el, i) => { if (el) el.scrollTop = keep[i]; });
     };
+    // Local context and external reputation load independently. Reputation no longer repeats the
+    // expensive honeypot, campaign, and outbound-flow context query.
     const localContext = api(`/api/threats/ip/${encodeURIComponent(ip)}/context`, "GET").then((c) => {
-      if (c && !extraDone && selectedIp === ip) renderUpdate(() => { d.context = c.context; });
+      if (c && selectedIp === ip) renderUpdate(() => { d.context = c.context; });
     });
     const x = await api(`/api/threats/ip/${encodeURIComponent(ip)}/extra`, "GET");
     if (selectedIp !== ip) return;
-    extraDone = true;
     renderUpdate(() => {
       d.intel_pending = false;
-      if (x) { d.intel = x.intel || {}; d.tag = x.tag || d.tag; d.context = x.context; }
+      if (x) { d.intel = x.intel || {}; d.tag = x.tag || d.tag; }
     });
     await localContext;
   }
@@ -825,6 +868,7 @@ function renderIpPanel(d) {
     ${d.tag ? `<p class="muted" style="font-size:12px;margin:8px 0 0">Research scanners map the whole internet and rarely mean harm. Blocking them is optional.</p>` : ""}</div>
 
     ${ipContextHtml(d)}
+    ${ipAiHtml(d)}
     <div class="p-sec"><h4>What it tried</h4>
       <div class="chips-wrap">${d.ports.map((p) => `<span class="pchip">${esc(p.service)} :${p.port ?? "—"}<b>×${fmtN(p.count)}</b></span>`).join("") || '<span class="muted">—</span>'}</div>
       ${(() => {            // one list: service, what it sent or tried, and how many times (identical lines are added up)
@@ -907,6 +951,7 @@ function renderIpPanel(d) {
     $("ruleText").textContent = rules[b.dataset.k];
   };
   $("bCopyRule").onclick = () => copyText($("ruleText"));
+  $("bIpAiRun").onclick = () => runIpAi(d, $("ipAiQuestion").value.trim());
   $("bGoRules").onclick = () => $("ruleTabs").scrollIntoView({behavior: "smooth", block: "center"});
   if ($("bBlockSetup")) $("bBlockSetup").onclick = () => { setTab = "unifi"; openSettings(); };
   if ($("bBlock")) $("bBlock").onclick = async (e) => {
