@@ -1762,12 +1762,14 @@ def build_app(nm: LanPulse) -> FastAPI:
             record, error = await asyncio.to_thread(nm.public_scans.start_nmap, target)
             if error:
                 return JSONResponse({"error": error}, 400)
+            log.info("Authorized public Nmap scan requested for %s", target)
             return {"ok": True, "scan": record}
         if not nm.openvas.cfg().get("enabled"):
             return JSONResponse({"error": "Enable OpenVAS in Settings > Scanner first."}, 400)
         error = await asyncio.to_thread(nm.openvas.start_scan, target, True)
         if error:
             return JSONResponse({"error": error}, 400)
+        log.info("Authorized public OpenVAS scan requested for %s", target)
         return {"ok": True, "scanner": "openvas", "target": target, "status": "Requested"}
 
     @app.get("/api/scans/authorized-public")
