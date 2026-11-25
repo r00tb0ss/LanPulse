@@ -44,6 +44,14 @@ class CloudEvidenceConsent(unittest.TestCase):
         revoked = alerts.apply_update(granted, {"ai": {"cloud_evidence_consent": False}})
         self.assertFalse(revoked["ai"]["cloud_evidence_consent"])
 
+    def test_changing_cloud_provider_endpoint_revokes_previous_consent(self):
+        approved = alerts.apply_update(alerts.DEFAULT_SETTINGS, {
+            "ai": {"provider": "openai", "base_url": "https://api.openai.com/v1",
+                   "cloud_evidence_consent": True}
+        })
+        changed = alerts.apply_update(approved, {"ai": {"provider": "anthropic"}})
+        self.assertFalse(changed["ai"]["cloud_evidence_consent"])
+
 
 if __name__ == "__main__":
     unittest.main()
