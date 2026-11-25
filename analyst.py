@@ -895,6 +895,9 @@ def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
             )
             if cfg.get("provider") == "ollama" and not _ollama_prompt_fits(IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096):
                 raise RuntimeError("An evidence-ledger consolidation prompt exceeds the safe Ollama context budget.")
+            context_error = _ollama_context_error(IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096) if cfg["provider"] == "ollama" else ""
+            if context_error:
+                raise RuntimeError(f"Evidence consolidation group {index} exceeds the safe model context. {context_error}")
             answer = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, prompt, timeout=180)
             if not answer:
                 raise RuntimeError(f"The AI returned an empty result while consolidating evidence group {index}.")
