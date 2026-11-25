@@ -1388,8 +1388,6 @@ class HoneyAnalysis:
         sessions, hashes = [], set()
         page_size = 200
         last_start, last_id = None, None
-        columns = ("id", "sensor", "ip", "port", "proto", "start", "end", "client",
-                   "hassh", "logins", "commands", "files", "tags", "score")
         while True:
             with self.lock:
                 if last_start is None:
