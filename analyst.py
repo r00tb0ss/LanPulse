@@ -22,6 +22,7 @@ import json
 import logging
 import re
 import urllib.error
+import time
 import urllib.request
 
 log = logging.getLogger("lanpulse.analyst")
@@ -187,7 +188,10 @@ def _estimate_tokens(text: str, provider: str = "", model: str = "") -> int:
             return len(enc.encode(text))
         except Exception:
             pass
-    return len(text.encode("utf-8"))
+    # Real JSON/English runs near 3 bytes per token. Counting one token per byte forced evidence that fits the
+    # window easily into slow multi-call chunking, so use the realistic figure; call_model() detects the rare
+    # prompt that still overflows (PromptTruncated) and the caller then falls back to chunking.
+    return -(-len(text.encode("utf-8")) // 3)
 
 
 def _ollama_context_error(system: str, user: str, reserve: int = 2048) -> str:
@@ -195,10 +199,14 @@ def _ollama_context_error(system: str, user: str, reserve: int = 2048) -> str:
     budget = max(1024, NUM_CTX - reserve)
     estimate = _estimate_tokens(system + "\n" + user, "ollama")
     if estimate > budget:
-        return (f"The complete evidence prompt is estimated at up to {estimate:,} tokens/bytes, "
+        return (f"The complete evidence prompt is estimated at about {estimate:,} tokens, "
                 f"above the safe Ollama budget of {budget:,} for a {NUM_CTX:,}-token context. "
                 "LanPulse did not silently truncate evidence; increase the context or narrow the investigation.")
     return ""
+
+
+class PromptTruncated(RuntimeError):
+    """Ollama reported a prompt that filled its context window, so the start of the evidence may have been cut."""
 
 
 def call_model(cfg: dict, system: str, user: str, timeout: int = 120) -> str:
@@ -208,6 +216,10 @@ def call_model(cfg: dict, system: str, user: str, timeout: int = 120) -> str:
         out = _http_json(f"{base}/api/chat", {
             "model": model, "stream": False, "options": {"temperature": 0.2, "num_ctx": NUM_CTX},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}, {}, timeout)
+        if int(out.get("prompt_eval_count") or 0) >= NUM_CTX - 32:
+            raise PromptTruncated(
+                f"The model's {NUM_CTX:,}-token context window was filled by the prompt, so some evidence may have been cut. "
+                "No answer was used. Increase the model context or narrow the investigation.")
         return (out.get("message") or {}).get("content", "").strip()
     if provider == "openai":
         headers = {"Authorization": f"Bearer {key}"} if key else {}
@@ -1064,10 +1076,17 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
         prompt = prompt_header + marker + raw_json + f"\n\n----\nUSER QUESTION: {q}\n\n"
         prompt += "Answer using only these facts. State when evidence is absent. Keep observations and inferences separate."
         direct_error = _ollama_context_error(IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096) if cfg["provider"] == "ollama" else ""
+        answer, chunks_analyzed, started_at = None, 1, time.time()
         if not direct_error:
-            answer = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, prompt, timeout=180)
-            chunks_analyzed = 1
-        else:
+            try:
+                answer = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, prompt, timeout=180)
+            except PromptTruncated:
+                log.warning("AI investigation of %s overflowed the model context; falling back to chunked analysis", ip)
+                direct_error = "truncated"
+        log.info("AI investigation of %s: %d chars of evidence, ~%d tokens, %s", ip, len(complete_evidence),
+                 _estimate_tokens(prompt, cfg["provider"], cfg.get("model", "")),
+                 "single call" if not direct_error else "chunked analysis")
+        if direct_error:
             chunk_limit = 18000 if cfg["provider"] == "ollama" else 30000
             chunks = _ip_evidence_chunks(raw_evidence, max_chars=chunk_limit)
             ledgers = []
@@ -1107,6 +1126,8 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
         if not answer:
             return {"error": "The model returned an empty answer. Try a different model."}
         answer = validate_attack_ids(answer, complete_evidence)
+        log.info("AI investigation of %s finished in %.0fs (%d model call%s)", ip, time.time() - started_at,
+                 chunks_analyzed, "" if chunks_analyzed == 1 else "s plus consolidation")
         return {"answer": answer, "provider": cfg["provider"], "model": cfg["model"],
                 "local": is_local(cfg["base_url"]), "mode": "passive", "evidence_chunks": chunks_analyzed}
     except urllib.error.HTTPError as e:
