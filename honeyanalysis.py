@@ -1387,13 +1387,13 @@ class HoneyAnalysis:
         """Estimate retained session and sample payload size using aggregate SQL, not row materialization."""
         with self.lock:
             session_count, session_bytes = self.db.execute(
-                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(logins,'')) + LENGTH(COALESCE(commands,'')) + "
-                "LENGTH(COALESCE(files,'')) + LENGTH(COALESCE(tags,'')) + LENGTH(COALESCE(client,'')) + 256), 0) "
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(COALESCE(logins,'') AS BLOB)) + LENGTH(CAST(COALESCE(commands,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(files,'') AS BLOB)) + LENGTH(CAST(COALESCE(tags,'') AS BLOB)) + LENGTH(CAST(COALESCE(client,'') AS BLOB)) + 256), 0) "
                 "FROM sessions"
             ).fetchone()
             sample_count, sample_bytes = self.db.execute(
-                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(analysis,'')) + LENGTH(COALESCE(ips,'')) + "
-                "LENGTH(COALESCE(urls,'')) + LENGTH(COALESCE(names,'')) + 256), 0) FROM samples"
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(COALESCE(analysis,'') AS BLOB)) + LENGTH(CAST(COALESCE(ips,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(urls,'') AS BLOB)) + LENGTH(CAST(COALESCE(names,'') AS BLOB)) + 256), 0) FROM samples"
             ).fetchone()
         runtime_bytes = 0
         telemetry = getattr(getattr(self, "nm", None), "runtime_telemetry", None)
