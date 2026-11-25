@@ -197,6 +197,7 @@ class AnalystContext(unittest.TestCase):
         nm = fake_nm()
         nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
         nm.honeypot.evidence_size = lambda: {"records": 100000, "estimated_bytes": analyst.MAX_AI_RAW_EVIDENCE_BYTES + 1}
+        nm.honeypot.evidence = lambda: (_ for _ in ()).throw(AssertionError("oversized evidence rows must not be loaded"))
         with patch.object(nm.honeypot, "evidence", side_effect=AssertionError("oversized evidence rows must not be loaded")):
             with patch.object(analyst, "call_model", side_effect=AssertionError("no partial evidence may be sent")):
                 result = analyst.ask(nm, "Analyze all honeypot credentials and sessions")
@@ -238,7 +239,7 @@ class AnalystContext(unittest.TestCase):
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
         )
         with patch.object(analyst, "MAX_AI_RAW_EVIDENCE_BYTES", 8 * 1024 * 1024):
-            with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No evidence was loaded or sent"):
+            with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No records were omitted or sent"):
                 analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
 
     def test_raw_evidence_preflight_allows_complete_pack_within_limit(self):
