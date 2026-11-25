@@ -883,8 +883,6 @@ def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
                 "Do not invent facts. Keep the ledger concise enough for a final synthesis.\n\n"
                 + "\n\n".join(items)
             )
-            if cfg.get("provider") == "ollama" and _ollama_context_error(IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096):
-                raise RuntimeError("An evidence-ledger consolidation prompt exceeds the safe Ollama context budget.")
             context_error = _ollama_context_error(IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096) if cfg["provider"] == "ollama" else ""
             if context_error:
                 raise RuntimeError(f"Evidence consolidation group {index} exceeds the safe model context. {context_error}")
