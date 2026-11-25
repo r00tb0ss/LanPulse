@@ -211,7 +211,8 @@ LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubun
 - Updates: Settings > Update > Check for updates, then hard-refresh the page. Source and releases: github.com/r00tb0ss/lanpulse."""
 
 TOPIC_WORDS = {
-    "threats": ("threat", "attack", "attacker", "threat map", "source ip", "ip address", "abuse", "reputation", "block", "campaign"),
+    "threats": ("threat", "attack", "attacker", "threat map", "source ip", "ip address", "abuse", "reputation", "block", "campaign",
+                "public ip", "authorized scan", "scan results", "nmap"),
     "honeypot": ("honeypot", "honey", "cowrie", "sensor", "password", "username", "credential", "brute", "malware", "sample", "captured",
                  "telnet", "ftp", "upload", "ssh", "payload", "botnet", "mirai"),
     "dns": ("dns", "domain", "pi-hole", "pihole", "lookup", "ad block", "blocked"),
@@ -263,7 +264,8 @@ def _threats(nm, detail: bool) -> list[str]:
     # Include manually authorized public-target scan output so AI can correlate it with threat evidence.
     try:
         public_nmap = nm.public_scans.list() if hasattr(nm, "public_scans") else []
-        public_openvas = [s for s in nm.openvas.status().get("scans", []) if s.get("public")]
+        ov = getattr(nm, "openvas", None)
+        public_openvas = [s for s in ov.status().get("scans", []) if s.get("public")] if ov else []
         out.append("AUTHORIZED PUBLIC IP SCAN RESULTS (JSON; targets were manually entered and user-approved):")
         out.append(json.dumps({"nmap": public_nmap, "openvas": public_openvas},
                               ensure_ascii=False, sort_keys=True, default=str))
