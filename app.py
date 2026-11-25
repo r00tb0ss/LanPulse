@@ -1715,6 +1715,14 @@ def build_app(nm: LanPulse) -> FastAPI:
             return JSONResponse({"error": "Not a valid IP address"}, 400)
         return await asyncio.to_thread(nm.threats.investigate, ip)
 
+    @app.get("/api/threats/ip/{ip}/context")
+    async def threat_ip_context(ip: str):
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            return JSONResponse({"error": "Not a valid IP address"}, 400)
+        return await asyncio.to_thread(nm.threats.ip_context, ip)
+
     @app.get("/api/threats/ip/{ip}/extra")
     async def threat_ip_extra(ip: str):
         try:
