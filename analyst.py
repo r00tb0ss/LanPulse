@@ -727,9 +727,9 @@ def ask(nm, question: str) -> dict:
         return investigate_ip(nm, ip_targets[0], q)
     try:
         preflight_error = retained_evidence_preflight(nm, q)
-    if preflight_error:
-        return {"error": preflight_error}
-    context = build_context(nm, q)
+        if preflight_error:
+            return {"error": preflight_error}
+        context = build_context(nm, q)
     except EvidenceBudgetExceeded as exc:
         return {"error": str(exc)}
     user = f"{context}\n\n----\nQUESTION: {q}\n\nAnswer using only the context above, citing specific devices/IPs/CVEs."
