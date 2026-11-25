@@ -223,6 +223,18 @@ class AnalystContext(unittest.TestCase):
         self.assertEqual(result.get("answer"), "Local answer")
         call.assert_called_once()
 
+    def test_ollama_context_guard_uses_utf8_bytes_and_includes_system_prompt(self):
+        self.assertEqual(analyst._estimate_tokens("é", "ollama"), 2)
+        with patch.object(analyst, "NUM_CTX", 4096):
+            error = analyst._ollama_context_error("system prompt", "é" * 1800, reserve=1024)
+        self.assertIn("safe Ollama budget", error)
+        self.assertIn("did not silently truncate", error)
+
+    def test_ip_evidence_chunks_respect_utf8_byte_budget(self):
+        chunks = analyst._ip_evidence_chunks({"unicode": "é" * 4000}, max_chars=500)
+        self.assertTrue(chunks)
+        self.assertTrue(all(len(chunk.encode("utf-8")) <= 500 for chunk in chunks))
+
     def test_question_is_passed_through(self):
         self.assertIn("num_ctx", open(analyst.__file__).read())
         self.assertGreater(analyst.NUM_CTX, 8000)
