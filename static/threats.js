@@ -731,8 +731,10 @@ async function openIp(ip) {
     const x = await api(`/api/threats/ip/${encodeURIComponent(ip)}/extra`, "GET");
     if (selectedIp !== ip) return;
     extraDone = true;
-    d.intel_pending = false;
-    if (x) renderUpdate(() => { d.intel = x.intel || {}; d.tag = x.tag || d.tag; d.context = x.context; });
+    renderUpdate(() => {
+      d.intel_pending = false;
+      if (x) { d.intel = x.intel || {}; d.tag = x.tag || d.tag; d.context = x.context; }
+    });
     await localContext;
   }
 }
