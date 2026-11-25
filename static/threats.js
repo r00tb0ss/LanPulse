@@ -770,7 +770,7 @@ function ipAiHtml(d) {
       '<select id="ipAiScanTarget" style="width:100%;margin-bottom:9px">' +
       targets.map((t) => '<option value="' + esc(t.lan) + '">' + esc(t.name) + ' · ' + esc(t.lan) + '</option>').join("") + '</select>' +
       '<label class="muted" for="ipAiScanEngine" style="display:block;font-size:11px;margin-bottom:4px">Scanner</label>' +
-      '<select id="ipAiScanEngine" style="width:100%;margin-bottom:9px"><option value="nmap">Nmap · thorough port and service scan</option><option value="openvas">OpenVAS · vulnerability assessment</option></select>' +
+      '<input type="hidden" id="ipAiScanEngine" value="nmap"><div class="muted" style="font-size:11px;margin:0 0 9px">Scanner: Nmap · thorough port and service scan. OpenVAS vulnerability assessments are managed from the device Vulnerabilities view or the separate authorized public-target workflow.</div>' +
       '<button class="btn sm ghost" id="bIpAiScan"><i class="fa-solid fa-radar"></i> Scan selected LAN device</button></div>';
   }
   html += '</div>';
