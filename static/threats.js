@@ -785,7 +785,6 @@ let ipAiState = {ip: "", loading: false, answer: "", error: "", provider: "", mo
 
 function ipAiHtml(d) {
   const s = ipAiState.ip === d.ip ? ipAiState : {ip: d.ip, loading: false, answer: "", error: ""};
-  const targets = (d.targets || []).filter((t) => t && t.id && t.lan);
   let html = '<div class="p-sec ip-ai"><h4><i class="fa-solid fa-robot"></i> AI security investigation</h4>' +
     '<p class="muted" style="font-size:12px;margin:4px 0 10px">AI can use complete available threat and honeypot evidence, including attempted credentials and raw events. Hosted providers require your explicit one-time approval before any evidence is sent; local Ollama stays on your network. Public attacker IPs are never scanned.</p>';
   if (s.answer) {
@@ -800,17 +799,6 @@ function ipAiHtml(d) {
     '<button class="btn" id="bIpAiRun" ' + (s.loading ? 'disabled' : '') + '><i class="fa-solid ' +
     (s.loading ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles') + '"></i>' +
     (s.loading ? 'Investigating…' : s.answer ? 'Ask follow-up' : 'Ask AI to investigate') + '</button>';
-  if (targets.length) {
-    html += '<div class="ip-lan-scan">' +
-      '<h4><i class="fa-solid fa-network-wired"></i> Scan an affected LAN device</h4>' +
-      '<p class="muted" style="font-size:12px;margin:4px 0 10px">This scans a device on your own network that this source reached. It does not scan the public attacker IP. Public-target scanning is a separate, manually authorized workflow below.</p>' +
-      '<label class="muted" for="ipAiScanTarget" style="display:block;font-size:11px;margin-bottom:4px">LAN device</label>' +
-      '<select id="ipAiScanTarget" style="width:100%;margin-bottom:9px">' +
-      targets.map((t) => '<option value="' + esc(t.lan) + '">' + esc(t.name) + ' · ' + esc(t.lan) + '</option>').join("") + '</select>' +
-      '<label class="muted" for="ipAiScanEngine" style="display:block;font-size:11px;margin-bottom:4px">Scanner</label>' +
-      '<input type="hidden" id="ipAiScanEngine" value="nmap"><div class="muted" style="font-size:11px;margin:0 0 9px">Scanner: Nmap · thorough port and service scan. OpenVAS vulnerability assessments are managed from the device Vulnerabilities view or the separate authorized public-target workflow.</div>' +
-      '<button class="btn sm ghost" id="bIpAiScan"><i class="fa-solid fa-radar"></i> Scan selected LAN device</button></div>';
-  }
   html += '</div>';
   return html;
 }
@@ -1077,17 +1065,6 @@ function renderIpPanel(d) {
       refreshAuthorizedPublicScans();
       if (!publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
     } else toast(result?.error || "The scan could not be started");
-  };
-  if ($("bIpAiScan")) $("bIpAiScan").onclick = async () => {
-    const target = $("ipAiScanTarget").value, scanner = $("ipAiScanEngine").value;
-    const label = scanner === "nmap" ? "thorough Nmap scan" : "OpenVAS vulnerability assessment";
-    if (!window.confirm("Launch a " + label + " against affected LAN device " + target + "? This sends active scan traffic to that device.")) return;
-    const button = $("bIpAiScan");
-    button.disabled = true; button.textContent = "Starting scan…";
-    const result = await api("/api/threats/ip/" + encodeURIComponent(d.ip) + "/scan", "POST", {target, scanner});
-    if (result && result.ok) toast(label + " queued for " + target);
-    else toast(result?.error || "The scan could not be started");
-    if (selectedIp === d.ip) renderIpPanel(d);
   };
   $("bGoRules").onclick = () => $("ruleTabs").scrollIntoView({behavior: "smooth", block: "center"});
   if ($("bBlockSetup")) $("bBlockSetup").onclick = () => { setTab = "unifi"; openSettings(); };
