@@ -53,5 +53,11 @@ class PassiveIpEvidence(unittest.TestCase):
         self.assertIn("UNKNOWN (list not loaded)", unknown)
 
 
+    def test_sample_prompt_is_defensive_and_evidence_first(self):
+        self.assertIn("must never be executed", analyst.SAMPLE_AGENT_SYSTEM_PROMPT)
+        self.assertIn("A YARA match is a rule match", analyst.SAMPLE_AGENT_SYSTEM_PROMPT)
+        self.assertIn("observed runtime telemetry", analyst.SAMPLE_AGENT_SYSTEM_PROMPT)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2794,6 +2794,18 @@ def build_app(nm: LanPulse) -> FastAPI:
         r = await asyncio.to_thread(nm.honeyan.sample, sha)
         return r if r else JSONResponse({"error": "File not found"}, 404)
 
+    @app.post("/api/honeypot/sample/ai")
+    async def honeypot_sample_ai(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Expected a sample hash and optional question."}, 400)
+        sha = str(body.get("sha256") or "")
+        question = str(body.get("question") or "")[:1000]
+        return await asyncio.to_thread(analyst.investigate_sample, nm, sha, question)
+
     @app.get("/api/honeypot/sample/content")
     async def honeypot_sample_content(sha: str, offset: int = 0, mode: str = "auto"):
         r = await asyncio.to_thread(nm.honeyan.sample_content, sha, offset, mode)

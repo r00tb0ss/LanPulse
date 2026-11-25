@@ -1662,6 +1662,41 @@ class HoneyAnalysis:
                 "stored": bool(stored), "sessions": [{"id": i, "ip": ip, "start": t} for i, ip, t in sess],
                 "vt_link": f"https://www.virustotal.com/gui/file/{sha}"}
 
+    def sample_evidence(self, sha: str, scan_yara: bool = True) -> dict | None:
+        """Full sample-centered evidence pack for AI: static/YARA results, all linked sessions and runtime telemetry."""
+        sha = str(sha or "").lower()
+        if not HEX64.fullmatch(sha):
+            return None
+        sample = self.sample(sha, scan_yara=scan_yara)
+        if not sample:
+            return None
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id FROM sessions WHERE files LIKE ? ORDER BY start DESC",
+                (f"%{sha}%",)).fetchall()
+        sessions = []
+        for (sid,) in rows:
+            record = self.session(sid)
+            if record:
+                sessions.append(record)
+        runtime = []
+        telemetry = getattr(self.nm, "runtime_telemetry", None)
+        if telemetry:
+            try:
+                runtime = telemetry.events_for_sample(sha, limit=500)
+            except Exception:
+                log.debug("runtime sample evidence unavailable", exc_info=True)
+        related_campaigns = []
+        try:
+            related_campaigns = [
+                row for row in self.campaigns(2160).get("campaigns", [])
+                if sha in (row.get("sample_hashes") or [])
+            ]
+        except Exception:
+            log.debug("sample campaign evidence unavailable", exc_info=True)
+        return {"sample": sample, "session_records": sessions, "session_count": len(sessions),
+                "runtime_events": runtime, "related_campaigns": related_campaigns}
+
     def _closer_look(self, sha: str, kind, scan_yara: bool = True) -> dict:
         """Extra read-only detail worked out from the stored file each time it is opened, so it also covers files
         captured before this existed: decoded hidden content for scripts, header structure for Linux programs."""
