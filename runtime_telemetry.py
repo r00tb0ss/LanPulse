@@ -235,6 +235,16 @@ class RuntimeTelemetry:
             self.prune(now)
         return {"accepted": inserted, "duplicates": len(cleaned) - inserted}
 
+    def evidence_size(self) -> dict:
+        """Estimate retained runtime-event payload size without loading event rows."""
+        with self.lock:
+            count, raw_bytes = self.db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(sensor_id,'')) + LENGTH(COALESCE(run_id,'')) + "
+                "LENGTH(COALESCE(hostname,'')) + LENGTH(COALESCE(destination_ip,'')) + "
+                "LENGTH(COALESCE(event_type,'')) + 192), 0) FROM runtime_events"
+            ).fetchone()
+        return {"records": int(count or 0), "estimated_bytes": int(raw_bytes or 0)}
+
     def events_for_sample(self, sample_sha256, limit=200):
         sha = str(sample_sha256 or "").lower()
         if not HEX64.fullmatch(sha):
