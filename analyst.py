@@ -260,6 +260,15 @@ def _threats(nm, detail: bool) -> list[str]:
         out.append(json.dumps(campaigns, ensure_ascii=False, sort_keys=True, default=str))
     except Exception:
         log.debug("threat campaign context unavailable", exc_info=True)
+    # Include manually authorized public-target scan output so AI can correlate it with threat evidence.
+    try:
+        public_nmap = nm.public_scans.list() if hasattr(nm, "public_scans") else []
+        public_openvas = [s for s in nm.openvas.status().get("scans", []) if s.get("public")]
+        out.append("AUTHORIZED PUBLIC IP SCAN RESULTS (JSON; targets were manually entered and user-approved):")
+        out.append(json.dumps({"nmap": public_nmap, "openvas": public_openvas},
+                              ensure_ascii=False, sort_keys=True, default=str))
+    except Exception:
+        log.debug("authorized public scan context unavailable", exc_info=True)
     return out
 
 
