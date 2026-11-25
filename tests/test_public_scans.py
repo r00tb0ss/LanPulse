@@ -52,6 +52,19 @@ class PublicScanQueue(unittest.TestCase):
             finally:
                 scans.close()
 
+    def test_nmap_progress_parser_persists_carriage_return_progress(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scans = PublicScans(tmp)
+            try:
+                scans.scans["abc"] = {"id": "abc", "status": "Running", "progress": 0}
+                scans._update_progress("abc", "About 42.50% done; ETC: 00:01:30")
+                row = scans.scans["abc"]
+                self.assertEqual(row["progress"], 42)
+                self.assertTrue(row["phase"])
+                self.assertIn("updated", row)
+            finally:
+                scans.close()
+
     def test_inflight_scan_is_marked_interrupted_after_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "authorized-public-scans.json"
