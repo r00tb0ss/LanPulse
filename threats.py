@@ -891,8 +891,16 @@ class ThreatMonitor:
             log.debug("ip context skipped", exc_info=True)
             return None
 
+    def ip_context(self, ip: str) -> dict:
+        """Fast local-only context for the IP panel; never waits for external reputation services."""
+        with self.lock:
+            rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
+                                   "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
+        tag = self.tags.cache.get(ip)
+        return {"context": self._context(ip, rows, {}, tag)}
+
     def ip_extra(self, ip: str) -> dict:
-        """The slower half of the IP box: outside lookups (in parallel) and the extra context."""
+        """The slower half of the IP box: outside lookups (in parallel) and enriched context."""
         with self.lock:
             rows = self.db.execute("SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
                                    "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
