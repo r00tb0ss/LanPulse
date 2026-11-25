@@ -996,8 +996,6 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
                 chunk_error = _ollama_context_error(IP_AGENT_SYSTEM_PROMPT, chunk_prompt, reserve=4096) if cfg["provider"] == "ollama" else ""
                 if chunk_error:
                     return {"error": f"Evidence chunk {index} cannot safely fit the configured Ollama context. {chunk_error}"}
-                if cfg.get("provider") == "ollama" and not _ollama_prompt_fits(IP_AGENT_SYSTEM_PROMPT, chunk_prompt, reserve=4096):
-                    raise RuntimeError(f"Evidence chunk {index} exceeds the safe Ollama context budget; no evidence was sent.")
                 ledger = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, chunk_prompt, timeout=180)
                 if not ledger:
                     return {"error": f"AI analysis stopped at evidence chunk {index} of {len(chunks)} because the model returned an empty result. No remaining evidence was silently skipped."}
