@@ -2330,8 +2330,13 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 #panelBody .ip-ai .ip-lan-scan{
   margin-top:14px;padding-top:13px;border-top:1px solid var(--border);
 }
-#panelBody .public-scan{border-color:color-mix(in srgb,var(--threat,#f43f5e) 35%,var(--border))}
-#panelBody .public-scan h4 i{color:var(--threat,#f43f5e)}
+.public-scan{border-color:color-mix(in srgb,var(--threat,#f43f5e) 35%,var(--border))}
+.public-scan h4 i{color:var(--threat,#f43f5e)}
+.public-scan .ps-form{display:grid;gap:7px;max-width:520px}
+.public-scan .ps-form label{font-size:11px}
+.public-scan .ps-form input[type=text],.public-scan .ps-form select{width:100%}
+.public-scan .chk-line{display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:13px}
+.public-scan .chk-line input{margin-top:3px}
 #panelBody .ip-ai .finding{padding:10px;border-radius:9px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:8px 0}
 #panelBody .ip-ai [style*="white-space:pre-wrap"]{padding:11px;border:1px solid var(--border);border-radius:9px;background:color-mix(in srgb,var(--bg) 65%,transparent)}
 @media(max-width:560px){
@@ -2341,5 +2346,5 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
   #panelBody .p-title{font-size:16px}
   #panelBody .actions{grid-template-columns:minmax(0,1fr)}
   #panelBody .actions .btn{width:100%;justify-content:center}
-  #panelBody .ip-ai .btn,#panelBody .public-scan .btn{width:100%;justify-content:center}
+  #panelBody .ip-ai .btn,.public-scan .btn{width:100%;justify-content:center}
 }

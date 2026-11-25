@@ -221,6 +221,21 @@
   <div class="t-kpis" id="vulnKpis"></div>
   <div class="v-note" id="vulnStatus"></div>
   <div class="v-grid two">
+    <div class="t-card wide public-scan" id="publicScanCard"><h4><span><i class="fa-solid fa-globe"></i> Authorized public-IP scan</span><span class="muted">Nmap or OpenVAS, manual and bounded</span></h4>
+      <p class="muted" style="font-size:12px;margin:4px 0 10px">Scan a public IPv4 address you own or are explicitly authorized to test. This sends active scan traffic to that address, never starts automatically, and is separate from LAN discovery and attacker investigation.</p>
+      <div class="ps-form">
+        <label class="muted" for="publicScanTarget">Public IPv4 target</label>
+        <input id="publicScanTarget" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Public IPv4 address">
+        <label class="muted" for="publicScanEngine">Scanner</label>
+        <select id="publicScanEngine">
+          <option value="nmap">Nmap · top 1,000 TCP ports</option>
+          <option value="openvas">OpenVAS · Full and Fast</option>
+        </select>
+        <label class="chk-line"><input type="checkbox" id="publicScanAuthorized"><span>I own this public IP or have explicit authorization to scan it.</span></label>
+        <button class="btn sm" id="bPublicScan"><i class="fa-solid fa-radar"></i> Start authorized scan</button>
+      </div>
+      <div id="publicScanStatus" class="muted" style="font-size:11px;margin-top:9px">Scan history loads when available.</div>
+    </div>
     <div class="t-card wide"><h4><span>Fix these first</span><span class="muted">actively exploited first, then by severity</span></h4><div id="vulnFix"></div></div>
     <div class="t-card"><h4><span>By device</span><span class="muted">tap for details</span></h4><div class="rank" id="vulnDevs"></div></div>
     <div class="t-card"><h4><span>Risky settings LanPulse found <span id="vulnCfgN"></span></span><span class="muted">open services, old Windows</span></h4><div id="vulnConfig"></div></div>
@@ -438,6 +453,7 @@
 <script src="/static/system.js"></script>
 <script src="/static/dnsview.js"></script>
 <script src="/static/vulnview.js"></script>
+<script src="/static/publicscan.js"></script>
 <script src="/static/svcview.js"></script>
 <script src="/static/healthview.js"></script>
 <script src="/static/quiet.js"></script>
