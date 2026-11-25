@@ -297,9 +297,15 @@ def main() -> int:
                 scan = page.evaluate("""() => {
                   const card = document.getElementById('publicScanCard');
                   const r = card.getBoundingClientRect(), b = document.getElementById('bPublicScan').getBoundingClientRect();
+                  const f = getComputedStyle(document.getElementById('publicScanTarget'));
                   return {shown: r.width > 0 && r.height > 0, cardW: r.width, btnW: b.width, vw: window.innerWidth,
-                          mapHidden: document.getElementById('mapCard').getBoundingClientRect().height === 0};
+                          mapHidden: document.getElementById('mapCard').getBoundingClientRect().height === 0,
+                          fieldBg: f.backgroundColor, fieldPx: parseFloat(f.fontSize), pageW: document.documentElement.scrollWidth};
                 }""")
+                if scan["fieldBg"] in ("rgb(255, 255, 255)", "rgba(255, 255, 255, 1)") or scan["fieldPx"] < 16:
+                    problems.append(f"[phone public scan tab] the target box is unreadable or will zoom the page ({scan['fieldBg']}, {scan['fieldPx']}px)")
+                if scan["pageW"] > scan["vw"] + 1:
+                    problems.append(f"[phone public scan tab] the page is wider than the screen ({scan['pageW']} > {scan['vw']})")
                 if not scan["shown"] or not scan["mapHidden"]:
                     problems.append(f"[phone public scan tab] the Public scan sub-tab did not open cleanly ({scan})")
                 elif scan["cardW"] > scan["vw"] or scan["btnW"] < 120:
@@ -309,6 +315,11 @@ def main() -> int:
                 back = page.evaluate("() => document.getElementById('mapCard').getBoundingClientRect().height")
                 if back < 100:
                     problems.append("[phone public scan tab] the attack map did not come back after leaving Public scan")
+                page.wait_for_timeout(800)
+                canvas = page.evaluate("""() => { const c = document.querySelector('#worldMap canvas');
+                  return c ? [c.getBoundingClientRect().width, c.getBoundingClientRect().height] : null; }""")
+                if not canvas or canvas[0] < 100 or canvas[1] < 100:
+                    problems.append(f"[phone public scan tab] the attack map is blank after returning from Public scan ({canvas})")
                 # Phone layout: a device card with many tags must keep a readable name column (it once became one letter wide).
                 page.set_viewport_size({"width": 390, "height": 800})
                 current["view"] = "phone vulns"

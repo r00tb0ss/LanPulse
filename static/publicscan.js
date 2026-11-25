@@ -42,8 +42,9 @@ async function refreshAuthorizedPublicScans() {
             ? '<div class="ok-line" style="margin-top:7px">Target responded. No open TCP ports were found in the top 1,000 scanned ports.</div>'
             : '<div class="finding" style="margin-top:7px">Scan finished, but target reachability was not confirmed. No open TCP ports were reported.</div>'))
       : s.status === "Done" && s.results?.length
-        ? '<div class="muted" style="padding:7px 0">' + s.results.slice(0, 8).map((f) =>
-            esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
+        ? '<div class="muted ps-findings" style="padding:7px 0">' + s.results.map((f) =>
+            '<div class="ps-find">' + esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))
+            + '</div>').join("") + '</div>'
         : "";
     const phase = s.phase || (s.status === "Requested" || s.status === "Queued" ? "Waiting for the scan worker" :
       s.status === "Running" ? "Scanning target and identifying services" : "");
@@ -87,12 +88,23 @@ async function refreshAuthorizedPublicScans() {
   };
   const pane = $("threatView");
   const showSub = (sub) => {
+    const wasScan = pane.classList.contains("ps-mode");
+    if (sub === "scan" && !wasScan) {
+      // Same housekeeping as leaving the tab: a chart left in a hidden box comes back blank in some browsers.
+      if (typeof mapIsFull === "function" && mapIsFull()) toggleMapFull(false);
+      if (typeof tChart !== "undefined" && tChart) {
+        try { pendingGeoView = geoView(); } catch (_) { pendingGeoView = null; }
+        try { tChart.dispose(); } catch (_) {}
+        tChart = null;
+        $("worldMap").innerHTML = "";
+      }
+    }
     pane.classList.toggle("ps-mode", sub === "scan");
     document.querySelectorAll("#threatSubTabs [data-tsub]").forEach((b) => {
       b.classList.toggle("on", b.dataset.tsub === sub); b.setAttribute("aria-selected", String(b.dataset.tsub === sub));
     });
     if (sub === "scan") refreshAuthorizedPublicScans();
-    else if (typeof tChart !== "undefined" && tChart) setTimeout(() => tChart.resize(), 0);
+    else if (wasScan) setView("threats");          // rebuild the map exactly as when the Threats tab is opened
   };
   $("threatSubTabs").onclick = (e) => { const b = e.target.closest("[data-tsub]"); if (b) showSub(b.dataset.tsub); };
   const remove = async (payload, what) => {
@@ -107,5 +119,5 @@ async function refreshAuthorizedPublicScans() {
   });
   $("bPublicScanClear").onclick = () => remove({all_finished: true}, "all finished scans");
   const prev = viewHooks.threats;
-  viewHooks.threats = () => { showSub("attacks"); if (prev) prev(); };   // opening Threats always starts on the map
+  viewHooks.threats = () => { if (pane.classList.contains("ps-mode")) showSub("attacks"); if (prev) prev(); };   // opening Threats always starts on the map
 })();
