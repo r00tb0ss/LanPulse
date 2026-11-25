@@ -1395,8 +1395,15 @@ class HoneyAnalysis:
                 "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(analysis,'')) + LENGTH(COALESCE(ips,'')) + "
                 "LENGTH(COALESCE(urls,'')) + LENGTH(COALESCE(names,'')) + 256), 0) FROM samples"
             ).fetchone()
+        runtime_bytes = 0
+        telemetry = getattr(getattr(self, "nm", None), "runtime_telemetry", None)
+        if telemetry and hasattr(telemetry, "evidence_size"):
+            try:
+                runtime_bytes = int(telemetry.evidence_size().get("estimated_bytes", 0))
+            except Exception:
+                log.debug("runtime evidence size preflight unavailable", exc_info=True)
         return {"sessions": int(session_count or 0), "samples": int(sample_count or 0),
-                "estimated_bytes": int(session_bytes or 0) + int(sample_bytes or 0)}
+                "estimated_bytes": int(session_bytes or 0) + int(sample_bytes or 0) + runtime_bytes}
 
     def evidence(self) -> dict:
         """All retained Cowrie evidence, read in bounded pages without one session query per row."""
