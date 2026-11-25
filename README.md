@@ -449,9 +449,8 @@ The analyst is strictly read-only: it is given a built-in guide to everything La
 "where do I find...?" questions work) plus network context and the relevant retained evidence for the question. This can
 include attempted honeypot usernames/passwords, raw threat events, complete Cowrie sessions and commands, captured
 sample analysis, YARA matches, runtime telemetry, LAN device names and IPs, and authorized scan results. It cites what
-it was given and can only explain; for fixes it gives steps for you to run. Evidence is processed in bounded batches and
-chunked analysis paths preserve the complete record set; if the complete prompt cannot safely fit the model context,
-LanPulse reports an explicit error rather than silently dropping records. Device names and banners are treated as
+it was given and can only explain; for fixes it gives steps for you to run. Database reads use bounded batches, and focused IP investigations use chunked analysis; if a complete prompt cannot
+safely fit the model context, LanPulse reports an explicit error rather than silently dropping records. Device names and banners are treated as
 untrusted data. **Cloud privacy:** hosted OpenAI-compatible and Anthropic endpoints receive no retained evidence until
 you approve a clear one-time confirmation. You can revoke that permission from the analyst configuration. If you
 switch back to local Ollama, no cloud approval is needed and prompts stay on your network. API keys are stored on the
