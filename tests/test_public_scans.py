@@ -39,6 +39,19 @@ class PublicScanQueue(unittest.TestCase):
             finally:
                 scans.close()
 
+    def test_nmap_progress_and_phase_are_persisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scans = PublicScans(tmp)
+            try:
+                scans.scans["scan1"] = {"id": "scan1", "status": "Running", "progress": 0}
+                scans._update_progress("scan1",
+                    "Stats: 0:00:10 elapsed; 0 hosts completed, 1 undergoing SYN Stealth Scan; About 42.50% done")
+                row = scans.list()[0]
+                self.assertEqual(row["progress"], 42)
+                self.assertEqual(row["phase"], "SYN Stealth Scan")
+            finally:
+                scans.close()
+
     def test_inflight_scan_is_marked_interrupted_after_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "authorized-public-scans.json"
