@@ -9,6 +9,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
+import os
 import re
 import selectors
 import shutil
@@ -120,7 +121,7 @@ class PublicScans:
                                 # newline-terminated lines. readline() can therefore block until the
                                 # scan ends and leave the UI stuck at "started". Read available bytes
                                 # and split on either line ending so progress is persisted live.
-                                chunk = proc.stderr.read1(4096)
+                                chunk = os.read(proc.stderr.fileno(), 4096)
                                 if chunk:
                                     pending += chunk
                                     while True:
