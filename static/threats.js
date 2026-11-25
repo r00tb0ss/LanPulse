@@ -708,9 +708,17 @@ async function refreshAuthorizedPublicScans() {
     const findings = s.scanner === "openvas" ? (s.count || 0) + " findings" :
       ((s.ports || []).length + " open ports");
     const error = s.error ? " · " + esc(s.error) : "";
+    const details = s.status === "Done" && s.scanner === "nmap" && (s.ports || []).length
+      ? '<div class="muted" style="padding:2px 0 4px">Open TCP: ' + s.ports.slice(0, 12).map((p) =>
+          esc(p.port + "/" + p.protocol + " " + p.service + (p.product ? " · " + p.product : "") +
+            (p.version ? " " + p.version : ""))).join(" · ") + '</div>'
+      : s.status === "Done" && s.results?.length
+        ? '<div class="muted" style="padding:2px 0 4px">' + s.results.slice(0, 5).map((f) =>
+            esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
+        : "";
     return '<div style="padding:5px 0;border-top:1px solid var(--line)"><b>' + esc(s.target || s.ip || "") +
       '</b> · ' + esc(s.scanner || "OpenVAS") + ' · ' + esc(s.status || "") +
-      (s.status === "Done" ? ' · ' + esc(findings) : "") + error + '</div>';
+      (s.status === "Done" ? ' · ' + esc(findings) : "") + error + details + '</div>';
   }).join("");
 }
 
