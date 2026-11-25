@@ -102,7 +102,7 @@ function renderVulns() {
     return `<div class="rk click vd" data-dev-id="${esc(d.id)}">
       <span class="ico"><i class="${faClass(ty)}" style="color:${ty.color}"></i></span><span class="nm">${esc(d.name)}</span>
       <span class="ct" title="Findings for this device">${d.count}<span class="vd-unit"> finding${d.count === 1 ? "" : "s"}</span></span>
-      <div class="vd-meta"><span class="vd-facts">${facts}</span><span class="vd-acts">${ovBtn(devices.get(d.id)?.ip)}${xBtn("redteam", d.id)}</span></div>
+      <div class="vd-meta"><span class="vd-facts">${facts}</span><span class="vd-acts">${xBtn("redteam", d.id)}</span></div>
       <div class="bar"><i style="width:${(100 * d.count / dmax).toFixed(1)}%;background:${SEV_COLOR[sevOf(d.max)]}"></i></div></div>`; }).join("")
     || `<div class="muted">No affected devices.</div>`;
 
@@ -218,8 +218,6 @@ let ovInfo = null;
 async function ovRefresh() { const r = await api("/api/openvas", "GET", null, true); ovInfo = r && !r.error ? r : null; return ovInfo; }
 const ovScanOf = (ip) => ((ovInfo && ovInfo.scans) || []).find((x) => x.ip === ip);
 const ovRunning = (x) => x && ["Requested", "Queued", "Running", "New"].includes(x.status);
-const ovBtn = (ip) => ovInfo && ovInfo.installed && ovInfo.ready && ovInfo.enabled && ip && !ovRunning(ovScanOf(ip))
-  ? `<button class="btn sm" data-ovscan="${esc(ip)}" title="Run an OpenVAS scan on this device"><i class="fa-solid fa-shield-halved"></i>OpenVAS scan</button>` : "";
 async function ovStart(ip) {
   const r = await api("/api/openvas/scan", "POST", {ip});
   if (r) { toast("OpenVAS scan started"); await ovRefresh(); if (selected && devices.get(selected)?.ip === ip) loadDeviceOv(selected); if (view === "vulns") renderVulns(); }
