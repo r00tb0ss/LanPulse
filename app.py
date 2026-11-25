@@ -29,6 +29,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -2466,20 +2467,57 @@ def build_app(nm: LanPulse) -> FastAPI:
         return await asyncio.to_thread(nm.honeyan.attacker_sessions, ip,
                                        max(1, min(hours, 2160)), max(1, min(limit, 200)))
 
-    # Profiles and campaigns re-read every session in the window, so keep each answer for 30 seconds.
+    # Profiles, campaigns and C2 re-read session history. Cache briefly and coalesce
+    # concurrent misses so a burst of dashboard requests only performs one DB scan per key.
     pot_cache = {}
+    pot_cache_lock = threading.Lock()
+    pot_inflight = {}
+
+    def pot_cache_store(key, value):
+        now = time.monotonic()
+        with pot_cache_lock:
+            # Expire stale entries first; if still full, evict the oldest entry rather
+            # than flushing every useful result at once.
+            for old_key, (created, _) in list(pot_cache.items()):
+                if now - created >= 30:
+                    pot_cache.pop(old_key, None)
+            pot_cache.pop(key, None)
+            while len(pot_cache) >= 32:
+                pot_cache.pop(next(iter(pot_cache)), None)
+            pot_cache[key] = (now, value)
 
     def pot_cached(fn, *args):
         key = (fn.__name__,) + args
-        now = time.monotonic()
-        hit = pot_cache.get(key)
-        if hit and now - hit[0] < 30:
-            return hit[1]
-        value = fn(*args)
-        if len(pot_cache) > 32:
-            pot_cache.clear()
-        pot_cache[key] = (now, value)
-        return value
+        with pot_cache_lock:
+            now = time.monotonic()
+            hit = pot_cache.get(key)
+            if hit and now - hit[0] < 30:
+                # Refresh insertion order so capacity eviction behaves like LRU.
+                pot_cache.pop(key, None)
+                pot_cache[key] = hit
+                return hit[1]
+            if hit:
+                pot_cache.pop(key, None)
+            event = pot_inflight.get(key)
+            owner = event is None
+            if owner:
+                event = threading.Event()
+                pot_inflight[key] = event
+
+        if not owner:
+            # The request that owns this key will publish its result (or fail) and wake us.
+            event.wait()
+            return pot_cached(fn, *args)
+
+        try:
+            value = fn(*args)
+            pot_cache_store(key, value)
+            return value
+        finally:
+            with pot_cache_lock:
+                pending = pot_inflight.pop(key, None)
+                if pending is not None:
+                    pending.set()
 
     @app.get("/api/honeypot/profiles")
     async def honeypot_profiles(hours: int = 2160, limit: int = 5000):
@@ -2495,7 +2533,7 @@ def build_app(nm: LanPulse) -> FastAPI:
         args = (max(1, min(hours, 2160)), max(1, min(limit, 500)))
         if refresh:
             result = await asyncio.to_thread(nm.honeyan.c2_intelligence, *args)
-            pot_cache[(nm.honeyan.c2_intelligence.__name__,) + args] = (time.monotonic(), result)
+            pot_cache_store((nm.honeyan.c2_intelligence.__name__,) + args, result)
         else:
             # C2 aggregation scans the selected session/sample window; reuse the bounded
             # result briefly so opening the tab repeatedly does not repeat that work.
