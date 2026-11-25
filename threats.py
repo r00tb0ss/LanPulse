@@ -904,9 +904,9 @@ class ThreatMonitor:
         """Return a cheap SQLite aggregate before the AI path materializes retained rows."""
         with self.lock:
             count, raw_bytes = self.db.execute(
-                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(src,'')) + LENGTH(COALESCE(lan,'')) + "
-                "LENGTH(COALESCE(service,'')) + LENGTH(COALESCE(sensor,'')) + "
-                "LENGTH(COALESCE(detail,'')) + 192), 0) FROM attacks"
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(COALESCE(src,'') AS BLOB)) + LENGTH(CAST(COALESCE(lan,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(service,'') AS BLOB)) + LENGTH(CAST(COALESCE(sensor,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(detail,'') AS BLOB)) + 192), 0) FROM attacks"
             ).fetchone()
         return {"records": int(count or 0), "estimated_bytes": int(raw_bytes or 0)}
 
