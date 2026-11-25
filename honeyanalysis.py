@@ -1383,6 +1383,21 @@ class HoneyAnalysis:
         return {"evidence_sessions": sessions, "sample_evidence": samples,
                 "session_count": len(sessions), "sample_count": len(samples)}
 
+    def evidence_size(self) -> dict:
+        """Estimate retained session and sample payload size using aggregate SQL, not row materialization."""
+        with self.lock:
+            session_count, session_bytes = self.db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(logins,'')) + LENGTH(COALESCE(commands,'')) + "
+                "LENGTH(COALESCE(files,'')) + LENGTH(COALESCE(tags,'')) + LENGTH(COALESCE(client,'')) + 256), 0) "
+                "FROM sessions"
+            ).fetchone()
+            sample_count, sample_bytes = self.db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(analysis,'')) + LENGTH(COALESCE(ips,'')) + "
+                "LENGTH(COALESCE(urls,'')) + LENGTH(COALESCE(names,'')) + 256), 0) FROM samples"
+            ).fetchone()
+        return {"sessions": int(session_count or 0), "samples": int(sample_count or 0),
+                "estimated_bytes": int(session_bytes or 0) + int(sample_bytes or 0)}
+
     def evidence(self) -> dict:
         """All retained Cowrie evidence, read in bounded pages without one session query per row."""
         sessions, hashes = [], set()
