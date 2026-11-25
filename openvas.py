@@ -304,7 +304,7 @@ class OpenVAS:
         dev = next((d for d in self.nm.devices.values() if d.get("ip") == ip), {})
         self.scans[ip] = {"task": tid, "status": "Requested", "progress": 0, "started": int(time.time()),
                           "finished": 0, "error": "", "count": 0, "mac": str(dev.get("mac") or "").lower(),
-                          "public": bool(authorized_public), "results": []}
+                          "public": bool(authorized_public), "authorized": bool(authorized_public), "results": []}
         self._save()
         self.wake.set()
         return ""
