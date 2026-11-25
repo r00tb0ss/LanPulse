@@ -464,6 +464,7 @@ class ThreatMonitor:
         self.intel_cache: dict[str, tuple[float, dict]] = {}
         self.intel_cache_lock = threading.Lock()
         self.ip_context_cache: dict[str, tuple[float, dict | None]] = {}
+        self.ip_context_cache_lock = threading.Lock()
         self.tor_exits: set[str] = set()
         self.tor_loaded = 0.0
         self.c2_ips: set[str] = set()
@@ -897,7 +898,8 @@ class ThreatMonitor:
     def ip_context(self, ip: str) -> dict:
         """Fast local-only context, cached briefly so IP details and an on-demand AI review can share it."""
         now = time.time()
-        hit = self.ip_context_cache.get(ip)
+        with self.ip_context_cache_lock:
+            hit = self.ip_context_cache.get(ip)
         if hit and now - hit[0] < 45:
             return {"context": hit[1]}
         with self.lock:
@@ -905,14 +907,15 @@ class ThreatMonitor:
                                    "WHERE src = ? ORDER BY t DESC LIMIT 2000", (ip,)).fetchall()
         tag = self.tags.cache.get(ip)
         context = self._context(ip, rows, {}, tag)
-        if len(self.ip_context_cache) >= 500:
-            for key, (stamp, _) in list(self.ip_context_cache.items()):
-                if now - stamp >= 45:
-                    self.ip_context_cache.pop(key, None)
+        with self.ip_context_cache_lock:
             if len(self.ip_context_cache) >= 500:
-                oldest = min(self.ip_context_cache, key=lambda key: self.ip_context_cache[key][0])
-                self.ip_context_cache.pop(oldest, None)
-        self.ip_context_cache[ip] = (now, context)
+                for key, (stamp, _) in list(self.ip_context_cache.items()):
+                    if now - stamp >= 45:
+                        self.ip_context_cache.pop(key, None)
+                if len(self.ip_context_cache) >= 500:
+                    oldest = min(self.ip_context_cache, key=lambda key: self.ip_context_cache[key][0])
+                    self.ip_context_cache.pop(oldest, None)
+            self.ip_context_cache[ip] = (now, context)
         return {"context": context}
 
     def ip_extra(self, ip: str) -> dict:
