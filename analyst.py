@@ -212,7 +212,7 @@ LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubun
 
 TOPIC_WORDS = {
     "threats": ("threat", "attack", "attacker", "threat map", "source ip", "ip address", "abuse", "reputation", "block", "campaign",
-                "public ip", "authorized scan", "scan results", "nmap"),
+                "public ip", "authorized scan", "scan results", "scan", "nmap", "openvas"),
     "honeypot": ("honeypot", "honey", "cowrie", "sensor", "password", "username", "credential", "brute", "malware", "sample", "captured",
                  "telnet", "ftp", "upload", "ssh", "payload", "botnet", "mirai"),
     "dns": ("dns", "domain", "pi-hole", "pihole", "lookup", "ad block", "blocked"),
