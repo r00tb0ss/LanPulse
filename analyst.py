@@ -115,15 +115,50 @@ def default_config() -> dict:
             "cloud_evidence_consent": False}
 
 
-def _cfg(nm) -> dict:
+def _cfg(nm, model: str = "") -> dict:
     c = dict(default_config())
     c.update({k: v for k, v in (nm.settings.get("ai") or {}).items() if k in c})
     if c["provider"] not in PROVIDERS:
         c["provider"] = "ollama"
-    base, model = DEFAULTS[c["provider"]]
+    base, default_model_name = DEFAULTS[c["provider"]]
     c["base_url"] = (c["base_url"] or base).rstrip("/")
-    c["model"] = c["model"] or model
+    c["model"] = c["model"] or default_model_name
+    chosen = str(model or "").strip()
+    if chosen and chosen != c["model"] and chosen in list_models(c):
+        c["model"] = chosen            # a one-off choice from the model picker; never saved to settings
     return c
+
+
+_models_cache: dict[str, tuple[float, list[str]]] = {}
+
+
+def list_models(cfg: dict) -> list[str]:
+    """Models the configured AI server offers right now (Ollama and OpenAI-compatible servers), cached briefly."""
+    provider, base = cfg.get("provider"), (cfg.get("base_url") or "").rstrip("/")
+    if provider not in ("ollama", "openai") or not base:
+        return []
+    key = f"{provider}|{base}"
+    hit = _models_cache.get(key)
+    if hit and time.time() - hit[0] < 30:
+        return list(hit[1])
+    names: list[str] = []
+    try:
+        url = f"{base}/api/tags" if provider == "ollama" else f"{base}/models"
+        headers = {"Authorization": f"Bearer {cfg['api_key']}"} if provider == "openai" and cfg.get("api_key") else {}
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            data = json.loads(r.read(1_000_000))
+        rows = data.get("models") if provider == "ollama" else data.get("data")
+        for row in rows or []:
+            name = str((row.get("name") or row.get("model") or row.get("id") or "") if isinstance(row, dict) else "")
+            if re.fullmatch(r"[\w.:/\-@]{1,120}", name):
+                names.append(name)
+    except Exception:
+        log.debug("could not list models from %s", base, exc_info=True)
+    names = sorted(set(names))
+    if names:
+        _models_cache[key] = (time.time(), names)
+    return names
 
 
 def is_local(url: str) -> bool:
@@ -209,8 +244,20 @@ class PromptTruncated(RuntimeError):
     """Ollama reported a prompt that filled its context window, so the start of the evidence may have been cut."""
 
 
+def date_note(today=None) -> str:
+    """Tell the model today's date. Models do not know it, and their training data is older than LanPulse's live data."""
+    import datetime
+    day = (today or datetime.date.today()).isoformat()
+    return (f"Today's date is {day} (LanPulse server time). Your training data is older than this. Dates, CVE IDs, "
+            "product versions and malware names in the supplied evidence come from LanPulse's current data: never call "
+            "a date on or before today 'future', and never dismiss an entry only because you do not recognize it. "
+            "Do not use your own memory to judge what is recent; judge from the dates in the evidence.")
+
+
 def call_model(cfg: dict, system: str, user: str, timeout: int = 120) -> str:
     """Send one question to the configured provider and return the answer text. Raises on transport errors."""
+    if system != "You are a test.":
+        system = f"{system}\n\n{date_note()}"
     provider, base, model, key = cfg["provider"], cfg["base_url"], cfg["model"], cfg.get("api_key", "")
     if provider == "ollama":
         out = _http_json(f"{base}/api/chat", {
@@ -691,8 +738,8 @@ def _question_ip_targets(question: str) -> list[str]:
     return found
 
 
-def ask(nm, question: str) -> dict:
-    cfg = _cfg(nm)
+def ask(nm, question: str, model: str = "") -> dict:
+    cfg = _cfg(nm, model)
     if not cfg["enabled"]:
         return {"error": "The AI analyst is turned off. Turn it on in Settings and choose a provider."}
     q = (question or "").strip()
@@ -998,9 +1045,9 @@ def _reduce_ip_chunk_summaries(cfg: dict, summaries: list[str]) -> str:
     return "\n\n".join(current)
 
 
-def investigate_ip(nm, ip: str, question: str = "") -> dict:
+def investigate_ip(nm, ip: str, question: str = "", model: str = "") -> dict:
     """On-demand passive AI investigation of one IP using LanPulse records and already-cached intelligence only."""
-    cfg = _cfg(nm)
+    cfg = _cfg(nm, model)
     if not cfg["enabled"]:
         return {"error": "The AI analyst is turned off. Enable it in Settings and choose a provider."}
     if cloud_evidence_consent_required(cfg):
@@ -1139,9 +1186,9 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
         return {"error": f"{type(e).__name__}: {e}"[:200]}
 
 
-def investigate_sample(nm, sha256: str, question: str = "") -> dict:
+def investigate_sample(nm, sha256: str, question: str = "", model: str = "") -> dict:
     """On-demand AI analysis of a captured sample and its complete linked honeypot/runtime evidence."""
-    cfg = _cfg(nm)
+    cfg = _cfg(nm, model)
     if not cfg["enabled"]:
         return {"error": "The AI analyst is turned off. Enable it in Settings and choose a provider."}
     if cloud_evidence_consent_required(cfg):

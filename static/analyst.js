@@ -1,4 +1,30 @@
 /* AI Security Analyst drawer: read-only Q&A over LanPulse's own data. Providers: Ollama, OpenAI-compatible, Anthropic. */
+
+/* Model picker shared by the analyst drawer, the attacker panel and the sample panel. */
+window.lpAiModels = [];
+window.lpAiModelDefault = "";
+const MODEL_KEY = "lp_ai_model";
+window.lpAiModelChoice = () => { try { return localStorage.getItem(MODEL_KEY) || ""; } catch (e) { return ""; } };
+window.lpAiModelSelectHtml = (id) => {
+  if (!window.lpAiModels.length) return "";
+  const pick = window.lpAiModelChoice();
+  return '<label class="muted" style="display:block;font-size:11px;margin:6px 0 3px" for="' + id + '">AI model</label>' +
+    '<select id="' + id + '" class="ai-model-pick" style="width:100%;margin-bottom:6px"><option value="">Default (' +
+    esc(window.lpAiModelDefault || "configured model") + ')</option>' +
+    window.lpAiModels.map((m) => '<option value="' + esc(m) + '"' + (m === pick ? " selected" : "") + '>' + esc(m) + '</option>').join("") + '</select>';
+};
+window.lpAiModelValue = (id) => { const el = document.getElementById(id); return el ? el.value : window.lpAiModelChoice(); };
+window.lpAiRememberModel = (value) => { try { localStorage.setItem(MODEL_KEY, value || ""); } catch (e) { /* private mode */ } };
+window.lpLoadAiModels = async () => {
+  const r = await api("/api/ai/models", "GET", null, true);
+  if (!r || r.error) return;
+  window.lpAiModels = r.models || []; window.lpAiModelDefault = r.current || "";
+};
+window.lpLoadAiModels();            // ready before the first attacker or sample panel opens
+document.addEventListener("change", (e) => {
+  if (e.target.classList && e.target.classList.contains("ai-model-pick")) window.lpAiRememberModel(e.target.value);
+});
+
 (() => {
   let st = null, busy = false;
   const PROV = {
@@ -23,6 +49,7 @@
   async function refresh() {
     st = await api("/api/ai", "GET");
     if (!st) return;
+    if (st.enabled && !window.lpAiModels.length) window.lpLoadAiModels();
     $("aiSub").textContent = st.enabled ? `${st.model} · ${st.local ? "runs on your network" : st.cloud_evidence_consent ? "hosted provider · raw evidence sharing approved" : "hosted provider · approval required before evidence is sent"}`
                                         : "explains your network — never changes anything";
     renderSugg();
@@ -62,7 +89,7 @@
     busy = true; $("aiSend").disabled = true; $("aiQ").value = "";
     note(q, "me");
     const wait = note("Thinking…", "sys wait");
-    const r = await api("/api/ai/ask", "POST", {question: q}, true);
+    const r = await api("/api/ai/ask", "POST", {question: q, model: window.lpAiModelChoice()}, true);
     wait.remove();
     if (r && r.answer) {
       const m = note(r.answer, "bot");
@@ -79,7 +106,7 @@
     box.innerHTML = `
       <label>Provider<select id="aiProv">${Object.entries(PROV).map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(v[0])}</option>`).join("")}</select></label>
       <label>Server address<input id="aiBase" placeholder=""></label>
-      <label>Model<input id="aiModel" placeholder=""></label>
+      <label>Model<input id="aiModel" placeholder="" list="aiModelList" autocomplete="off"><datalist id="aiModelList">${(window.lpAiModels || []).map((m) => `<option value="${esc(m)}">`).join("")}</datalist></label>
        <div class="muted" style="font-size:12px">Cloud provider API keys are managed in Settings &gt; API Keys. Local Ollama does not need a key.</div>
       <div class="ai-warn" id="aiWarn"></div>
       <div class="btns"><button class="btn" id="aiTest" type="button">Test</button>

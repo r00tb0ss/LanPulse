@@ -730,6 +730,7 @@ function ipAiHtml(d) {
       '<div style="white-space:pre-wrap;line-height:1.55;overflow-wrap:anywhere">' + esc(s.answer) + '</div>';
   }
   if (s.error) html += '<div class="finding"><span class="sev high">AI</span><span>' + esc(s.error) + '</span></div>';
+  html += (window.lpAiModelSelectHtml ? window.lpAiModelSelectHtml("ipAiModel") : "");
   html += '<textarea id="ipAiQuestion" rows="2" placeholder="' +
     (s.answer ? 'Ask a follow-up about this IP…' : 'Optional: focus the investigation on a specific concern…') +
     '" style="width:100%;margin:8px 0"></textarea>' +
@@ -748,7 +749,8 @@ async function runIpAi(d, question) {
   ipAiState.loading = true;
   ipAiState.error = "";
   renderIpPanel(d);
-  const result = await api('/api/threats/ip/' + encodeURIComponent(d.ip) + '/ai', 'POST', {question: question || ""});
+  const result = await api('/api/threats/ip/' + encodeURIComponent(d.ip) + '/ai', 'POST',
+    {question: question || "", model: window.lpAiModelValue ? window.lpAiModelValue("ipAiModel") : ""});
   if (selectedIp !== d.ip) { if (ipAiState.ip === d.ip) ipAiState.loading = false; return; }
   ipAiState.loading = false;
   if (!result || result.error) {
