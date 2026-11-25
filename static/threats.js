@@ -697,6 +697,23 @@ function addLocalEvent(e) {
   toast(`${e.title}: ${e.src_name || e.src || e.mac}`);
 }
 
+async function refreshAuthorizedPublicScans() {
+  const box = $("publicScanStatus");
+  if (!box) return;
+  const data = await api("/api/scans/authorized-public", "GET");
+  if (!data) { box.textContent = "Could not load public scan history."; return; }
+  const rows = [...(data.nmap || []), ...(data.openvas || [])].sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 8);
+  if (!rows.length) { box.textContent = "No authorized public scans yet."; return; }
+  box.innerHTML = rows.map((s) => {
+    const findings = s.scanner === "openvas" ? (s.count || 0) + " findings" :
+      ((s.ports || []).length + " open ports");
+    const error = s.error ? " · " + esc(s.error) : "";
+    return '<div style="padding:5px 0;border-top:1px solid var(--line)"><b>' + esc(s.target || s.ip || "") +
+      '</b> · ' + esc(s.scanner || "OpenVAS") + ' · ' + esc(s.status || "") +
+      (s.status === "Done" ? ' · ' + esc(findings) : "") + error + '</div>';
+  }).join("");
+}
+
 async function onThreatSummary(s) {
   if (tHours === s.hours) { renderThreats(s, false); return; }
   if (Date.now() - lastRangeFetch < 10000) return;
@@ -880,6 +897,21 @@ function renderIpPanel(d) {
 
     ${ipContextHtml(d)}
     ${ipAiHtml(d)}
+    <div class="p-sec public-scan">
+      <h4><i class="fa-solid fa-shield-halved"></i> Authorized public IP scan</h4>
+      <p class="muted" style="font-size:12px;margin:4px 0 9px">Scan a public IPv4 address you own or have explicit permission to test. This target is entered manually; the attacker IP above is never selected automatically. Nmap checks the 1,000 most common TCP ports with light service detection. OpenVAS runs its Full and Fast vulnerability assessment.</p>
+      <input id="publicScanTarget" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Public IPv4 address" style="width:100%;margin-bottom:7px">
+      <select id="publicScanEngine" style="width:100%;margin-bottom:7px">
+        <option value="nmap">Nmap · top 1,000 TCP ports</option>
+        <option value="openvas">OpenVAS · Full and Fast</option>
+      </select>
+      <label class="chk-line" style="display:flex;gap:8px;align-items:flex-start;margin:7px 0">
+        <input type="checkbox" id="publicScanAuthorized" style="margin-top:3px">
+        <span>I own this public IP or have explicit authorization to scan it.</span>
+      </label>
+      <button class="btn sm" id="bPublicScan"><i class="fa-solid fa-radar"></i> Start authorized scan</button>
+      <div id="publicScanStatus" class="muted" style="font-size:11px;margin-top:9px">Scan history loads when available.</div>
+    </div>
     <div class="p-sec"><h4>What it tried</h4>
       <div class="chips-wrap">${d.ports.map((p) => `<span class="pchip">${esc(p.service)} :${p.port ?? "—"}<b>×${fmtN(p.count)}</b></span>`).join("") || '<span class="muted">—</span>'}</div>
       ${(() => {            // one list: service, what it sent or tried, and how many times (identical lines are added up)
@@ -963,6 +995,24 @@ function renderIpPanel(d) {
   };
   $("bCopyRule").onclick = () => copyText($("ruleText"));
   $("bIpAiRun").onclick = () => runIpAi(d, $("ipAiQuestion").value.trim());
+  refreshAuthorizedPublicScans();
+  $("bPublicScan").onclick = async () => {
+    const target = $("publicScanTarget").value.trim();
+    const scanner = $("publicScanEngine").value;
+    const authorized = $("publicScanAuthorized").checked;
+    if (!authorized) { toast("Confirm ownership or explicit authorization first"); return; }
+    const label = scanner === "nmap" ? "Nmap top-1,000-port scan" : "OpenVAS Full and Fast assessment";
+    if (!window.confirm("Start " + label + " against " + target + "? This sends active scan traffic to that public IP. Only proceed if you are authorized to test it.")) return;
+    const button = $("bPublicScan");
+    button.disabled = true; button.textContent = "Starting scan…";
+    const result = await api("/api/scans/authorized-public", "POST", {target, scanner, authorized: true});
+    button.disabled = false; button.innerHTML = '<i class="fa-solid fa-radar"></i> Start authorized scan';
+    if (result && result.ok) {
+      toast(label + " started for " + target);
+      $("publicScanStatus").textContent = "Scan requested for " + target + ". Refresh this panel to see progress and findings.";
+      refreshAuthorizedPublicScans();
+    } else toast(result?.error || "The scan could not be started");
+  };
   if ($("bIpAiScan")) $("bIpAiScan").onclick = async () => {
     const target = $("ipAiScanTarget").value, scanner = $("ipAiScanEngine").value;
     const label = scanner === "nmap" ? "thorough Nmap scan" : "OpenVAS vulnerability assessment";
