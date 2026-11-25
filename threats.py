@@ -462,6 +462,7 @@ class ThreatMonitor:
         self.lock = threading.Lock()
         self.geo = Geo(self.data_dir)
         self.intel_cache: dict[str, tuple[float, dict]] = {}
+        self.intel_cache_lock = threading.Lock()
         self.ip_context_cache: dict[str, tuple[float, dict | None]] = {}
         self.tor_exits: set[str] = set()
         self.tor_loaded = 0.0
@@ -640,7 +641,8 @@ class ThreatMonitor:
         for src, cnt, reached in rows:
             if not is_public(src):
                 continue
-            hit = self.intel_cache.get(src)
+            with self.intel_cache_lock:
+                hit = self.intel_cache.get(src)
             if hit and now - hit[0] < 6 * 3600:
                 continue
             await asyncio.to_thread(self.intel, src)
@@ -919,7 +921,8 @@ class ThreatMonitor:
         return {"intel": intel, "tag": self.tags.cache.get(ip)}
 
     def cached_intel(self, ip: str):
-        hit = self.intel_cache.get(ip)
+        with self.intel_cache_lock:
+            hit = self.intel_cache.get(ip)
         return hit[1] if hit and time.time() - hit[0] < 6 * 3600 else None
 
     def reached_ips(self, hours: int = 168) -> set:
@@ -929,18 +932,19 @@ class ThreatMonitor:
         return {r[0] for r in rows}
 
     def intel(self, ip: str) -> dict:
-        hit = self.intel_cache.get(ip)
-        if hit and time.time() - hit[0] < 6 * 3600:
-            return hit[1]
-        if len(self.intel_cache) >= 2000:
-            now = time.time()
-            # Expire old entries first; retain useful recent results instead of flushing the whole cache.
-            for key, (stamp, _) in list(self.intel_cache.items()):
-                if now - stamp >= 6 * 3600:
-                    self.intel_cache.pop(key, None)
-            while len(self.intel_cache) >= 2000:
-                oldest = min(self.intel_cache, key=lambda key: self.intel_cache[key][0])
-                self.intel_cache.pop(oldest, None)
+        with self.intel_cache_lock:
+            hit = self.intel_cache.get(ip)
+            if hit and time.time() - hit[0] < 6 * 3600:
+                return hit[1]
+            if len(self.intel_cache) >= 2000:
+                now = time.time()
+                # Expire old entries first; retain useful recent results instead of flushing the whole cache.
+                for key, (stamp, _) in list(self.intel_cache.items()):
+                    if now - stamp >= 6 * 3600:
+                        self.intel_cache.pop(key, None)
+                while len(self.intel_cache) >= 2000:
+                    oldest = min(self.intel_cache, key=lambda key: self.intel_cache[key][0])
+                    self.intel_cache.pop(oldest, None)
         if self.nm.args.demo:
             r = random.Random(ip)
             info = {"rdns": f"host-{ip.replace('.', '-')}.example.net", "isp": r.choice(["Example Hosting Ltd", "Demo Cloud Inc", "Sample Telecom"]),
@@ -957,7 +961,8 @@ class ThreatMonitor:
                                   if ip not in DEMO_SCANNERS and r.random() > 0.5 else {"found": False}),
                     "tor": ip not in DEMO_SCANNERS and r.random() > 0.85,
                     "errors": {}}
-            self.intel_cache[ip] = (time.time(), info)
+            with self.intel_cache_lock:
+                self.intel_cache[ip] = (time.time(), info)
             return info
         info = {"rdns": "", "isp": "", "org": "", "asn": "", "as_name": "", "hosting": None, "proxy": None,
                 "mobile": None, "abuse": None, "shodan": None, "errors": {}}
@@ -1064,9 +1069,11 @@ class ThreatMonitor:
         log.debug("intel for %s took %.1fs (%d late)", ip, time.time() - started, len(late))
         if late:
             # do not cache a partial answer for hours; try again soon
-            self.intel_cache[ip] = (time.time() - 6 * 3600 + 120, info)
+            with self.intel_cache_lock:
+                self.intel_cache[ip] = (time.time() - 6 * 3600 + 120, info)
             return info
-        self.intel_cache[ip] = (time.time(), info)
+        with self.intel_cache_lock:
+            self.intel_cache[ip] = (time.time(), info)
         return info
 
     def known_c2(self, ip: str) -> bool:
