@@ -10,6 +10,8 @@ LanPulse keeps public-target scanning separate from Threat Map attacker investig
 - Confirm the browser prompt before the scan starts.
 - Only globally routable public IPv4 addresses are accepted. Private, loopback, link-local, multicast, reserved, and IPv6 targets are rejected in this initial implementation.
 - One public scan may be queued or running at a time.
+- Public Nmap and OpenVAS scans have a one-minute global launch cooldown and a one-hour per-target cooldown.
+- Terminal scan history is bounded to the newest 100 records per scanner; active scans are never pruned.
 
 The authorization checkbox is an operator attestation, not independent proof of ownership. Do not scan systems unless you are authorized to test them.
 
@@ -28,5 +30,6 @@ Scan status and results are retained under the LanPulse data directory. The AI T
 ## Operational notes
 
 - Public scans require the LanPulse dashboard login and are disabled in demo mode.
-- Nmap scan history is persisted. If LanPulse restarts during a scan, that record is marked Interrupted; it is not silently resumed.
+- Nmap scan history is persisted with the dashboard account that attested authorization and the timestamp. If LanPulse restarts during a scan, that record is marked Interrupted; it is not silently resumed.
+- OpenVAS scan history is persisted and pruned to the newest 100 terminal records while preserving active tasks.
 - This initial workflow accepts IPv4 addresses only. Hostnames and automatic scans of attacker IPs are intentionally unsupported.
