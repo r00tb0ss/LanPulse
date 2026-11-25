@@ -568,6 +568,20 @@ def validate_attack_ids(answer: str, context: str) -> str:
     return cleaned
 
 
+def _question_ip_targets(question: str) -> list[str]:
+    """Extract valid IP literals from a question without treating arbitrary text as a target."""
+    import ipaddress
+    found = []
+    for candidate in re.findall(r"(?<![A-Fa-f0-9:.])(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?![A-Fa-f0-9:.])|(?<![A-Fa-f0-9:])[A-Fa-f0-9]*:[A-Fa-f0-9:]+(?![A-Fa-f0-9:])", question or ""):
+        try:
+            normalized = str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+        if normalized not in found:
+            found.append(normalized)
+    return found
+
+
 def ask(nm, question: str) -> dict:
     cfg = _cfg(nm)
     if not cfg["enabled"]:
@@ -575,6 +589,19 @@ def ask(nm, question: str) -> dict:
     q = (question or "").strip()
     if not q:
         return {"error": "Ask a question."}
+    ip_targets = _question_ip_targets(q)
+    if len(ip_targets) == 1 and re.search(r"\\b(nmap|openvas|port[ -]?scan|scan|probe)\\b", q, re.I):
+        target = ip_targets[0]
+        return {"error": (
+            f"{target} is an IP mentioned in your question, but Threat Map presence does not establish "
+            "permission to actively scan it. To run Nmap, open Threats > Authorized Public IP Scan, "
+            "enter the address manually, and confirm that you own or are explicitly authorized to test it. "
+            "No scan was started. For passive analysis, ask LanPulse to investigate this IP without requesting a scan."
+        )}
+    if len(ip_targets) == 1 and not any(word in q.lower() for word in OVERVIEW_WORDS):
+        # Route a focused IP question to the per-IP evidence collector. Do not load the
+        # entire retained threat database (or unrelated honeypot history) into Ollama.
+        return investigate_ip(nm, ip_targets[0], q)
     context = build_context(nm, q)
     user = f"{context}\n\n----\nQUESTION: {q}\n\nAnswer using only the context above, citing specific devices/IPs/CVEs."
     if cfg["provider"] == "ollama" and len(user) > (NUM_CTX - 1024) * 2:
