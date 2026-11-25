@@ -1307,6 +1307,7 @@ def build_app(nm: LanPulse) -> FastAPI:
             nm.dns.client.logout()
         nm.save()
         nm.runtime_telemetry.close()
+        nm.public_scans.close()
 
     app = FastAPI(title="LanPulse", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
     app.add_middleware(SelectiveGzip, minimum_size=1024, compresslevel=5)
