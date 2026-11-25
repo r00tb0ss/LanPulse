@@ -738,10 +738,15 @@ async function refreshAuthorizedPublicScans() {
             esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
         : "";
     const state = terminal ? esc(s.status) : esc(s.status || "Queued") + " · scan in progress";
+    const progress = Math.max(0, Math.min(100, Number(s.progress) || 0));
+    const phase = esc(s.phase || (s.status === "Requested" ? "Waiting for the Nmap worker…" : "Scanning ports and identifying services"));
+    const progressHtml = !terminal && s.scanner === "nmap"
+      ? '<div style="margin-top:8px"><div style="height:6px;background:var(--line);border-radius:8px;overflow:hidden"><div style="height:100%;width:' + progress + '%;background:var(--accent);transition:width .3s"></div></div><div class="muted" style="font-size:11px;margin-top:5px">' + progress + '% · ' + phase + '</div><div class="muted" style="font-size:11px">This panel refreshes automatically every 3 seconds.</div></div>'
+      : (!terminal ? '<div class="muted" style="font-size:12px">Scan is queued or running. This panel refreshes automatically.</div>' : "");
     return '<div style="padding:9px 0;border-top:1px solid var(--line)"><b>' + esc(s.target || s.ip || "") +
       '</b><div class="muted" style="font-size:11px;margin:3px 0">' + scanner + ' · ' + state +
       (terminal && s.status === "Done" ? ' · ' + esc(findings) : "") + '</div>' +
-      (!terminal ? '<div class="muted" style="font-size:12px">Nmap is checking the selected TCP ports and identifying services. This panel refreshes automatically.</div>' : "") +
+      progressHtml +
       (s.summary ? '<div class="muted" style="margin-top:4px">' + esc(s.summary) + '</div>' : "") +
       error + details + '</div>';
   }).join("");
