@@ -67,7 +67,8 @@ SUGGESTED = [
 
 
 def default_config() -> dict:
-    return {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": ""}
+    return {"enabled": False, "provider": "ollama", "base_url": "", "model": "", "api_key": "",
+            "cloud_evidence_consent": False}
 
 
 def _cfg(nm) -> dict:
@@ -79,15 +80,6 @@ def _cfg(nm) -> dict:
     c["base_url"] = (c["base_url"] or base).rstrip("/")
     c["model"] = c["model"] or model
     return c
-
-
-def cloud_evidence_consent_error(cfg: dict) -> str:
-    """Block retained evidence from leaving the network until the owner explicitly opts in."""
-    if not is_local(cfg.get("base_url", "")) and not cfg.get("cloud_evidence_consent", False):
-        return ("Cloud AI is blocked from receiving LanPulse evidence until you explicitly enable "
-                "the cloud evidence consent setting in the AI Analyst setup. This includes attempted "
-                "honeypot credentials, raw sessions/events, and LAN device details. No evidence was sent.")
-    return ""
 
 
 def is_local(url: str) -> bool:
@@ -616,9 +608,6 @@ def ask(nm, question: str) -> dict:
     q = (question or "").strip()
     if not q:
         return {"error": "Ask a question."}
-    consent_error = cloud_evidence_consent_error(cfg)
-    if consent_error:
-        return {"error": consent_error}
     ip_targets = _question_ip_targets(q)
     if len(ip_targets) == 1 and re.search(r"\b(nmap|openvas|port[ -]?scan|scan|probe)\b", q, re.I):
         target = ip_targets[0]
