@@ -2366,3 +2366,6 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
   #panelBody .actions .btn{width:100%;justify-content:center}
   #panelBody .ip-ai .btn,.public-scan .btn{width:100%;justify-content:center}
 }
+
+.public-scan .ps-find{padding:3px 0;overflow-wrap:anywhere;word-break:break-word;min-width:0}
+.public-scan .ps-findings{max-width:100%;overflow-wrap:anywhere}

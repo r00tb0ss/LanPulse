@@ -42,8 +42,9 @@ async function refreshAuthorizedPublicScans() {
             ? '<div class="ok-line" style="margin-top:7px">Target responded. No open TCP ports were found in the top 1,000 scanned ports.</div>'
             : '<div class="finding" style="margin-top:7px">Scan finished, but target reachability was not confirmed. No open TCP ports were reported.</div>'))
       : s.status === "Done" && s.results?.length
-        ? '<div class="muted" style="padding:7px 0">' + s.results.slice(0, 8).map((f) =>
-            esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
+        ? '<div class="muted ps-findings" style="padding:7px 0">' + s.results.map((f) =>
+            '<div class="ps-find">' + esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))
+            + '</div>').join("") + '</div>'
         : "";
     const phase = s.phase || (s.status === "Requested" || s.status === "Queued" ? "Waiting for the scan worker" :
       s.status === "Running" ? "Scanning target and identifying services" : "");
