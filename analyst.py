@@ -248,16 +248,6 @@ def _device_lines(nm) -> list[str]:
 NUM_CTX = 32768                 # Ollama's configured context window
 
 
-def _ollama_prompt_fits(system: str, user: str, reserve: int = 4096) -> bool:
-    """Conservatively bound prompt tokens using UTF-8 bytes, not a chars-per-token guess.
-
-    Byte count is an intentionally pessimistic upper bound for byte-based BPE tokenizers;
-    the reserve covers message framing and generated output. This can chunk early, but
-    prevents dense JSON and multibyte evidence from passing a dangerously optimistic check.
-    """
-    prompt_bytes = len((system or "").encode("utf-8")) + len((user or "").encode("utf-8")) + 256
-    return prompt_bytes <= max(0, NUM_CTX - max(1024, int(reserve)))
-
 
 GUIDE = """LANPULSE GUIDE (what LanPulse is and where things are; use it to answer "how do I..." and "what is..." questions):
 LanPulse is a self-hosted LAN mapper and security dashboard. It runs on one Ubuntu/Debian/Raspberry Pi machine and is opened in a browser. Tabs along the top: Network, Threats, DNS, Vulns, Services, Red Team, Honeypot. The gear icon opens Settings; the wand icon opens this analyst.
