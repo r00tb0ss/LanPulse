@@ -525,7 +525,7 @@ def ask(nm, question: str) -> dict:
         return {"error": "Ask a question."}
     context = build_context(nm, q)
     user = f"{context}\n\n----\nQUESTION: {q}\n\nAnswer using only the context above, citing specific devices/IPs/CVEs."
-    if cfg["provider"] == "ollama" and len(user) > (NUM_CTX - 1024) * 3:
+    if cfg["provider"] == "ollama" and len(user) > (NUM_CTX - 1024) * 2:
         return {"error": "The complete requested evidence exceeds the configured Ollama context window. LanPulse did not silently remove records; increase the model context or narrow the investigation."}
     try:
         answer = call_model(cfg, SYSTEM_PROMPT, user)
@@ -733,7 +733,7 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
             f"{evidence}\n\n----\nUSER QUESTION: {q}\n\n"
             "Answer using only these facts. State when evidence is absent. Keep observations and inferences separate."
         )
-        if cfg["provider"] == "ollama" and len(prompt) > (NUM_CTX - 1024) * 3:
+        if cfg["provider"] == "ollama" and len(prompt) > (NUM_CTX - 1024) * 2:
             return {"error": "This IP's complete retained evidence exceeds the configured Ollama context window. LanPulse did not silently remove records; increase the model context or narrow the investigation."}
         answer = call_model(cfg, IP_AGENT_SYSTEM_PROMPT, prompt, timeout=150)
         if not answer:
@@ -772,7 +772,7 @@ def investigate_sample(nm, sha256: str, question: str = "") -> dict:
             + "\n\n----\nUSER QUESTION: " + q
             + "\n\nAnalyze the supplied evidence. Distinguish static findings, honeypot input, and observed runtime events."
         )
-        if cfg["provider"] == "ollama" and len(user) > (NUM_CTX - 1024) * 3:
+        if cfg["provider"] == "ollama" and len(user) > (NUM_CTX - 1024) * 2:
             return {"error": "This sample's complete evidence exceeds the configured Ollama context window. LanPulse did not silently remove records; increase the model context or narrow the investigation."}
         answer = call_model(cfg, SAMPLE_AGENT_SYSTEM_PROMPT, user, timeout=180)
         if not answer:
