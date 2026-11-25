@@ -734,7 +734,7 @@ async function refreshAuthorizedPublicScans() {
     const terminal = ["Done","Failed","Interrupted"].includes(s.status);
     const progress = Math.max(0, Math.min(100, Number(s.progress) || 0));
     const findings = s.scanner === "openvas" ? (s.count || 0) + " findings" :
-      ((s.ports || []).length + " open TCP ports");
+      (s.host_state === "down" ? "target did not respond" : ((s.ports || []).length + " open TCP ports"));
     const error = s.error ? '<div style="color:var(--red);margin-top:6px;overflow-wrap:anywhere">' + esc(s.error) + '</div>' : "";
     const ports = (s.ports || []);
     const details = s.status === "Done" && s.scanner === "nmap"
@@ -743,7 +743,11 @@ async function refreshAuthorizedPublicScans() {
           ports.map((p) => '<li><code>' + esc(p.port + "/" + p.protocol) + '</code> · ' + esc(p.service || "unknown service") +
             (p.product ? ' · ' + esc(p.product) : "") + (p.version ? ' ' + esc(p.version) : "") + '</li>').join("") +
           '</ul></div>'
-        : '<div class="ok-line" style="margin-top:7px">Scan completed. No open TCP ports were found in the top 1,000 scanned ports.</div>')
+        : (s.host_state === "down"
+          ? '<div class="finding" style="margin-top:7px">Nmap could not confirm that the target was reachable. No port findings can be reported for this scan.</div>'
+          : s.host_state === "up"
+            ? '<div class="ok-line" style="margin-top:7px">Target responded. No open TCP ports were found in the top 1,000 scanned ports.</div>'
+            : '<div class="finding" style="margin-top:7px">Scan finished, but target reachability was not confirmed. No open TCP ports were reported.</div>'))
       : s.status === "Done" && s.results?.length
         ? '<div class="muted" style="padding:7px 0">' + s.results.slice(0, 8).map((f) =>
             esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
