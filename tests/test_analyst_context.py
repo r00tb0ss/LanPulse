@@ -252,12 +252,27 @@ class AnalystContext(unittest.TestCase):
         )
         analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
 
-    def test_ollama_context_guard_uses_utf8_bytes_and_includes_system_prompt(self):
-        self.assertEqual(analyst._estimate_tokens("é", "ollama"), 2)
+    def test_ollama_context_guard_uses_realistic_token_estimate_and_includes_system_prompt(self):
+        self.assertEqual(analyst._estimate_tokens("é", "ollama"), 1)          # 2 bytes -> ceil(2/3)
         with patch.object(analyst, "NUM_CTX", 4096):
-            error = analyst._ollama_context_error("system prompt", "é" * 1800, reserve=1024)
+            self.assertEqual(analyst._ollama_context_error("system prompt", "é" * 1800, reserve=1024), "")
+            error = analyst._ollama_context_error("system prompt", "é" * 5000, reserve=1024)
         self.assertIn("safe Ollama budget", error)
         self.assertIn("did not silently truncate", error)
+
+    def test_moderate_evidence_now_fits_one_call_instead_of_chunking(self):
+        prompt = "x" * 60_000                      # ~20k tokens: used to be "too big", fits a 32k window
+        self.assertEqual(analyst._ollama_context_error(analyst.IP_AGENT_SYSTEM_PROMPT, prompt, reserve=4096), "")
+
+    def test_prompt_that_fills_the_context_is_detected_not_trusted(self):
+        cfg = {"provider": "ollama", "base_url": "http://localhost:11434", "model": "m"}
+        with patch.object(analyst, "_http_json", return_value={"prompt_eval_count": analyst.NUM_CTX,
+                                                               "message": {"content": "answer from cut evidence"}}):
+            with self.assertRaises(analyst.PromptTruncated):
+                analyst.call_model(cfg, "s", "u")
+        with patch.object(analyst, "_http_json", return_value={"prompt_eval_count": 9000,
+                                                               "message": {"content": "ok"}}):
+            self.assertEqual(analyst.call_model(cfg, "s", "u"), "ok")
 
     def test_ip_evidence_chunks_respect_utf8_byte_budget(self):
         chunks = analyst._ip_evidence_chunks({"unicode": "é" * 4000}, max_chars=500)
