@@ -712,7 +712,7 @@ let ipAiState = {ip: "", loading: false, answer: "", error: "", provider: "", mo
 function ipAiHtml(d) {
   const s = ipAiState.ip === d.ip ? ipAiState : {ip: d.ip, loading: false, answer: "", error: ""};
   let html = '<div class="p-sec ip-ai"><h4><i class="fa-solid fa-robot"></i> AI security investigation</h4>' +
-    '<p class="muted" style="font-size:12px;margin:4px 0 10px">On-demand passive review of LanPulse evidence. No ports are scanned and no traffic is sent to the target IP.</p>';
+    '<p class="muted" style="font-size:12px;margin:4px 0 10px">Sends a bounded LanPulse evidence summary to your configured AI provider (cloud providers receive that summary). No ports are scanned and no traffic is sent to the target IP.</p>';
   if (s.answer) {
     html += '<div class="muted" style="font-size:11px;margin-bottom:6px">' +
       (s.local ? 'Local AI' : 'Provider') + ' · ' + esc(s.provider) + ' · ' + esc(s.model) + '</div>' +
