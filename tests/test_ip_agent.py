@@ -34,8 +34,10 @@ class PassiveIpEvidence(unittest.TestCase):
         data = {"count": 1, "blocked": 0, "reached": 1}
         no_match = analyst.format_ip_evidence("198.51.100.9", data, known_c2=False)
         match = analyst.format_ip_evidence("198.51.100.9", data, known_c2=True)
-        self.assertIn("NO / not listed", no_match)
+        self.assertIn("NO (not in loaded list)", no_match)
         self.assertIn("exact-match: YES", match)
+        unknown = analyst.format_ip_evidence("198.51.100.9", data, known_c2=None)
+        self.assertIn("UNKNOWN (list not loaded)", unknown)
 
 
 if __name__ == "__main__":
