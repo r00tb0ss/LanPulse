@@ -20,6 +20,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
+          MAIN_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          if [ "$MAIN_SHA" != "$RELEASE_SHA" ]; then
+            echo "A newer main commit exists ($MAIN_SHA); skipping stale CI result $RELEASE_SHA."
+            exit 0
+          fi
           VER=$(grep -m1 -oP '^VERSION = "\K[^"]+' app.py)
           if gh release view "v$VER" >/dev/null 2>&1; then echo "v$VER already released"; exit 0; fi
           git archive --prefix=lanpulse/ "$RELEASE_SHA" -o /tmp/lanpulse.zip --format=zip
