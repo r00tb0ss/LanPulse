@@ -2341,7 +2341,18 @@ body[data-theme="light"] .res.allowed,body[data-theme="light"] .res.logged,body[
 .public-scan .ps-del{padding:3px 8px}
 .public-scan .ps-form{display:grid;gap:7px;max-width:520px}
 .public-scan .ps-form label{font-size:11px}
-.public-scan .ps-form input[type=text],.public-scan .ps-form select{width:100%}
+.public-scan .ps-form input[type=text],.public-scan .ps-form select{
+  width:100%;box-sizing:border-box;padding:10px 12px;border-radius:9px;border:1px solid var(--border);
+  background:var(--bg2);color:var(--text);
+  font-size:16px;                     /* 16px or more stops phone browsers zooming the page when the box is tapped */
+}
+.public-scan .ps-form input[type=text]::placeholder{color:var(--muted);opacity:.8}
+.public-scan .ps-form input[type=text]:focus,.public-scan .ps-form select:focus{outline:2px solid var(--accent2);outline-offset:1px}
+.public-scan .ps-form input[type=checkbox]{width:18px;height:18px;flex:none}
+#publicScanPane{grid-template-columns:minmax(0,1fr)}
+.public-scan{min-width:0;max-width:100%}
+.public-scan h4{flex-wrap:wrap}
+.public-scan p{overflow-wrap:anywhere}
 .public-scan .chk-line{display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:13px}
 .public-scan .chk-line input{margin-top:3px}
 #panelBody .ip-ai .finding{padding:10px;border-radius:9px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:8px 0}
