@@ -58,7 +58,7 @@ def _preflight_raw_evidence(nm, asked: list[str]) -> None:
         raise EvidenceBudgetExceeded(
             f"The complete retained evidence pack is estimated at {total / (1024 * 1024):.1f} MiB "
             f"and exceeds LanPulse's {MAX_AI_RAW_EVIDENCE_BYTES // (1024 * 1024)} MiB in-memory safety limit "
-            f"({breakdown}). No evidence was loaded or sent. No records were omitted. Narrow the investigation to a specific "
+            f"({breakdown}). No evidence was loaded or sent. No records were omitted or sent to the AI. Narrow the investigation to a specific "
             "IP or reduce the retained-data time window before retrying."
         )
 
