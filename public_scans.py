@@ -79,7 +79,7 @@ class PublicScans:
             scan_id = uuid.uuid4().hex[:12]
             record = {"id": scan_id, "target": target, "scanner": "nmap", "scope": "top-1000-tcp-ports",
                       "status": "Requested", "progress": 0, "started": int(time.time()),
-                      "finished": 0, "ports": [], "error": ""}
+                      "finished": 0, "ports": [], "error": "", "authorized": True}
             self.scans[scan_id] = record
             self._save()
         self.pool.submit(self._run_nmap, scan_id, target)
