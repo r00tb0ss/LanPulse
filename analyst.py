@@ -63,6 +63,18 @@ def _preflight_raw_evidence(nm, asked: list[str]) -> None:
         )
 
 
+def retained_evidence_preflight(nm, question: str) -> str:
+    """Return a user-safe error string for the evidence areas explicitly requested."""
+    q = (question or "").lower()
+    asked = [topic for topic, words in TOPIC_WORDS.items()
+             if any(word in q for word in words)]
+    try:
+        _preflight_raw_evidence(nm, asked)
+    except EvidenceBudgetExceeded as exc:
+        return str(exc)
+    return ""
+
+
 CONTEXT_CHARS = 9000            # hard cap on the device/threat snapshot (the guide and topic data are added on top)
 DEVICE_CAP = 60
 EVENT_CAP = 25
@@ -697,6 +709,9 @@ def ask(nm, question: str) -> dict:
         # entire retained threat database (or unrelated honeypot history) into Ollama.
         return investigate_ip(nm, ip_targets[0], q)
     try:
+        preflight_error = retained_evidence_preflight(nm, q)
+        if preflight_error:
+            return {"error": preflight_error}
         context = build_context(nm, q)
     except EvidenceBudgetExceeded as exc:
         return {"error": str(exc)}
