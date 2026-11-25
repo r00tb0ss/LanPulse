@@ -1359,6 +1359,31 @@ class HoneyAnalysis:
                 "samples": [{"sha256": k, "name": v} for k, v in list(hashes.items())[:6]],
                 "sequence": sequence, "sequence_session": pick or rows[0][0], "campaigns": links[:8]}
 
+    def ip_evidence(self, ip: str, hours: int = 2160) -> dict:
+        """Complete stored Cowrie evidence for an AI investigation; not used by the Threat Map UI."""
+        since = time.time() - max(1, min(int(hours), 2160)) * 3600
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, files FROM sessions WHERE ip = ? AND start >= ? ORDER BY start DESC",
+                (ip, since)).fetchall()
+        sessions = []
+        hashes = set()
+        for sid, files_json in rows:
+            record = self.session(sid)
+            if record:
+                sessions.append(record)
+            for item in json.loads(files_json or "[]"):
+                sha = str(item.get("sha256") or "").lower() if isinstance(item, dict) else ""
+                if HEX64.match(sha):
+                    hashes.add(sha)
+        samples = []
+        for sha in sorted(hashes):
+            record = self.sample(sha, scan_yara=False)
+            if record:
+                samples.append(record)
+        return {"evidence_sessions": sessions, "sample_evidence": samples,
+                "session_count": len(sessions), "sample_count": len(samples)}
+
     def sessions(self, hours: int = 168, limit: int = 100) -> dict:
         since = time.time() - hours * 3600
         with self.lock:

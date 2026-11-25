@@ -695,12 +695,15 @@ class Honeypot:
             pass
         return out
 
-    def detail(self, ip: str, hours: int = 2160) -> dict:
+    def detail(self, ip: str, hours: int = 2160, full: bool = False) -> dict:
         """Everything this one address did to the decoys: totals, every login tried, every request."""
         since = time.time() - hours * 3600
         with self.lock:
-            rows = self.db.execute("SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? AND t >= ? "
-                                   "ORDER BY t DESC LIMIT 500", (ip, since)).fetchall()
+            query = ("SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? AND t >= ? "
+                     "ORDER BY t DESC" if full else
+                     "SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? AND t >= ? "
+                     "ORDER BY t DESC LIMIT 500")
+            rows = self.db.execute(query, (ip, since)).fetchall()
         hits = [{"t": t, "service": svc, "port": port, "creds": c, "data": d, "sensor": sn}
                 for t, svc, port, c, d, sn in rows]
         by_svc: dict[str, int] = {}

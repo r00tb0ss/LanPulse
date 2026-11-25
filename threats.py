@@ -886,6 +886,20 @@ class ThreatMonitor:
             out["context"] = self._context(ip, rows, out["intel"], out["tag"])
         return out
 
+    def raw_events(self, ip: str) -> list[dict]:
+        """All retained raw attack records for an on-demand AI investigation; dashboard queries stay capped."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT t, dport, proto, action, lan, service, sensor, detail FROM attacks "
+                "WHERE src = ? ORDER BY t DESC", (ip,)).fetchall()
+        keys = ("t", "dport", "proto", "action", "lan", "service", "sensor", "detail")
+        by_ip = {d["ip"]: d for d in list(self.nm.devices.values())}
+        out = [dict(zip(keys, row)) for row in rows]
+        for event in out:
+            device = by_ip.get(event.get("lan"))
+            event["lan_id"], event["lan_name"] = (device["id"], self.nm.label(device)) if device else ("", "")
+        return out
+
     def _context(self, ip, rows, intel, tag):
         try:
             gn = (intel.get("greynoise") or {}).get("classification", "")
