@@ -551,6 +551,10 @@ IP_AGENT_SYSTEM_PROMPT = (
 )
 
 
+def _ip_join(values, limit: int = 8, width: int = 60) -> str:
+    return ", ".join(_clip(value, width) for value in list(values or [])[:limit])
+
+
 def format_ip_evidence(ip: str, data: dict, context: dict | None = None, known_c2: bool = False) -> str:
     """Build a bounded, secret-free IP evidence brief. Never pass attempted credentials or raw event detail to a model."""
     context = context or {}
@@ -590,13 +594,13 @@ def format_ip_evidence(ip: str, data: dict, context: dict | None = None, known_c
             lines.append(f"  GreyNoise: classification={_clip(gn.get('classification'), 30)}, name={_clip(gn.get('name'), 80)}, noise={gn.get('noise')}.")
         tf = intel.get("threatfox") or {}
         if tf:
-            lines.append(f"  ThreatFox listed: {bool(tf.get('found'))}; malware labels: {_join(tf.get('malware') or [], 80)}; types: {_join(tf.get('types') or [], 60)}.")
+            lines.append(f"  ThreatFox listed: {bool(tf.get('found'))}; malware labels: {_ip_join(tf.get('malware') or [], 8, 80)}; types: {_ip_join(tf.get('types') or [], 8, 60)}.")
         abuse = intel.get("abuse") or {}
         if abuse:
             lines.append(f"  AbuseIPDB score: {abuse.get('score')}%; reports: {abuse.get('reports')}; usage: {_clip(abuse.get('usage'), 100)}.")
         shodan = intel.get("shodan") or {}
         if shodan:
-            lines.append(f"  Shodan ports: {_join(shodan.get('ports') or [], 20)}; CVEs: {_join(shodan.get('vulns') or [], 40)}; tags: {_join(shodan.get('tags') or [], 50)}.")
+            lines.append(f"  Shodan ports: {_ip_join(shodan.get('ports') or [], 12, 20)}; CVEs: {_ip_join(shodan.get('vulns') or [], 8, 40)}; tags: {_ip_join(shodan.get('tags') or [], 8, 50)}.")
         if intel.get("tor") is not None:
             lines.append(f"  Tor exit-list match: {bool(intel.get('tor'))}.")
         if intel.get("errors"):
@@ -613,16 +617,16 @@ def format_ip_evidence(ip: str, data: dict, context: dict | None = None, known_c
     devices = outbound.get("devices") or []
     lines.append(f"Observed outbound connections from LAN devices to this IP in the last {int(outbound.get('hours') or 168)} hours: {len(devices)} devices, {int(outbound.get('total') or 0)} recorded connections.")
     for dev in devices[:8]:
-        lines.append(f"  outbound device: {_clip(dev.get('name'), 80)} ({_clip(dev.get('ip'), 48)}); connections={int(dev.get('count') or 0)}; ports={_join(dev.get('ports') or [], 20)}.")
+        lines.append(f"  outbound device: {_clip(dev.get('name'), 80)} ({_clip(dev.get('ip'), 48)}); connections={int(dev.get('count') or 0)}; ports={_ip_join(dev.get('ports') or [], 8, 20)}.")
     hp = context.get("honeypot") or {}
     if hp:
         lines.append(f"Honeypot decoy activity: {int(hp.get('total') or 0)} sessions; decoy login accepted={bool(hp.get('logged_in'))}; commands recorded={int(hp.get('commands') or 0)}.")
         for session in (hp.get("sessions") or [])[:6]:
-            lines.append(f"  decoy session: {_clip(session.get('proto'), 12)}:{session.get('port')}; login accepted={bool(session.get('logged_in'))}; commands={int(session.get('commands') or 0)}; files={int(session.get('files') or 0)}; tags={_join(session.get('tags') or [], 40)}.")
+            lines.append(f"  decoy session: {_clip(session.get('proto'), 12)}:{session.get('port')}; login accepted={bool(session.get('logged_in'))}; commands={int(session.get('commands') or 0)}; files={int(session.get('files') or 0)}; tags={_ip_join(session.get('tags') or [], 8, 40)}.")
         for sample in (hp.get("samples") or [])[:6]:
             lines.append(f"  captured sample reference: sha256={_clip(sample.get('sha256'), 64)}; name={_clip(sample.get('name'), 80)}. No YARA result is attached to this IP evidence.")
         for campaign in (hp.get("campaigns") or [])[:6]:
-            lines.append(f"  campaign correlation: {_clip(campaign.get('kind'), 40)}={_clip(campaign.get('value'), 100)}; confidence={_clip(campaign.get('confidence'), 20)}; other sources={_join(campaign.get('others') or [], 48)}.")
+            lines.append(f"  campaign correlation: {_clip(campaign.get('kind'), 40)}={_clip(campaign.get('value'), 100)}; confidence={_clip(campaign.get('confidence'), 20)}; other sources={_ip_join(campaign.get('others') or [], 5, 48)}.")
     for neighbour in (context.get("neighbours") or [])[:8]:
         lines.append(f"Same-/24 neighbour also seen: {_clip(neighbour.get('ip'), 48)} ({int(neighbour.get('count') or 0)} records).")
     # Deliberately omit data.credentials, recent[].detail, raw honeypot commands, usernames, and passwords.
