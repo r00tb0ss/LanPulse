@@ -26,8 +26,9 @@ def validate_public_ipv4(value: str) -> str:
         address = ipaddress.ip_address(str(value or "").strip())
     except ValueError:
         raise ValueError("Enter a valid public IPv4 address.") from None
-    if address.version != 4 or not address.is_global:
-        raise ValueError("The target must be a globally routable public IPv4 address.")
+    if (address.version != 4 or not address.is_global or address.is_multicast or
+            address.is_unspecified or address.is_loopback or address.is_link_local or address.is_reserved):
+        raise ValueError("The target must be a globally routable public IPv4 address, not a reserved or multicast address.")
     return str(address)
 
 
