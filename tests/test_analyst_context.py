@@ -237,8 +237,8 @@ class AnalystContext(unittest.TestCase):
             honeypot=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
         )
-        with self.assertRaisesRegex(analyst.EvidenceBudgetExceeded, "No records were omitted or sent"):
-            analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
+        error = analyst.retained_evidence_preflight(nm, "investigate threat and honeypot")
+        self.assertIn("No evidence was truncated or sent", error)
 
     def test_raw_evidence_preflight_allows_complete_pack_within_limit(self):
         nm = types.SimpleNamespace(
@@ -246,7 +246,7 @@ class AnalystContext(unittest.TestCase):
             honeypot=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
             honeyan=types.SimpleNamespace(evidence_size=lambda: {"estimated_bytes": 2 * 1024 * 1024}),
         )
-        analyst._preflight_raw_evidence(nm, ["threats", "honeypot"])
+        self.assertEqual(analyst.retained_evidence_preflight(nm, "investigate threat and honeypot"), "")
 
     def test_ollama_context_guard_uses_utf8_bytes_and_includes_system_prompt(self):
         self.assertEqual(analyst._estimate_tokens("é", "ollama"), 2)
