@@ -69,7 +69,7 @@ import snmpdisc
 from backup_ui import BACKUP_DIR, backup_archive_path, delete_backup_archive, list_backup_archives, prune_backups
 from runtime_telemetry import RuntimeTelemetry
 
-VERSION = "1.39.28"
+VERSION = "1.39.29"
 
 from concurrent.futures import ThreadPoolExecutor as _Pool
 ALERT_POOL = _Pool(max_workers=4, thread_name_prefix="lanpulse-alert")   # alerts can be raised from any thread, so they don't depend on the event loop
@@ -1785,6 +1785,34 @@ def build_app(nm: LanPulse) -> FastAPI:
                 nm.openvas._save()
             log.info("Authorized public OpenVAS scan requested for %s by %s", target, actor)
         return {"ok": True, "scanner": "openvas", "target": target, "status": "Requested"}
+
+    @app.post("/api/scans/authorized-public/delete")
+    async def authorized_public_scans_delete(request: Request):
+        """Delete finished public-scan history. Queued and running scans are never deleted."""
+        if nm.args.demo:
+            return JSONResponse({"error": "Active scans are disabled in demo mode."}, 400)
+        if not nm.auth.enabled:
+            return JSONResponse({"error": "Set a LanPulse dashboard login before managing public scans."}, 403)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "Expected all_finished or a list of items."}, 400)
+        if body.get("all_finished") is True:
+            nmap_ids = ov_ips = None
+        else:
+            items = body.get("items")
+            if not isinstance(items, list) or not items or len(items) > 200 or not all(isinstance(i, dict) for i in items):
+                return JSONResponse({"error": "Choose scans to delete."}, 400)
+            nmap_ids = {str(i.get("key"))[:40] for i in items if i.get("scanner") == "nmap"}
+            ov_ips = {str(i.get("key"))[:45] for i in items if i.get("scanner") == "openvas"}
+        actor = nm.auth.verify(request.cookies.get("nm_session")) or nm.auth.user or "dashboard-admin"
+        async with public_scan_lock:
+            removed = await asyncio.to_thread(nm.public_scans.delete, nmap_ids)
+            removed += await asyncio.to_thread(nm.openvas.delete_public, ov_ips)
+        log.info("Authorized public scan history: %d finished scan(s) deleted by %s", removed, actor)
+        return {"ok": True, "removed": removed}
 
     @app.get("/api/scans/authorized-public")
     async def authorized_public_scans():

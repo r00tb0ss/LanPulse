@@ -1,4 +1,4 @@
-/* Authorized public-target scanning (Nmap / OpenVAS). Lives on the Vulns tab, separate from attacker investigation. */
+/* Authorized public-target scanning (Nmap / OpenVAS). Lives on the "Public scan" sub-tab of Threats, separate from attacker investigation. */
 
 let publicScanPoll = null;
 async function refreshAuthorizedPublicScans() {
@@ -11,7 +11,7 @@ async function refreshAuthorizedPublicScans() {
     return;
   }
   const rows = [...(data.nmap || []), ...(data.openvas || [])]
-    .sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 8);
+    .sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 30);
   if (!rows.length) {
     box.textContent = "No authorized public scans yet.";
     if (publicScanPoll) clearInterval(publicScanPoll);
@@ -22,6 +22,7 @@ async function refreshAuthorizedPublicScans() {
   if (active && !publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
   if (!active && publicScanPoll) { clearInterval(publicScanPoll); publicScanPoll = null; }
   box.innerHTML = rows.map((s) => {
+    const key = s.scanner === "nmap" ? s.id : (s.target || s.ip);
     const scanner = (s.scanner || "openvas").toUpperCase();
     const terminal = ["Done","Failed","Interrupted"].includes(s.status);
     const progress = Math.max(0, Math.min(100, Number(s.progress) || 0));
@@ -55,7 +56,8 @@ async function refreshAuthorizedPublicScans() {
       : "";
     const started = s.started ? new Date(s.started * 1000).toLocaleString() : "";
     return '<div style="padding:11px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>' +
-      esc(s.target || s.ip || "Unknown target") + '</b><span class="badge">' + scanner + '</span></div>' +
+      esc(s.target || s.ip || "Unknown target") + '</b><span class="badge">' + scanner + '</span>' + (terminal ? '<button class="btn sm ghost ps-del" data-scanner="' + esc(s.scanner || "openvas") +
+      '" data-key="' + esc(key || "") + '" title="Delete this scan from history" aria-label="Delete this scan"><i class="fa-solid fa-trash"></i></button>' : "") + '</div>' +
       '<div class="muted" style="font-size:11px;margin:4px 0">' + state +
       (terminal && s.status === "Done" ? ' · ' + esc(findings) : "") + (started ? ' · ' + esc(started) : "") + '</div>' +
       progressHtml + (s.summary ? '<div class="muted" style="margin-top:6px">' + esc(s.summary) + '</div>' : "") +
@@ -83,6 +85,27 @@ async function refreshAuthorizedPublicScans() {
       if (!publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
     } else toast(result?.error || "The scan could not be started");
   };
-  const prev = viewHooks.vulns;
-  viewHooks.vulns = () => { if (prev) prev(); refreshAuthorizedPublicScans(); };
+  const pane = $("threatView");
+  const showSub = (sub) => {
+    pane.classList.toggle("ps-mode", sub === "scan");
+    document.querySelectorAll("#threatSubTabs [data-tsub]").forEach((b) => {
+      b.classList.toggle("on", b.dataset.tsub === sub); b.setAttribute("aria-selected", String(b.dataset.tsub === sub));
+    });
+    if (sub === "scan") refreshAuthorizedPublicScans();
+    else if (typeof tChart !== "undefined" && tChart) setTimeout(() => tChart.resize(), 0);
+  };
+  $("threatSubTabs").onclick = (e) => { const b = e.target.closest("[data-tsub]"); if (b) showSub(b.dataset.tsub); };
+  const remove = async (payload, what) => {
+    if (!window.confirm("Delete " + what + " from the public scan history? Running scans are never deleted.")) return;
+    const r = await api("/api/scans/authorized-public/delete", "POST", payload);
+    if (r && r.ok) { toast(r.removed + " scan" + (r.removed === 1 ? "" : "s") + " deleted"); refreshAuthorizedPublicScans(); }
+    else toast(r?.error || "Could not delete");
+  };
+  $("publicScanStatus").addEventListener("click", (e) => {
+    const b = e.target.closest(".ps-del"); if (!b) return;
+    remove({items: [{scanner: b.dataset.scanner, key: b.dataset.key}]}, "this scan");
+  });
+  $("bPublicScanClear").onclick = () => remove({all_finished: true}, "all finished scans");
+  const prev = viewHooks.threats;
+  viewHooks.threats = () => { showSub("attacks"); if (prev) prev(); };   // opening Threats always starts on the map
 })();

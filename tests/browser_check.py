@@ -283,6 +283,29 @@ def main() -> int:
                     if shown < 200:
                         problems.append(f"[{vid}] the page looks blank ({shown} characters of text)")
                     page.screenshot(path=os.path.join(ROOT, f"browser-{vid}.png"))
+                # Threats has a "Public scan" sub-tab; it must open, fit the phone, and return to the map.
+                current["view"] = "phone public scan tab"
+                page.goto(BASE, wait_until="domcontentloaded")
+                page.wait_for_selector("#vThreat", timeout=20000)
+                page.evaluate("document.getElementById('vThreat').click()")
+                page.wait_for_timeout(800)
+                page.evaluate("document.querySelector('#threatSubTabs [data-tsub=scan]').click()")
+                page.wait_for_timeout(500)
+                scan = page.evaluate("""() => {
+                  const card = document.getElementById('publicScanCard');
+                  const r = card.getBoundingClientRect(), b = document.getElementById('bPublicScan').getBoundingClientRect();
+                  return {shown: r.width > 0 && r.height > 0, cardW: r.width, btnW: b.width, vw: window.innerWidth,
+                          mapHidden: document.getElementById('mapCard').getBoundingClientRect().height === 0};
+                }""")
+                if not scan["shown"] or not scan["mapHidden"]:
+                    problems.append(f"[phone public scan tab] the Public scan sub-tab did not open cleanly ({scan})")
+                elif scan["cardW"] > scan["vw"] or scan["btnW"] < 120:
+                    problems.append(f"[phone public scan tab] the scan card does not fit the phone screen ({scan})")
+                page.evaluate("document.querySelector('#threatSubTabs [data-tsub=attacks]').click()")
+                page.wait_for_timeout(500)
+                back = page.evaluate("() => document.getElementById('mapCard').getBoundingClientRect().height")
+                if back < 100:
+                    problems.append("[phone public scan tab] the attack map did not come back after leaving Public scan")
                 # Phone layout: a device card with many tags must keep a readable name column (it once became one letter wide).
                 page.set_viewport_size({"width": 390, "height": 800})
                 current["view"] = "phone vulns"
@@ -290,16 +313,6 @@ def main() -> int:
                 page.wait_for_selector("#vVuln", timeout=20000)
                 page.evaluate("document.getElementById('vVuln').click()")
                 page.wait_for_timeout(1500)
-                scan = page.evaluate("""() => {
-                  const card = document.getElementById('publicScanCard');
-                  if (!card) return null;
-                  const r = card.getBoundingClientRect(), b = document.getElementById('bPublicScan').getBoundingClientRect();
-                  return {inVulns: !!card.closest('#vulnView'), cardW: r.width, btnW: b.width, vw: window.innerWidth};
-                }""")
-                if not scan or not scan["inVulns"]:
-                    problems.append("[phone vulns] the authorized public scan card is missing from the Vulns tab")
-                elif scan["cardW"] > scan["vw"] or scan["btnW"] < 120:
-                    problems.append(f"[phone vulns] the public scan card does not fit the phone screen ({scan})")
                 widths = page.evaluate("""() => {
                   const host = document.getElementById('vulnFix'); const dev = document.getElementById('vulnDevs');
                   host.innerHTML = `<div class="fixdev open"><button class="fixdev-head"><span class="score-chip">10.0</span>
