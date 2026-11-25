@@ -163,7 +163,7 @@ def check_pan_hides_then_restores(page, problems):
     page.wait_for_timeout(3000)
     page.evaluate("""() => {
       if (!tChart) return;
-      tLayer = "traffic";
+      tLayer = "both";
       tSummary = {
         countries: [{country: "United States", count: 5}],
         home: {lat: 38, lon: -96, city: "Home", country: "US"},
@@ -172,7 +172,7 @@ def check_pan_hides_then_restores(page, problems):
       };
       flowSummary = {
         countries: [{country: "Japan", count: 4}],
-        dests: [{ip: "203.0.113.8", lat: 35, lon: 139, lon: 139, iso: "JP", org: "Test network",
+        dests: [{ip: "203.0.113.8", lat: 35, lon: 139, iso: "JP", org: "Test network",
           count: 4, bad: false}],
         recent: []
       };
