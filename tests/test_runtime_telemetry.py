@@ -45,6 +45,14 @@ class RuntimeTelemetryTests(unittest.TestCase):
         self.assertEqual(second, {"accepted": 0, "duplicates": 1})
         self.assertEqual(len(self.store.events_for_sample(self.sha)), 1)
 
+    def test_ai_can_retrieve_all_sample_events_beyond_dashboard_limit(self):
+        now = time.time()
+        events = [self.event(run_id=f"run-{i}", timestamp=now - i) for i in range(501)]
+        for start in range(0, len(events), 100):
+            self.store.ingest("isolated-lab-01", events[start:start + 100])
+        self.assertEqual(len(self.store.events_for_sample(self.sha, limit=500)), 500)
+        self.assertEqual(len(self.store.events_for_sample(self.sha, limit=None)), 501)
+
     def test_rejects_bad_hash_and_unknown_event(self):
         with self.assertRaises(ValueError):
             self.store.validate_event(self.event(sample_sha256="not-a-hash"))

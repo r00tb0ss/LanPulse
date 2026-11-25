@@ -239,12 +239,18 @@ class RuntimeTelemetry:
         sha = str(sample_sha256 or "").lower()
         if not HEX64.fullmatch(sha):
             raise ValueError("Invalid sample SHA-256.")
-        limit = max(1, min(int(limit), 500))
         with self.lock:
-            rows = self.db.execute("""
-                SELECT sensor_id,run_id,observed_at,event_type AS type,hostname,destination_ip,port,protocol
-                FROM runtime_events WHERE sample_sha256=? ORDER BY observed_at DESC LIMIT ?
-            """, (sha, limit)).fetchall()
+            if limit is None:
+                rows = self.db.execute("""
+                    SELECT sensor_id,run_id,observed_at,event_type AS type,hostname,destination_ip,port,protocol
+                    FROM runtime_events WHERE sample_sha256=? ORDER BY observed_at DESC
+                """, (sha,)).fetchall()
+            else:
+                limit = max(1, min(int(limit), 500))
+                rows = self.db.execute("""
+                    SELECT sensor_id,run_id,observed_at,event_type AS type,hostname,destination_ip,port,protocol
+                    FROM runtime_events WHERE sample_sha256=? ORDER BY observed_at DESC LIMIT ?
+                """, (sha, limit)).fetchall()
         return [dict(row) for row in rows]
 
     def close(self):

@@ -1405,7 +1405,7 @@ class HoneyAnalysis:
                 samples.append(record)
             if telemetry:
                 try:
-                    runtime[sha] = telemetry.events_for_sample(sha, limit=500)
+                    runtime[sha] = telemetry.events_for_sample(sha, limit=None)
                 except Exception:
                     log.debug("runtime evidence unavailable for %s", sha, exc_info=True)
         return {"session_records": sessions, "session_count": len(sessions),
@@ -1710,7 +1710,7 @@ class HoneyAnalysis:
         telemetry = getattr(self.nm, "runtime_telemetry", None)
         if telemetry:
             try:
-                runtime = telemetry.events_for_sample(sha, limit=500)
+                runtime = telemetry.events_for_sample(sha, limit=None)
             except Exception:
                 log.debug("runtime sample evidence unavailable", exc_info=True)
         related_campaigns = []
