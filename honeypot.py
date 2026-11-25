@@ -699,9 +699,9 @@ class Honeypot:
         """Estimate retained hit payload size without materializing the rows."""
         with self.lock:
             count, raw_bytes = self.db.execute(
-                "SELECT COUNT(*), COALESCE(SUM(LENGTH(COALESCE(ip,'')) + LENGTH(COALESCE(service,'')) + "
-                "LENGTH(COALESCE(creds,'')) + LENGTH(COALESCE(data,'')) + "
-                "LENGTH(COALESCE(sensor,'')) + 192), 0) FROM hits"
+                "SELECT COUNT(*), COALESCE(SUM(LENGTH(CAST(COALESCE(ip,'') AS BLOB)) + LENGTH(CAST(COALESCE(service,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(creds,'') AS BLOB)) + LENGTH(CAST(COALESCE(data,'') AS BLOB)) + "
+                "LENGTH(CAST(COALESCE(sensor,'') AS BLOB)) + 192), 0) FROM hits"
             ).fetchone()
         return {"records": int(count or 0), "estimated_bytes": int(raw_bytes or 0)}
 
