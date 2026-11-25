@@ -816,6 +816,9 @@ function ipAiHtml(d) {
 }
 
 async function runIpAi(d, question) {
+  // The server independently blocks hosted evidence until consent is saved. Ask before
+  // calling the focused-IP endpoint too, not only from the main analyst drawer.
+  if (window.lpEnsureCloudEvidenceConsent && !(await window.lpEnsureCloudEvidenceConsent())) return;
   if (ipAiState.ip !== d.ip) ipAiState = {ip: d.ip, loading: false, answer: "", error: "", provider: "", model: "", local: false};
   ipAiState.loading = true;
   ipAiState.error = "";
