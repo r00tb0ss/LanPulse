@@ -99,6 +99,24 @@ def is_local(url: str) -> bool:
         return "." not in host or host.endswith((".local", ".lan", ".home", ".internal", ".home.arpa"))
 
 
+def cloud_evidence_consent_required(cfg: dict) -> bool:
+    """Require explicit approval before retained raw evidence leaves this network."""
+    return (cfg.get("provider") in ("openai", "anthropic")
+            and not is_local(cfg.get("base_url", ""))
+            and not bool(cfg.get("cloud_evidence_consent", False)))
+
+
+def _cloud_consent_error(cfg: dict) -> dict:
+    return {
+        "error": ("This question would send complete retained LanPulse evidence to the hosted "
+                  f"{cfg.get('provider')} provider, including attempted honeypot credentials, raw "
+                  "session/event records, and LAN device names and details. No evidence was sent. "
+                  "Confirm cloud evidence sharing in the analyst first."),
+        "consent_required": True,
+        "provider": cfg.get("provider"),
+    }
+
+
 # --------------------------------------------------------------------------- provider calls
 def _http_json(url: str, payload: dict, headers: dict, timeout: int):
     data = json.dumps(payload).encode()
@@ -598,6 +616,8 @@ def ask(nm, question: str) -> dict:
             "enter the address manually, and confirm that you own or are explicitly authorized to test it. "
             "No scan was started. For passive analysis, ask LanPulse to investigate this IP without requesting a scan."
         )}
+    if cloud_evidence_consent_required(cfg):
+        return _cloud_consent_error(cfg)
     if len(ip_targets) == 1 and not any(word in q.lower() for word in OVERVIEW_WORDS):
         # Route a focused IP question to the per-IP evidence collector. Do not load the
         # entire retained threat database (or unrelated honeypot history) into Ollama.
@@ -841,6 +861,8 @@ def investigate_ip(nm, ip: str, question: str = "") -> dict:
     cfg = _cfg(nm)
     if not cfg["enabled"]:
         return {"error": "The AI analyst is turned off. Enable it in Settings and choose a provider."}
+    if cloud_evidence_consent_required(cfg):
+        return _cloud_consent_error(cfg)
     try:
         import ipaddress
         ip = str(ipaddress.ip_address(ip))
@@ -965,6 +987,8 @@ def investigate_sample(nm, sha256: str, question: str = "") -> dict:
     cfg = _cfg(nm)
     if not cfg["enabled"]:
         return {"error": "The AI analyst is turned off. Enable it in Settings and choose a provider."}
+    if cloud_evidence_consent_required(cfg):
+        return _cloud_consent_error(cfg)
     sha = str(sha256 or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", sha):
         return {"error": "Not a valid SHA-256 sample hash."}
@@ -1003,4 +1027,6 @@ def status(nm) -> dict:
     cfg = _cfg(nm)
     return {"enabled": cfg["enabled"], "provider": cfg["provider"], "model": cfg["model"],
             "configured": bool(cfg["base_url"]), "suggested": SUGGESTED,
-            "local": is_local(cfg["base_url"])}
+            "local": is_local(cfg["base_url"]),
+            "cloud_evidence_consent": bool(cfg.get("cloud_evidence_consent", False)),
+            "cloud_consent_required": cloud_evidence_consent_required(cfg)}
