@@ -137,6 +137,24 @@ class AnalystContext(unittest.TestCase):
         answer = "A file was transferred. Execution was not confirmed."
         self.assertEqual(analyst.validate_attack_ids(answer, ""), answer)
 
+    def test_ip_evidence_chunking_preserves_every_record_and_long_text_fragment(self):
+        raw = {
+            "raw_attack_events": [{"id": i, "detail": "event-" + str(i)} for i in range(12)],
+            "built_in_honeypot_records": {"hits": [{"id": "hit-" + str(i)} for i in range(5)]},
+            "long_value": "x" * 3500,
+        }
+        chunks = analyst._ip_evidence_chunks(raw, max_chars=2000)
+        records = [record for chunk in chunks for record in __import__("json").loads(chunk)["records"]]
+        event_ids = {record["value"]["id"] for record in records
+                     if record.get("path", "").startswith("raw_attack_events[") and isinstance(record.get("value"), dict)}
+        hit_ids = {record["value"]["id"] for record in records
+                   if record.get("path", "").startswith("built_in_honeypot_records.hits[") and isinstance(record.get("value"), dict)}
+        fragments = sorted((record for record in records if record.get("path") == "long_value"),
+                           key=lambda record: record["offset"])
+        self.assertEqual(event_ids, {i for i in range(12)})
+        self.assertEqual(hit_ids, {"hit-" + str(i) for i in range(5)})
+        self.assertEqual("".join(record["text_fragment"] for record in fragments), raw["long_value"])
+
     def test_single_ip_question_uses_focused_ip_evidence_not_global_context(self):
         nm = fake_nm()
         nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
