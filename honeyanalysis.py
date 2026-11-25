@@ -1361,11 +1361,10 @@ class HoneyAnalysis:
 
     def ip_evidence(self, ip: str, hours: int = 2160) -> dict:
         """Complete stored Cowrie evidence for an AI investigation; not used by the Threat Map UI."""
-        since = time.time() - max(1, min(int(hours), 2160)) * 3600
         with self.lock:
             rows = self.db.execute(
-                "SELECT id, files FROM sessions WHERE ip = ? AND start >= ? ORDER BY start DESC",
-                (ip, since)).fetchall()
+                "SELECT id, files FROM sessions WHERE ip = ? ORDER BY start DESC",
+                (ip,)).fetchall()
         sessions = []
         hashes = set()
         for sid, files_json in rows:
@@ -1383,6 +1382,34 @@ class HoneyAnalysis:
                 samples.append(record)
         return {"evidence_sessions": sessions, "sample_evidence": samples,
                 "session_count": len(sessions), "sample_count": len(samples)}
+
+    def evidence(self) -> dict:
+        """All retained Cowrie session records and cached sample/runtime evidence for explicit AI analysis."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, files FROM sessions ORDER BY start DESC").fetchall()
+        sessions, hashes = [], set()
+        for sid, files_json in rows:
+            record = self.session(sid)
+            if record:
+                sessions.append(record)
+            for item in json.loads(files_json or "[]"):
+                sha = str(item.get("sha256") or "").lower() if isinstance(item, dict) else ""
+                if HEX64.fullmatch(sha):
+                    hashes.add(sha)
+        samples, runtime = [], {}
+        telemetry = getattr(self.nm, "runtime_telemetry", None)
+        for sha in sorted(hashes):
+            record = self.sample(sha, scan_yara=False)
+            if record:
+                samples.append(record)
+            if telemetry:
+                try:
+                    runtime[sha] = telemetry.events_for_sample(sha, limit=500)
+                except Exception:
+                    log.debug("runtime evidence unavailable for %s", sha, exc_info=True)
+        return {"session_records": sessions, "session_count": len(sessions),
+                "samples": samples, "runtime_events_by_sample": runtime}
 
     def sessions(self, hours: int = 168, limit: int = 100) -> dict:
         since = time.time() - hours * 3600

@@ -695,15 +695,23 @@ class Honeypot:
             pass
         return out
 
+    def evidence(self) -> list[dict]:
+        """All retained built-in honeypot hit records; called only for explicit AI analysis."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT t, ip, service, port, internal, creds, data, sensor FROM hits ORDER BY t DESC"
+            ).fetchall()
+        keys = ("t", "ip", "service", "port", "internal", "creds", "data", "sensor")
+        return [dict(zip(keys, row)) for row in rows]
+
     def detail(self, ip: str, hours: int = 2160, full: bool = False) -> dict:
         """Everything this one address did to the decoys: totals, every login tried, every request."""
         since = time.time() - hours * 3600
         with self.lock:
-            query = ("SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? AND t >= ? "
-                     "ORDER BY t DESC" if full else
+            query = ("SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? ORDER BY t DESC" if full else
                      "SELECT t, service, port, creds, data, sensor FROM hits WHERE ip = ? AND t >= ? "
                      "ORDER BY t DESC LIMIT 500")
-            rows = self.db.execute(query, (ip, since)).fetchall()
+            rows = self.db.execute(query, (ip,) if full else (ip, since)).fetchall()
         hits = [{"t": t, "service": svc, "port": port, "creds": c, "data": d, "sensor": sn}
                 for t, svc, port, c, d, sn in rows]
         by_svc: dict[str, int] = {}

