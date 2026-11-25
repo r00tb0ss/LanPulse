@@ -40,6 +40,8 @@ class PublicScans:
     """Small persistent queue for bounded Nmap scans of manually approved public IPs."""
 
     ACTIVE = {"Requested", "Running"}
+    MAX_HISTORY = 100
+    TARGET_COOLDOWN_SECONDS = 3600
 
     def __init__(self, data_dir: str | Path):
         self.path = Path(data_dir) / "authorized-public-scans.json"
@@ -66,12 +68,24 @@ class PublicScans:
         except OSError:
             log.exception("Could not persist authorized public scan history")
 
+    def _prune_history_locked(self, now: int):
+        """Bound persisted history while never pruning a queued or running scan."""
+        terminal = sorted(
+            ((key, row) for key, row in self.scans.items() if row.get("status") not in self.ACTIVE),
+            key=lambda item: item[1].get("started", 0), reverse=True,
+        )
+        keep = {key for key, _ in terminal[:self.MAX_HISTORY]}
+        keep.update(key for key, row in self.scans.items() if row.get("status") in self.ACTIVE)
+        if len(keep) != len(self.scans):
+            self.scans = {key: row for key, row in self.scans.items() if key in keep}
+            self._save()
+
     def list(self) -> list[dict]:
         with self.lock:
             rows = [dict(v) for v in self.scans.values()]
         return sorted(rows, key=lambda x: x.get("started", 0), reverse=True)[:30]
 
-    def start_nmap(self, target: str) -> tuple[dict | None, str]:
+    def start_nmap(self, target: str, authorized_by: str = "dashboard-admin") -> tuple[dict | None, str]:
         try:
             target = validate_public_ipv4(target)
         except ValueError as exc:
@@ -79,13 +93,23 @@ class PublicScans:
         if not shutil.which("nmap"):
             return None, "Nmap is not installed on this LanPulse server."
         with self.lock:
+            now = int(time.time())
+            self._prune_history_locked(now)
             if any(s.get("status") in self.ACTIVE for s in self.scans.values()):
                 return None, "A public IP scan is already queued or running. Wait for it to finish first."
+            previous = max((s.get("started", 0) for s in self.scans.values()
+                            if s.get("target") == target), default=0)
+            wait = self.TARGET_COOLDOWN_SECONDS - (now - previous)
+            if previous and wait > 0:
+                return None, f"This target was scanned recently. Try again in about {max(1, (wait + 59) // 60)} minute(s)."
             scan_id = uuid.uuid4().hex[:12]
             record = {"id": scan_id, "target": target, "scanner": "nmap", "scope": "top-1000-tcp-ports",
-                      "status": "Requested", "progress": 0, "started": int(time.time()),
-                      "finished": 0, "ports": [], "host_state": "unknown", "error": "", "authorized": True}
+                      "status": "Requested", "progress": 0, "started": now,
+                      "finished": 0, "ports": [], "host_state": "unknown", "error": "", "authorized": True,
+                      "authorized_by": str(authorized_by or "dashboard-admin")[:80], "authorized_at": now,
+                      "authorization_attestation": "User confirmed ownership or explicit authorization in dashboard"}
             self.scans[scan_id] = record
+            self._prune_history_locked(now)
             self._save()
         self.pool.submit(self._run_nmap, scan_id, target)
         return dict(record), ""
