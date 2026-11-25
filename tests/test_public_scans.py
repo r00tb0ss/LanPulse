@@ -29,6 +29,9 @@ class PublicScanQueue(unittest.TestCase):
                         self.assertFalse(error)
                         self.assertEqual(record["status"], "Requested")
                         self.assertEqual(record["scope"], "top-1000-tcp-ports")
+                        self.assertEqual(record["authorized_by"], "dashboard-admin")
+                        self.assertEqual(record["authorized_at"], record["started"])
+                        self.assertTrue(record["authorization_attestation"])
                         self.assertEqual(submit.call_count, 1)
                         duplicate, error = scans.start_nmap("1.1.1.1")
                         self.assertIsNone(duplicate)
@@ -36,6 +39,36 @@ class PublicScanQueue(unittest.TestCase):
                 saved = json.loads((Path(tmp) / "authorized-public-scans.json").read_text())
                 self.assertEqual(len(saved), 1)
                 self.assertEqual(next(iter(saved.values()))["target"], "8.8.8.8")
+            finally:
+                scans.close()
+
+    def test_same_target_cannot_be_rescanned_during_cooldown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scans = PublicScans(tmp)
+            try:
+                with patch("public_scans.shutil.which", return_value="/usr/bin/nmap"), \\
+                     patch("public_scans.time.time", return_value=1_800_000_000):
+                    first, error = scans.start_nmap("8.8.8.8", "operator")
+                    self.assertFalse(error)
+                    second, error = scans.start_nmap("8.8.8.8", "operator")
+                    self.assertIsNone(second)
+                    self.assertIn("scanned recently", error)
+            finally:
+                scans.close()
+
+    def test_history_is_bounded_without_pruning_active_scans(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scans = PublicScans(tmp)
+            try:
+                now = 1_800_000_000
+                scans.scans = {str(i): {"id": str(i), "status": "Done", "started": now - i}
+                               for i in range(scans.MAX_HISTORY + 25)}
+                scans.scans["active"] = {"id": "active", "status": "Running", "started": now}
+                with patch("public_scans.time.time", return_value=now):
+                    with scans.lock:
+                        scans._prune_history_locked(now)
+                self.assertEqual(len(scans.scans), scans.MAX_HISTORY + 1)
+                self.assertIn("active", scans.scans)
             finally:
                 scans.close()
 
