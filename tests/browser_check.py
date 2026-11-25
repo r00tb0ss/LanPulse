@@ -290,6 +290,16 @@ def main() -> int:
                 page.wait_for_selector("#vVuln", timeout=20000)
                 page.evaluate("document.getElementById('vVuln').click()")
                 page.wait_for_timeout(1500)
+                scan = page.evaluate("""() => {
+                  const card = document.getElementById('publicScanCard');
+                  if (!card) return null;
+                  const r = card.getBoundingClientRect(), b = document.getElementById('bPublicScan').getBoundingClientRect();
+                  return {inVulns: !!card.closest('#vulnView'), cardW: r.width, btnW: b.width, vw: window.innerWidth};
+                }""")
+                if not scan or not scan["inVulns"]:
+                    problems.append("[phone vulns] the authorized public scan card is missing from the Vulns tab")
+                elif scan["cardW"] > scan["vw"] or scan["btnW"] < 120:
+                    problems.append(f"[phone vulns] the public scan card does not fit the phone screen ({scan})")
                 widths = page.evaluate("""() => {
                   const host = document.getElementById('vulnFix'); const dev = document.getElementById('vulnDevs');
                   host.innerHTML = `<div class="fixdev open"><button class="fixdev-head"><span class="score-chip">10.0</span>

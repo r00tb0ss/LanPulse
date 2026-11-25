@@ -708,69 +708,6 @@ function addLocalEvent(e) {
   toast(`${e.title}: ${e.src_name || e.src || e.mac}`);
 }
 
-let publicScanPoll = null;
-async function refreshAuthorizedPublicScans() {
-  const box = $("publicScanStatus");
-  if (!box) { if (publicScanPoll) clearInterval(publicScanPoll); publicScanPoll = null; return; }
-  const data = await api("/api/scans/authorized-public", "GET");
-  if (!data) {
-    box.innerHTML = '<div class="finding"><span>Could not refresh scan status. LanPulse will retry automatically.</span></div>';
-    if (!publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 5000);
-    return;
-  }
-  const rows = [...(data.nmap || []), ...(data.openvas || [])]
-    .sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 8);
-  if (!rows.length) {
-    box.textContent = "No authorized public scans yet.";
-    if (publicScanPoll) clearInterval(publicScanPoll);
-    publicScanPoll = null;
-    return;
-  }
-  const active = rows.some((s) => ["Requested","Queued","Running","New"].includes(s.status));
-  if (active && !publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
-  if (!active && publicScanPoll) { clearInterval(publicScanPoll); publicScanPoll = null; }
-  box.innerHTML = rows.map((s) => {
-    const scanner = (s.scanner || "openvas").toUpperCase();
-    const terminal = ["Done","Failed","Interrupted"].includes(s.status);
-    const progress = Math.max(0, Math.min(100, Number(s.progress) || 0));
-    const findings = s.scanner === "openvas" ? (s.count || 0) + " findings" :
-      (s.host_state === "down" ? "target did not respond" : ((s.ports || []).length + " open TCP ports"));
-    const error = s.error ? '<div style="color:var(--red);margin-top:6px;overflow-wrap:anywhere">' + esc(s.error) + '</div>' : "";
-    const ports = (s.ports || []);
-    const details = s.status === "Done" && s.scanner === "nmap"
-      ? (ports.length
-        ? '<div style="margin-top:8px"><b>Open ports and detected services</b><ul style="margin:5px 0 0;padding-left:19px">' +
-          ports.map((p) => '<li><code>' + esc(p.port + "/" + p.protocol) + '</code> · ' + esc(p.service || "unknown service") +
-            (p.product ? ' · ' + esc(p.product) : "") + (p.version ? ' ' + esc(p.version) : "") + '</li>').join("") +
-          '</ul></div>'
-        : (s.host_state === "down"
-          ? '<div class="finding" style="margin-top:7px">Nmap could not confirm that the target was reachable. No port findings can be reported for this scan.</div>'
-          : s.host_state === "up"
-            ? '<div class="ok-line" style="margin-top:7px">Target responded. No open TCP ports were found in the top 1,000 scanned ports.</div>'
-            : '<div class="finding" style="margin-top:7px">Scan finished, but target reachability was not confirmed. No open TCP ports were reported.</div>'))
-      : s.status === "Done" && s.results?.length
-        ? '<div class="muted" style="padding:7px 0">' + s.results.slice(0, 8).map((f) =>
-            esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
-        : "";
-    const phase = s.phase || (s.status === "Requested" || s.status === "Queued" ? "Waiting for the scan worker" :
-      s.status === "Running" ? "Scanning target and identifying services" : "");
-    const state = terminal ? esc(s.status) : esc(s.status || "Queued");
-    const progressHtml = !terminal
-      ? '<div style="height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:7px 0 5px">' +
-        '<div style="height:100%;width:' + (progress || (s.status === "Requested" ? 4 : 8)) +
-        '%;background:var(--accent);border-radius:99px;transition:width .3s"></div></div>' +
-        '<div class="muted" style="font-size:11px">' + (progress ? progress + "% · " : "") + esc(phase) + '</div>'
-      : "";
-    const started = s.started ? new Date(s.started * 1000).toLocaleString() : "";
-    return '<div style="padding:11px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>' +
-      esc(s.target || s.ip || "Unknown target") + '</b><span class="badge">' + scanner + '</span></div>' +
-      '<div class="muted" style="font-size:11px;margin:4px 0">' + state +
-      (terminal && s.status === "Done" ? ' · ' + esc(findings) : "") + (started ? ' · ' + esc(started) : "") + '</div>' +
-      progressHtml + (s.summary ? '<div class="muted" style="margin-top:6px">' + esc(s.summary) + '</div>' : "") +
-      error + details + '</div>';
-  }).join("");
-}
-
 async function onThreatSummary(s) {
   if (tHours === s.hours) { renderThreats(s, false); return; }
   if (Date.now() - lastRangeFetch < 10000) return;
@@ -947,23 +884,6 @@ function renderIpPanel(d) {
 
     ${ipContextHtml(d)}
     ${ipAiHtml(d)}
-    <div class="p-sec public-scan">
-      <h4><i class="fa-solid fa-globe"></i> Authorized public-target scan</h4>
-      <p class="muted" style="font-size:12px;margin:4px 0 10px">Separate workflow for a public IPv4 address you own or are explicitly authorized to test. The attacker IP above is never prefilled or scanned automatically.</p>
-      <label class="muted" for="publicScanTarget" style="display:block;font-size:11px;margin-bottom:4px">Public IPv4 target</label>
-      <input id="publicScanTarget" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Public IPv4 address" style="width:100%;margin-bottom:7px">
-      <label class="muted" for="publicScanEngine" style="display:block;font-size:11px;margin:2px 0 4px">Scanner</label>
-      <select id="publicScanEngine" style="width:100%;margin-bottom:7px">
-        <option value="nmap">Nmap · top 1,000 TCP ports</option>
-        <option value="openvas">OpenVAS · Full and Fast</option>
-      </select>
-      <label class="chk-line" style="display:flex;gap:8px;align-items:flex-start;margin:7px 0">
-        <input type="checkbox" id="publicScanAuthorized" style="margin-top:3px">
-        <span>I own this public IP or have explicit authorization to scan it.</span>
-      </label>
-      <button class="btn sm" id="bPublicScan"><i class="fa-solid fa-radar"></i> Start authorized scan</button>
-      <div id="publicScanStatus" class="muted" style="font-size:11px;margin-top:9px">Scan history loads when available.</div>
-    </div>
     <div class="p-sec"><h4>What it tried</h4>
       <div class="chips-wrap">${d.ports.map((p) => `<span class="pchip">${esc(p.service)} :${p.port ?? "—"}<b>×${fmtN(p.count)}</b></span>`).join("") || '<span class="muted">—</span>'}</div>
       ${(() => {            // one list: service, what it sent or tried, and how many times (identical lines are added up)
@@ -1047,25 +967,6 @@ function renderIpPanel(d) {
   };
   $("bCopyRule").onclick = () => copyText($("ruleText"));
   $("bIpAiRun").onclick = () => runIpAi(d, $("ipAiQuestion").value.trim());
-  refreshAuthorizedPublicScans();
-  $("bPublicScan").onclick = async () => {
-    const target = $("publicScanTarget").value.trim();
-    const scanner = $("publicScanEngine").value;
-    const authorized = $("publicScanAuthorized").checked;
-    if (!authorized) { toast("Confirm ownership or explicit authorization first"); return; }
-    const label = scanner === "nmap" ? "Nmap top-1,000-port scan" : "OpenVAS Full and Fast assessment";
-    if (!window.confirm("Start " + label + " against " + target + "? This sends active scan traffic to that public IP. Only proceed if you are authorized to test it.")) return;
-    const button = $("bPublicScan");
-    button.disabled = true; button.textContent = "Starting scan…";
-    const result = await api("/api/scans/authorized-public", "POST", {target, scanner, authorized: true});
-    button.disabled = false; button.innerHTML = '<i class="fa-solid fa-radar"></i> Start authorized scan';
-    if (result && result.ok) {
-      toast(label + " started for " + target);
-      $("publicScanStatus").textContent = "Scan accepted for " + target + ". Waiting for Nmap to start…";
-      refreshAuthorizedPublicScans();
-      if (!publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
-    } else toast(result?.error || "The scan could not be started");
-  };
   $("bGoRules").onclick = () => $("ruleTabs").scrollIntoView({behavior: "smooth", block: "center"});
   if ($("bBlockSetup")) $("bBlockSetup").onclick = () => { setTab = "unifi"; openSettings(); };
   if ($("bBlock")) $("bBlock").onclick = async (e) => {
