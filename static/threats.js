@@ -713,45 +713,56 @@ async function refreshAuthorizedPublicScans() {
   const box = $("publicScanStatus");
   if (!box) { if (publicScanPoll) clearInterval(publicScanPoll); publicScanPoll = null; return; }
   const data = await api("/api/scans/authorized-public", "GET");
-  if (!data) { box.textContent = "Could not load public scan history. Check the server connection and try again."; return; }
-  const rows = [...(data.nmap || []), ...(data.openvas || [])].sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 8);
-  if (!rows.length) { box.textContent = "No authorized public scans yet."; if (publicScanPoll) clearInterval(publicScanPoll); publicScanPoll = null; return; }
+  if (!data) {
+    box.innerHTML = '<div class="finding"><span>Could not refresh scan status. LanPulse will retry automatically.</span></div>';
+    if (!publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 5000);
+    return;
+  }
+  const rows = [...(data.nmap || []), ...(data.openvas || [])]
+    .sort((a, b) => (b.started || 0) - (a.started || 0)).slice(0, 8);
+  if (!rows.length) {
+    box.textContent = "No authorized public scans yet.";
+    if (publicScanPoll) clearInterval(publicScanPoll);
+    publicScanPoll = null;
+    return;
+  }
   const active = rows.some((s) => ["Requested","Queued","Running","New"].includes(s.status));
   if (active && !publicScanPoll) publicScanPoll = setInterval(refreshAuthorizedPublicScans, 3000);
   if (!active && publicScanPoll) { clearInterval(publicScanPoll); publicScanPoll = null; }
   box.innerHTML = rows.map((s) => {
     const scanner = (s.scanner || "openvas").toUpperCase();
     const terminal = ["Done","Failed","Interrupted"].includes(s.status);
+    const progress = Math.max(0, Math.min(100, Number(s.progress) || 0));
     const findings = s.scanner === "openvas" ? (s.count || 0) + " findings" :
       ((s.ports || []).length + " open TCP ports");
-    const error = s.error ? '<div style="color:var(--red);margin-top:4px">' + esc(s.error) + '</div>' : "";
+    const error = s.error ? '<div style="color:var(--red);margin-top:6px;overflow-wrap:anywhere">' + esc(s.error) + '</div>' : "";
     const ports = (s.ports || []);
     const details = s.status === "Done" && s.scanner === "nmap"
       ? (ports.length
-        ? '<div style="margin-top:7px"><b>Open ports and detected services</b><ul style="margin:4px 0 0;padding-left:19px">' +
-          ports.map((p) => '<li>' + esc(p.port + "/" + p.protocol) + ' · ' + esc(p.service || "unknown service") +
+        ? '<div style="margin-top:8px"><b>Open ports and detected services</b><ul style="margin:5px 0 0;padding-left:19px">' +
+          ports.map((p) => '<li><code>' + esc(p.port + "/" + p.protocol) + '</code> · ' + esc(p.service || "unknown service") +
             (p.product ? ' · ' + esc(p.product) : "") + (p.version ? ' ' + esc(p.version) : "") + '</li>').join("") +
           '</ul></div>'
-        : (s.host_state === "down"
-          ? '<div class="muted" style="margin-top:5px">The target did not respond to Nmap probes. No open ports could be confirmed.</div>'
-          : s.host_state === "up"
-            ? '<div class="muted" style="margin-top:5px">Target responded. No open TCP ports were found in the scanned top 1,000.</div>'
-            : '<div class="muted" style="margin-top:5px">Nmap completed but did not return a confirmed host state or open ports.</div>'))
+        : '<div class="ok-line" style="margin-top:7px">Scan completed. No open TCP ports were found in the top 1,000 scanned ports.</div>')
       : s.status === "Done" && s.results?.length
-        ? '<div class="muted" style="padding:5px 0">' + s.results.slice(0, 8).map((f) =>
+        ? '<div class="muted" style="padding:7px 0">' + s.results.slice(0, 8).map((f) =>
             esc(f.name + " · severity " + f.severity + (f.cve?.length ? " · " + f.cve.join(", ") : ""))).join("<br>") + '</div>'
         : "";
-    const state = terminal ? esc(s.status) : esc(s.status || "Queued") + " · scan in progress";
-    const progress = Math.max(0, Math.min(100, Number(s.progress) || 0));
-    const phase = esc(s.phase || (s.status === "Requested" ? "Waiting for the Nmap worker…" : "Scanning ports and identifying services"));
-    const progressHtml = !terminal && s.scanner === "nmap"
-      ? '<div style="margin-top:8px"><div style="height:6px;background:var(--line);border-radius:8px;overflow:hidden"><div style="height:100%;width:' + progress + '%;background:var(--accent);transition:width .3s"></div></div><div class="muted" style="font-size:11px;margin-top:5px">' + progress + '% · ' + phase + '</div><div class="muted" style="font-size:11px">This panel refreshes automatically every 3 seconds.</div></div>'
-      : (!terminal ? '<div class="muted" style="font-size:12px">Scan is queued or running. This panel refreshes automatically.</div>' : "");
-    return '<div style="padding:9px 0;border-top:1px solid var(--line)"><b>' + esc(s.target || s.ip || "") +
-      '</b><div class="muted" style="font-size:11px;margin:3px 0">' + scanner + ' · ' + state +
-      (terminal && s.status === "Done" ? ' · ' + esc(findings) : "") + '</div>' +
-      progressHtml +
-      (s.summary ? '<div class="muted" style="margin-top:4px">' + esc(s.summary) + '</div>' : "") +
+    const phase = s.phase || (s.status === "Requested" || s.status === "Queued" ? "Waiting for the scan worker" :
+      s.status === "Running" ? "Scanning target and identifying services" : "");
+    const state = terminal ? esc(s.status) : esc(s.status || "Queued");
+    const progressHtml = !terminal
+      ? '<div style="height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:7px 0 5px">' +
+        '<div style="height:100%;width:' + (progress || (s.status === "Requested" ? 4 : 8)) +
+        '%;background:var(--accent);border-radius:99px;transition:width .3s"></div></div>' +
+        '<div class="muted" style="font-size:11px">' + (progress ? progress + "% · " : "") + esc(phase) + '</div>'
+      : "";
+    const started = s.started ? new Date(s.started * 1000).toLocaleString() : "";
+    return '<div style="padding:11px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>' +
+      esc(s.target || s.ip || "Unknown target") + '</b><span class="badge">' + scanner + '</span></div>' +
+      '<div class="muted" style="font-size:11px;margin:4px 0">' + state +
+      (terminal && s.status === "Done" ? ' · ' + esc(findings) : "") + (started ? ' · ' + esc(started) : "") + '</div>' +
+      progressHtml + (s.summary ? '<div class="muted" style="margin-top:6px">' + esc(s.summary) + '</div>' : "") +
       error + details + '</div>';
   }).join("");
 }
