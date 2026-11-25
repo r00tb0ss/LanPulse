@@ -1,5 +1,6 @@
 import types
 import unittest
+from unittest.mock import patch
 
 import analyst
 
@@ -136,6 +137,27 @@ class AnalystContext(unittest.TestCase):
         answer = "A file was transferred. Execution was not confirmed."
         self.assertEqual(analyst.validate_attack_ids(answer, ""), answer)
 
+    def test_single_ip_question_uses_focused_ip_evidence_not_global_context(self):
+        nm = fake_nm()
+        nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
+        with patch.object(analyst, "investigate_ip", return_value={"answer": "focused"}) as focused, \
+             patch.object(analyst, "build_context", side_effect=AssertionError("global context must not load")):
+            result = analyst.ask(nm, "Investigate 202.165.25.8 from my Threat Map")
+        self.assertEqual(result, {"answer": "focused"})
+        focused.assert_called_once_with(nm, "202.165.25.8", "Investigate 202.165.25.8 from my Threat Map")
+
+    def test_ip_scan_request_requires_authorization_and_skips_ai_context(self):
+        nm = fake_nm()
+        nm.settings = {"ai": {"enabled": True, "provider": "ollama"}}
+        with patch.object(analyst, "build_context", side_effect=AssertionError("scan intent must not load global context")), \
+             patch.object(analyst, "investigate_ip", side_effect=AssertionError("scan intent must not silently become passive analysis")):
+            result = analyst.ask(nm, "Use Nmap and scan 202.165.25.8")
+        self.assertIn("Threat Map presence does not establish permission", result["error"])
+        self.assertIn("No scan was started", result["error"])
+
+    def test_question_is_passed_through(self):
+        self.assertIn("num_ctx", open(analyst.__file__).read())
+        self.assertGreater(analyst.NUM_CTX, 8000)
     def test_question_is_passed_through(self):
         self.assertIn("num_ctx", open(analyst.__file__).read())
         self.assertGreater(analyst.NUM_CTX, 8000)
