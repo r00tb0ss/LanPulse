@@ -37,13 +37,18 @@ def _preflight_raw_evidence(nm, asked: list[str]) -> None:
     """Check aggregate database payload sizes before any full evidence rows are materialized."""
     sources = []
     try:
-        if "threats" in asked and hasattr(getattr(nm, "threats", None), "evidence_size"):
-            sources.append(("threat events", nm.threats.evidence_size()))
+        candidates = []
+        if "threats" in asked:
+            candidates.append(("threat events", getattr(nm, "threats", None)))
         if "honeypot" in asked:
-            if hasattr(getattr(nm, "honeypot", None), "evidence_size"):
-                sources.append(("built-in honeypot hits", nm.honeypot.evidence_size()))
-            if hasattr(getattr(nm, "honeyan", None), "evidence_size"):
-                sources.append(("Cowrie sessions and samples", nm.honeyan.evidence_size()))
+            candidates.extend((("built-in honeypot hits", getattr(nm, "honeypot", None)),
+                               ("Cowrie sessions and samples", getattr(nm, "honeyan", None))))
+        for label, source in candidates:
+            if source is None or not hasattr(source, "evidence"):
+                continue
+            if not hasattr(source, "evidence_size"):
+                raise RuntimeError(f"{label} has raw evidence but no size preflight")
+            sources.append((label, source.evidence_size()))
     except Exception as exc:
         raise EvidenceBudgetExceeded(
             f"LanPulse could not safely estimate retained evidence size ({type(exc).__name__}). "
